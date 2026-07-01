@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "925162935539",
+    "project_id": "journey-to-balance",
+    "storage_bucket": "journey-to-balance.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:925162935539:android:58410c53c7e47196da1386",
+        "android_client_info": {
+          "package_name": "com.example.journey_to_balance"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "925162935539-6kg7endlmsm9lnclbh9cg7ir5hh18m8o.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC5owrDaiJn5I-s4nDT2W-wui4qOLL-a4o"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "925162935539-6kg7endlmsm9lnclbh9cg7ir5hh18m8o.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
