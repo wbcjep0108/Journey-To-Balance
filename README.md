@@ -1,21 +1,4 @@
-<<<<<<< HEAD
-# just_budget
 
-A new Flutter project.
-
-## Getting Started
-
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
-=======
 # Journey-To-Balance
->>>>>>> 1f5bcea84a027d603dafb485ee167377e7bc14df
+
+Journey to Balance is a simple Flutter mobile app that helps users track and manage their daily expenses with ease. It includes Google Sign-In using Firebase for secure authentication and provides a smooth, user-friendly interface for personal budgeting.
