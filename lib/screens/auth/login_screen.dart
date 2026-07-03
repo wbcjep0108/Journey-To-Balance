@@ -37,7 +37,7 @@ class LoginScreen extends StatelessWidget {
                 height: 55,
                 child: ElevatedButton.icon(
                   icon: Image.asset(
-                    'assets/images/google.png', // Google logo
+                    'assets/images/google.png', 
                     width: 24,
                   ),
                   label: const Text(
