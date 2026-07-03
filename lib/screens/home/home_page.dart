@@ -19,7 +19,7 @@ class _HomePageState extends State<HomePage> {
     final user = FirebaseAuth.instance.currentUser;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFFFAFA),
+      backgroundColor: const Color(0xFFE2E6E9),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -82,7 +82,7 @@ class _HomePageState extends State<HomePage> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  "Monthly Salary",
+                                  "Income",
                                   style: TextStyle(
                                     fontSize: 13,
                                     color: Colors.grey.shade600,
