@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
-import '../home/home_page.dart';
+import '../navigation/bottom_nav_screen.dart';
 
 class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
@@ -27,6 +27,7 @@ class LoginScreen extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
+                  color: Color(0xFFF8F9FE),
                 ),
               ),
 
@@ -40,10 +41,14 @@ class LoginScreen extends StatelessWidget {
                     'assets/images/google.png', 
                     width: 24,
                   ),
-                  label: const Text(
-                    "Continue with Google",
-                    style: TextStyle(fontSize: 16),
+      
+                 label: const Text(
+                  "Continue with Google",
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Color(0xFF121212),
                   ),
+                ),
                   onPressed: () async {
                     final user =
                         await AuthService().signInWithGoogle();
@@ -52,7 +57,7 @@ class LoginScreen extends StatelessWidget {
                       Navigator.pushReplacement(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => const HomePage(),
+                          builder: (_) => const BottomNavScreen(),
                         ),
                       );
                     }
