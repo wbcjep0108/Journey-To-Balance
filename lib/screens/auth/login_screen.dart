@@ -8,7 +8,7 @@ class LoginScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
+      backgroundColor: const Color.fromARGB(255, 255, 255, 255),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -27,43 +27,48 @@ class LoginScreen extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFFF8F9FE),
+                  color: Color(0xFF000000),
                 ),
               ),
 
               const SizedBox(height: 50),
 
               SizedBox(
-                width: double.infinity,
-                height: 55,
-                child: ElevatedButton.icon(
-                  icon: Image.asset(
-                    'assets/images/google.png', 
-                    width: 24,
-                  ),
-      
-                 label: const Text(
-                  "Continue with Google",
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Color(0xFF121212),
-                  ),
-                ),
-                  onPressed: () async {
-                    final user =
-                        await AuthService().signInWithGoogle();
-
-                    if (user != null && context.mounted) {
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const BottomNavScreen(),
+                    width: double.infinity,
+                    height: 55,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        foregroundColor: const Color(0xFF121212),
+                        backgroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
                         ),
-                      );
-                    }
-                  },
-                ),
-              ),
+                      ),
+                      icon: Image.asset(
+                        'assets/images/google.png',
+                        width: 24,
+                      ),
+                      label: const Text(
+                        "Continue with Google",
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.black,
+                        ),
+                      ),
+                      onPressed: () async {
+                        final user = await AuthService().signInWithGoogle();
+
+                        if (user != null && context.mounted) {
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const BottomNavScreen(),
+                            ),
+                          );
+                        }
+                      },
+                    ),
+                  ),
             ],
           ),
         ),

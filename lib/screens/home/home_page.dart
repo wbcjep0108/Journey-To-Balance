@@ -65,10 +65,23 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           children: [
             // ===== HEADER SECTION (35-40% of screen) =====
-            Container(
+           Container(
               height: headerHeight,
-              color: const Color(0xFF121212),
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topRight,
+                  end: Alignment.bottomLeft,
+                  colors: [
+                    Color(0xFF262626),
+                    Color(0xFF000000),
+                  ],
+                ),
+                borderRadius: BorderRadius.only(
+                  bottomLeft: Radius.circular(32),
+                  bottomRight: Radius.circular(32),
+                ),
+              ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -100,7 +113,7 @@ class _HomePageState extends State<HomePage> {
                           Text(
                             user?.displayName ?? 'User',
                             style: const TextStyle(
-                              fontSize: 18,
+                              fontSize: 14,
                               fontWeight: FontWeight.w500,
                               color: Colors.white,
                             ),
@@ -109,7 +122,7 @@ class _HomePageState extends State<HomePage> {
                           Text(
                             user?.email ?? 'No email',
                             style: TextStyle(
-                              fontSize: 13,
+                              fontSize: 10,
                               color: Colors.grey[400],
                             ),
                             maxLines: 1,
@@ -120,7 +133,7 @@ class _HomePageState extends State<HomePage> {
                     ],
                   ),
 
-                  // Balance Section (Centered)
+                  // Balance Display with Edit Icon
                   Center(
                     child: Column(
                       children: [
@@ -187,8 +200,8 @@ class _HomePageState extends State<HomePage> {
                       amount: '10,000',
                       label: 'BILLS',
                       gradientColors: const [
-                        Color(0xFFEBF0F5),
-                        Color(0xFFC8D1DC),
+                        Color(0xFF333333),
+                        Color(0xFF000000),
                       ],
                     ),
                   ),
@@ -199,8 +212,8 @@ class _HomePageState extends State<HomePage> {
                       amount: '8,500',
                       label: 'SAVINGS',
                       gradientColors: const [
-                        Color(0xFFEAF2EC),
-                        Color(0xFFBAC7BD),
+                        Color(0xFF333333),
+                        Color(0xFF000000),
                       ],
                     ),
                   ),
@@ -211,8 +224,8 @@ class _HomePageState extends State<HomePage> {
                       amount: '5,500',
                       label: 'PERSONAL',
                       gradientColors: const [
-                        Color(0xFFF0F0F0),
-                        Color(0xFFC8C9CE),
+                        Color(0xFF333333),
+                        Color(0xFF000000),
                       ],
                     ),
                   ),
@@ -235,7 +248,6 @@ class _BuildGridCard extends StatelessWidget {
   final List<Color> gradientColors;
 
   const _BuildGridCard({
-    super.key,
     required this.amount,
     required this.label,
     required this.gradientColors,
@@ -269,7 +281,7 @@ class _BuildGridCard extends StatelessWidget {
               style: const TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF121212), // Dark text
+                color: Colors.white,
               ),
             ),
             const SizedBox(height: 8),
@@ -278,7 +290,7 @@ class _BuildGridCard extends StatelessWidget {
               style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF121212), // Dark text
+                color: Colors.white,
                 letterSpacing: 1.2,
               ),
             ),
