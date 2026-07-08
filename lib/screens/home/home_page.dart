@@ -32,7 +32,7 @@ class _HomePageState extends State<HomePage> {
           TextButton(
             onPressed: () => Navigator.pop(context),
             style: TextButton.styleFrom(
-              foregroundColor: Colors.red, // Cancel text color
+              foregroundColor:  const Color(0xFF121212), 
             ),
             child: const Text('Cancel'),
           ),
@@ -45,7 +45,7 @@ class _HomePageState extends State<HomePage> {
               Navigator.pop(context);
             },
              style: TextButton.styleFrom(
-             foregroundColor: Colors.green,),
+             foregroundColor:  const Color(0xFF121212),),
             child: const Text('Save'),
           ),
         ],
@@ -159,7 +159,7 @@ class _HomePageState extends State<HomePage> {
                         const SizedBox(height: 8),
                         // Label below balance
                         Text(
-                          'income',
+                          'Income',
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w400,
@@ -186,24 +186,34 @@ class _HomePageState extends State<HomePage> {
                     child: _BuildGridCard(
                       amount: '10,000',
                       label: 'BILLS',
+                      gradientColors: const [
+                        Color(0xFFEBF0F5),
+                        Color(0xFFC8D1DC),
+                      ],
                     ),
                   ),
                   const SizedBox(width: 12),
 
-                  // Savings Card
                   Expanded(
                     child: _BuildGridCard(
                       amount: '8,500',
                       label: 'SAVINGS',
+                      gradientColors: const [
+                        Color(0xFFEAF2EC),
+                        Color(0xFFBAC7BD),
+                      ],
                     ),
                   ),
                   const SizedBox(width: 12),
 
-                  // Personal Card
                   Expanded(
                     child: _BuildGridCard(
                       amount: '5,500',
                       label: 'PERSONAL',
+                      gradientColors: const [
+                        Color(0xFFF0F0F0),
+                        Color(0xFFC8C9CE),
+                      ],
                     ),
                   ),
                 ],
@@ -222,10 +232,13 @@ class _HomePageState extends State<HomePage> {
 class _BuildGridCard extends StatelessWidget {
   final String amount;
   final String label;
+  final List<Color> gradientColors;
 
   const _BuildGridCard({
+    super.key,
     required this.amount,
     required this.label,
+    required this.gradientColors,
   });
 
   @override
@@ -233,13 +246,17 @@ class _BuildGridCard extends StatelessWidget {
     return Container(
       height: 160,
       decoration: BoxDecoration(
-        color: const Color(0xFF121212),
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: gradientColors,
+        ),
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
           ),
         ],
       ),
@@ -252,7 +269,7 @@ class _BuildGridCard extends StatelessWidget {
               style: const TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
-                color: Colors.white,
+                color: Color(0xFF121212), // Dark text
               ),
             ),
             const SizedBox(height: 8),
@@ -260,8 +277,8 @@ class _BuildGridCard extends StatelessWidget {
               label,
               style: const TextStyle(
                 fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF121212), // Dark text
                 letterSpacing: 1.2,
               ),
             ),
