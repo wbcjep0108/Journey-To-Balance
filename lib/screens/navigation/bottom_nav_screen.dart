@@ -37,29 +37,53 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
         index: _selectedIndex,
         children: _pages,
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
-        items: const [
+     bottomNavigationBar: BottomNavigationBar(
+      backgroundColor: const Color(0xFFF7F7F7), 
+      type: BottomNavigationBarType.fixed,
+      currentIndex: _selectedIndex,
+      onTap: _onItemTapped,
+
+  selectedItemColor: const Color(0xFF121212), // Selected label color
+  unselectedItemColor: Colors.grey,  
+  items: const [
           BottomNavigationBarItem(
-            icon: SizedBox.shrink(),
+            icon: Image(
+              image: AssetImage('assets/images/icons/home.png'),
+              width: 24,
+              height: 24,
+            ),
             label: 'HOME',
           ),
           BottomNavigationBarItem(
-            icon: SizedBox.shrink(),
+            icon: Image(
+              image: AssetImage('assets/images/icons/bills.png'),
+              width: 24,
+              height: 24,
+            ),
             label: 'BILLS',
           ),
           BottomNavigationBarItem(
-            icon: SizedBox.shrink(),
+            icon: Image(
+              image: AssetImage('assets/images/icons/savings.png'),
+              width: 24,
+              height: 24,
+            ),
             label: 'SAVINGS',
           ),
           BottomNavigationBarItem(
-            icon: SizedBox.shrink(),
+            icon: Image(
+              image: AssetImage('assets/images/icons/personal.png'),
+              width: 24,
+              height: 24,
+            ),
             label: 'PERSONAL',
           ),
           BottomNavigationBarItem(
-            icon: SizedBox.shrink(),
+            icon: Image(
+              image: AssetImage('assets/images/icons/account.png'),
+              width: 24,
+              height: 24,
+            ),
             label: 'ACCOUNT',
           ),
         ],
