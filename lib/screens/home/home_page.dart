@@ -12,46 +12,130 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   double balance = 0.0;
 
-  void _showEditDialog() {
-    final TextEditingController controller =
-        TextEditingController(text: balance.toStringAsFixed(0));
+double billsPercentage = 50.0;
+double savingsPercentage = 20.0;
+double personalPercentage = 30.0;
 
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Edit Income'),
-        content: TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            hintText: 'Enter income amount',
-            prefixText: '₱ ',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            style: TextButton.styleFrom(
-              foregroundColor:  const Color(0xFF121212), 
+double billsAmount = 0.0;
+double savingsAmount = 0.0;
+double personalAmount = 0.0;
+double remainingAmount = 0.0;
+
+
+    void _showEditDialog() {
+  final incomeController =
+      TextEditingController(text: balance.toStringAsFixed(0));
+
+  final billsController =
+      TextEditingController(text: billsPercentage.toString());
+
+  final savingsController =
+      TextEditingController(text: savingsPercentage.toString());
+
+  final personalController =
+      TextEditingController(text: personalPercentage.toString());
+
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Budget Setup'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: incomeController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Income',
+                prefixText: '₱ ',
+              ),
             ),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              final value = double.tryParse(controller.text);
-              if (value != null) {
-                setState(() => balance = value);
+
+            const SizedBox(height: 12),
+
+            TextField(
+              controller: billsController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Bills %',
+                suffixText: '%',
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            TextField(
+              controller: savingsController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Savings %',
+                suffixText: '%',
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            TextField(
+              controller: personalController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Personal %',
+                suffixText: '%',
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () {
+            setState(() {
+              balance =
+                  double.tryParse(incomeController.text) ?? 0;
+
+              billsPercentage =
+                  double.tryParse(billsController.text) ?? 0;
+
+              savingsPercentage =
+                  double.tryParse(savingsController.text) ?? 0;
+
+              personalPercentage =
+                  double.tryParse(personalController.text) ?? 0;
+
+              double totalPercentage = billsPercentage + savingsPercentage + personalPercentage;
+
+              if (totalPercentage != 100) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Bills + Savings + Personal must equal 100%',
+                    ),
+                  ),
+                );
+                return;
               }
+
+              billsAmount = balance * (billsPercentage / 100);
+              savingsAmount = balance * (savingsPercentage / 100);
+              personalAmount = balance * (personalPercentage / 100);
+
+              remainingAmount =
+                  balance - billsAmount - savingsAmount - personalAmount;
+            });
+
               Navigator.pop(context);
             },
-             style: TextButton.styleFrom(
-             foregroundColor:  const Color(0xFF121212),),
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-    );
-  }
+          child: const Text('Save'),
+        ),
+      ],
+    ),
+  );
+}
 
   @override
   Widget build(BuildContext context) {
@@ -197,7 +281,7 @@ class _HomePageState extends State<HomePage> {
                   // Bills Card
                   Expanded(
                     child: _BuildGridCard(
-                      amount: '10,000',
+                      amount: NumberFormat('#,##0').format(billsAmount),
                       label: 'BILLS',
                       gradientColors: const [
                         Color(0xFF333333),
@@ -209,7 +293,7 @@ class _HomePageState extends State<HomePage> {
 
                   Expanded(
                     child: _BuildGridCard(
-                      amount: '8,500',
+                      amount: NumberFormat('#,##0').format(savingsAmount),
                       label: 'SAVINGS',
                       gradientColors: const [
                         Color(0xFF333333),
@@ -221,7 +305,7 @@ class _HomePageState extends State<HomePage> {
 
                   Expanded(
                     child: _BuildGridCard(
-                      amount: '5,500',
+                      amount: NumberFormat('#,##0').format(personalAmount),
                       label: 'PERSONAL',
                       gradientColors: const [
                         Color(0xFF333333),
