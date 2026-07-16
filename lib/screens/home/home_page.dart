@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import '../../providers/budget_provider.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -127,6 +129,16 @@ double remainingAmount = 0.0;
               remainingAmount =
                   balance - billsAmount - savingsAmount - personalAmount;
             });
+            
+              Provider.of<BudgetProvider>(
+                context,
+                listen: false,
+              ).updateBudget(
+                income: balance,
+                billsPercentage: billsPercentage,
+                savingsPercentage: savingsPercentage,
+                personalPercentage: personalPercentage,
+              );
 
               Navigator.pop(context);
             },
