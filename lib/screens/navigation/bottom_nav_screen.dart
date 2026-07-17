@@ -30,61 +30,98 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
     });
   }
 
+  Widget _navItem({
+    required int index,
+    required String assetPath,
+  }) {
+    final bool isSelected = _selectedIndex == index;
+
+    return GestureDetector(
+      onTap: () => _onItemTapped(index),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeInOut,
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? const Color(0xFF121212).withOpacity(0.08)
+              : Colors.transparent,
+          shape: BoxShape.circle,
+        ),
+        child: Opacity(
+          opacity: isSelected ? 1.0 : 0.45,
+          child: Image.asset(
+            assetPath,
+            width: 24,
+            height: 24,
+            color: isSelected ? const Color(0xFF121212) : Colors.grey,
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: _pages,
-      ),
-     bottomNavigationBar: BottomNavigationBar(
-      backgroundColor: const Color(0xFFF7F7F7), 
-      type: BottomNavigationBarType.fixed,
-      currentIndex: _selectedIndex,
-      onTap: _onItemTapped,
+      backgroundColor: Colors.white,
 
-  selectedItemColor: const Color(0xFF121212), // Selected label color
-  unselectedItemColor: Colors.grey,  
-  items: const [
-          BottomNavigationBarItem(
-            icon: Image(
-              image: AssetImage('assets/images/icons/home.png'),
-              width: 24,
-              height: 24,
-            ),
-            label: 'HOME',
+      body: Stack(
+        children: [
+          // Pages
+          IndexedStack(
+            index: _selectedIndex,
+            children: _pages,
           ),
-          BottomNavigationBarItem(
-            icon: Image(
-              image: AssetImage('assets/images/icons/bills.png'),
-              width: 24,
-              height: 24,
+
+      
+          Positioned(
+            left: 20,
+            right: 20,
+            bottom: 24,
+            child: SafeArea(
+              child: Container(
+                height: 72,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(40),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      blurRadius: 24,
+                      spreadRadius: 2,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _navItem(
+                      index: 0,
+                      assetPath: 'assets/images/icons/home.png',
+                    ),
+                    _navItem(
+                      index: 1,
+                      assetPath: 'assets/images/icons/bills.png',
+                    ),
+                    _navItem(
+                      index: 2,
+                      assetPath: 'assets/images/icons/savings.png',
+                    ),
+                    _navItem(
+                      index: 3,
+                      assetPath: 'assets/images/icons/personal.png',
+                    ),
+                    _navItem(
+                      index: 4,
+                      assetPath: 'assets/images/icons/account.png',
+                    ),
+                  ],
+                ),
+              ),
             ),
-            label: 'BILLS',
-          ),
-          BottomNavigationBarItem(
-            icon: Image(
-              image: AssetImage('assets/images/icons/savings.png'),
-              width: 24,
-              height: 24,
-            ),
-            label: 'SAVINGS',
-          ),
-          BottomNavigationBarItem(
-            icon: Image(
-              image: AssetImage('assets/images/icons/personal.png'),
-              width: 24,
-              height: 24,
-            ),
-            label: 'PERSONAL',
-          ),
-          BottomNavigationBarItem(
-            icon: Image(
-              image: AssetImage('assets/images/icons/account.png'),
-              width: 24,
-              height: 24,
-            ),
-            label: 'ACCOUNT',
           ),
         ],
       ),
