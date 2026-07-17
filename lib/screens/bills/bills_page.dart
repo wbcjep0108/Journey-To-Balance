@@ -65,12 +65,15 @@ class BillsPage extends StatelessWidget {
                             ),
                           ),
                           const Spacer(),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            crossAxisAlignment: CrossAxisAlignment.center,
+                         Row(
+                            mainAxisAlignment:
+                                MainAxisAlignment.spaceBetween,
+                            crossAxisAlignment:
+                                CrossAxisAlignment.center,
                             children: [
                               Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
                                 children: [
                                   Text(
                                     '${NumberFormat('#,##0').format(budget.billsAmount)}php',
@@ -81,7 +84,9 @@ class BillsPage extends StatelessWidget {
                                       height: 1,
                                     ),
                                   ),
+
                                   const SizedBox(height: 6),
+
                                   Text(
                                     'Total balance',
                                     style: TextStyle(
@@ -90,30 +95,46 @@ class BillsPage extends StatelessWidget {
                                       fontWeight: FontWeight.w400,
                                     ),
                                   ),
+
+                                  const SizedBox(height: 6),
+
+                                  Text(
+                                    '${budget.billsPercentage.toStringAsFixed(0)}%',
+                                    style: TextStyle(
+                                      color: Colors.grey.shade400,
+                                      fontSize: 14,
+                                    ),
+                                  ),
                                 ],
                               ),
+
                               GestureDetector(
                                 onTap: () {
                                   showDialog(
                                     context: context,
-                                    builder: (context) => AlertDialog(
-                                      shape: RoundedRectangleBorder(
+                                    builder: (context) =>
+                                        AlertDialog(
+                                      shape:
+                                          RoundedRectangleBorder(
                                         borderRadius:
-                                            BorderRadius.circular(24),
+                                            BorderRadius.circular(
+                                                24),
                                       ),
                                       title: const Text(
-                                        'Deduct Balance',
+                                        'Bills',
                                       ),
                                       content: const Text(
-                                        'Deduct Balance Placeholder',
+                                        'Bills Expense Placeholder',
                                       ),
                                     ),
                                   );
                                 },
                                 child: Container(
-                                  padding: const EdgeInsets.all(14),
+                                  padding:
+                                      const EdgeInsets.all(14),
                                   decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.12),
+                                    color: Colors.white
+                                        .withOpacity(0.12),
                                     shape: BoxShape.circle,
                                   ),
                                   child: const Icon(
@@ -139,7 +160,7 @@ class BillsPage extends StatelessWidget {
                 child: Container(
                   width: double.infinity,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF0f0f0f),
+                    color: const Color(0xFF161616),
                     borderRadius: BorderRadius.circular(28),
                   ),
                   child: Padding(
