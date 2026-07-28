@@ -46,6 +46,8 @@ class _AccountPageState extends State<AccountPage> {
     showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
         title: const Text('Help & Support'),
         content: const Text(
           'For help with Journey to Balance, contact the application support '
@@ -54,7 +56,10 @@ class _AccountPageState extends State<AccountPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
+            child: const Text(
+              'Close',
+              style: TextStyle(color: Color(0xFF6B7280)),
+            ),
           ),
         ],
       ),
@@ -71,6 +76,8 @@ class _AccountPageState extends State<AccountPage> {
     showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         title: const Text(
           'About us',
@@ -247,7 +254,7 @@ class _AccountCard extends StatelessWidget {
                 children: [
                   CircleAvatar(
                     radius: 19,
-                    backgroundColor: Color(0xFFF1F2F4),
+                    backgroundColor: Colors.white,
                     child: Icon(
                       Icons.help_outline,
                       size: 22,
