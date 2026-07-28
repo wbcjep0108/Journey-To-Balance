@@ -1,30 +1,21 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:just_budget/main.dart';
+import 'package:just_budget/models/financial_entry.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  test('financial entry copy preserves identity and creation time', () {
+    final createdAt = DateTime(2026, 7, 28);
+    final entry = FinancialEntry(
+      id: 'entry-id',
+      title: 'Electricity',
+      amount: 500,
+      createdAt: createdAt,
+    );
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    final updated = entry.copyWith(title: 'Water', amount: 250);
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
-
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(updated.id, entry.id);
+    expect(updated.createdAt, createdAt);
+    expect(updated.title, 'Water');
+    expect(updated.amount, 250);
   });
 }

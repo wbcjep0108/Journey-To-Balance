@@ -12,17 +12,6 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  double balance = 0.0;
-  double billsPercentage = 50.0;
-  double savingsPercentage = 20.0;
-  double personalPercentage = 30.0;
-
-  double billsAmount = 0.0;
-  double savingsAmount = 0.0;
-  double personalAmount = 0.0;
-  double remainingAmount = 0.0;
-
-
   late TextEditingController incomeController;
   late TextEditingController billsController;
   late TextEditingController savingsController;
@@ -31,16 +20,15 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-  
-    incomeController = TextEditingController(text: balance.toStringAsFixed(0));
-    billsController = TextEditingController(text: billsPercentage.toString());
-    savingsController = TextEditingController(text: savingsPercentage.toString());
-    personalController = TextEditingController(text: personalPercentage.toString());
+
+    incomeController = TextEditingController();
+    billsController = TextEditingController();
+    savingsController = TextEditingController();
+    personalController = TextEditingController();
   }
 
   @override
   void dispose() {
-  
     incomeController.dispose();
     billsController.dispose();
     savingsController.dispose();
@@ -49,11 +37,11 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _showEditDialog() {
-    
-    incomeController.text = balance.toStringAsFixed(0);
-    billsController.text = billsPercentage.toString();
-    savingsController.text = savingsPercentage.toString();
-    personalController.text = personalPercentage.toString();
+    final budget = context.read<BudgetProvider>();
+    incomeController.text = budget.income.toStringAsFixed(0);
+    billsController.text = budget.billsPercentage.toStringAsFixed(0);
+    savingsController.text = budget.savingsPercentage.toStringAsFixed(0);
+    personalController.text = budget.personalPercentage.toStringAsFixed(0);
 
     showDialog(
       context: context,
@@ -61,9 +49,7 @@ class _HomePageState extends State<HomePage> {
       builder: (context) => Dialog(
         insetAnimationDuration: Duration.zero,
         backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(32),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
         child: ConstrainedBox(
           constraints: BoxConstraints(
             maxHeight: MediaQuery.of(context).size.height * 0.68,
@@ -122,48 +108,51 @@ class _HomePageState extends State<HomePage> {
                     ),
                     const SizedBox(width: 12),
                     TextButton(
-                      onPressed: () {
-                        setState(() {
-                          balance = double.tryParse(incomeController.text) ?? 0;
-                          billsPercentage = double.tryParse(billsController.text) ?? 0;
-                          savingsPercentage = double.tryParse(savingsController.text) ?? 0;
-                          personalPercentage = double.tryParse(personalController.text) ?? 0;
+                      onPressed: () async {
+                        final income =
+                            double.tryParse(incomeController.text) ?? -1;
+                        final billsPercentage =
+                            double.tryParse(billsController.text) ?? 0;
+                        final savingsPercentage =
+                            double.tryParse(savingsController.text) ?? 0;
+                        final personalPercentage =
+                            double.tryParse(personalController.text) ?? 0;
+                        final totalPercentage =
+                            billsPercentage +
+                            savingsPercentage +
+                            personalPercentage;
 
-                          double totalPercentage = billsPercentage +
-                              savingsPercentage +
-                              personalPercentage;
+                        if (income < 0 ||
+                            (totalPercentage - 100).abs() > 0.001) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Enter a valid income and percentages totaling 100%',
+                              ),
+                            ),
+                          );
+                          return;
+                        }
 
-                          if (totalPercentage != 100) {
+                        try {
+                          await context.read<BudgetProvider>().updateBudget(
+                            income: income,
+                            billsPercentage: billsPercentage,
+                            savingsPercentage: savingsPercentage,
+                            personalPercentage: personalPercentage,
+                          );
+                          if (context.mounted) Navigator.pop(context);
+                        } catch (_) {
+                          if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text(
-                                  'Bills + Savings + Personal must equal 100%',
+                                  'Budget changes could not be saved.',
                                 ),
                               ),
                             );
-                            return;
                           }
-
-                          billsAmount = balance * (billsPercentage / 100);
-                          savingsAmount = balance * (savingsPercentage / 100);
-                          personalAmount = balance * (personalPercentage / 100);
-                          remainingAmount = balance -
-                              billsAmount -
-                              savingsAmount -
-                              personalAmount;
-                        });
-
-                        Provider.of<BudgetProvider>(
-                          context,
-                          listen: false,
-                        ).updateBudget(
-                          income: balance,
-                          billsPercentage: billsPercentage,
-                          savingsPercentage: savingsPercentage,
-                          personalPercentage: personalPercentage,
-                        );
-
-                        Navigator.pop(context);
+                        }
                       },
                       child: const Text(
                         'Save',
@@ -183,49 +172,59 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  
- Widget _buildField({
-  required String label,
-  required TextEditingController controller,
-  String? prefixText,
-  String? suffixText,
-}) {
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF121212))),
-      const SizedBox(height: 8),
-      RepaintBoundary( 
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.06),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
-              ),
-            ],
+  Widget _buildField({
+    required String label,
+    required TextEditingController controller,
+    String? prefixText,
+    String? suffixText,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF121212),
           ),
-          child: TextField(
-            controller: controller,
-            keyboardType: TextInputType.number,
-            decoration: InputDecoration(
-              prefixText: prefixText,
-              suffixText: suffixText,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-              border: InputBorder.none,
+        ),
+        const SizedBox(height: 8),
+        RepaintBoundary(
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                prefixText: prefixText,
+                suffixText: suffixText,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 18,
+                ),
+                border: InputBorder.none,
+              ),
             ),
           ),
         ),
-      ),
-    ],
-  );
-}
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final budget = context.watch<BudgetProvider>();
     final screenHeight = MediaQuery.of(context).size.height;
     final headerHeight = screenHeight * 0.38;
     final user = FirebaseAuth.instance.currentUser;
@@ -242,10 +241,7 @@ class _HomePageState extends State<HomePage> {
                 gradient: LinearGradient(
                   begin: Alignment.topRight,
                   end: Alignment.bottomLeft,
-                  colors: [
-                    Color(0xFF262626),
-                    Color(0xFF000000),
-                  ],
+                  colors: [Color(0xFF262626), Color(0xFF000000)],
                 ),
                 borderRadius: BorderRadius.only(
                   bottomLeft: Radius.circular(32),
@@ -323,7 +319,9 @@ class _HomePageState extends State<HomePage> {
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     Text(
-                                      NumberFormat('#,##0').format(balance),
+                                      NumberFormat(
+                                        '#,##0',
+                                      ).format(budget.income),
                                       style: const TextStyle(
                                         fontSize: 32,
                                         fontWeight: FontWeight.bold,
@@ -367,7 +365,7 @@ class _HomePageState extends State<HomePage> {
                                 Container(
                                   width: 1.5,
                                   height: 100,
-                                  color: Colors.white.withOpacity(0.7),
+                                  color: Colors.white.withValues(alpha: 0.7),
                                 ),
                                 Container(
                                   width: 8,
@@ -396,7 +394,9 @@ class _HomePageState extends State<HomePage> {
                                 ),
                                 const SizedBox(height: 10),
                                 Text(
-                                  NumberFormat('#,##0').format(remainingAmount),
+                                  NumberFormat(
+                                    '#,##0',
+                                  ).format(budget.remainingAmount),
                                   style: const TextStyle(
                                     fontSize: 32,
                                     fontWeight: FontWeight.bold,
@@ -420,7 +420,7 @@ class _HomePageState extends State<HomePage> {
                 children: [
                   Expanded(
                     child: _BuildGridCard(
-                      amount: NumberFormat('#,##0').format(billsAmount),
+                      amount: NumberFormat('#,##0').format(budget.billsAmount),
                       label: 'BILLS',
                       gradientColors: const [
                         Color(0xFF333333),
@@ -431,7 +431,9 @@ class _HomePageState extends State<HomePage> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: _BuildGridCard(
-                      amount: NumberFormat('#,##0').format(savingsAmount),
+                      amount: NumberFormat(
+                        '#,##0',
+                      ).format(budget.savingsAmount),
                       label: 'SAVINGS',
                       gradientColors: const [
                         Color(0xFF333333),
@@ -442,7 +444,9 @@ class _HomePageState extends State<HomePage> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: _BuildGridCard(
-                      amount: NumberFormat('#,##0').format(personalAmount),
+                      amount: NumberFormat(
+                        '#,##0',
+                      ).format(budget.personalAmount),
                       label: 'PERSONAL',
                       gradientColors: const [
                         Color(0xFF333333),
@@ -485,7 +489,7 @@ class _BuildGridCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 10,
             offset: const Offset(0, 5),
           ),

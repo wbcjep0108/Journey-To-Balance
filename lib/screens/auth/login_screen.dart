@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
-import '../navigation/bottom_nav_screen.dart';
 
 class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
@@ -15,10 +14,7 @@ class LoginScreen extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Image.asset(
-                'assets/images/logo.png',
-                width: 150,
-              ),
+              Image.asset('assets/images/logo.png', width: 150),
 
               const SizedBox(height: 40),
 
@@ -34,45 +30,40 @@ class LoginScreen extends StatelessWidget {
               const SizedBox(height: 50),
 
               SizedBox(
-                    width: double.infinity,
-                    height: 55,
-                    child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        foregroundColor: const Color(0xFF121212),
-                        backgroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                      icon: Image.asset(
-                        'assets/images/google.png',
-                        width: 24,
-                      ),
-                      label: const Text(
-                        "Continue with Google",
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.black,
-                        ),
-                      ),
-                      onPressed: () async {
-                        final user = await AuthService().signInWithGoogle();
-
-                        if (user != null && context.mounted) {
-                          Navigator.pushReplacement(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const BottomNavScreen(),
-                            ),
-                          );
-                        }
-                      },
+                width: double.infinity,
+                height: 55,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    foregroundColor: const Color(0xFF121212),
+                    backgroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
                     ),
                   ),
+                  icon: Image.asset('assets/images/google.png', width: 24),
+                  label: const Text(
+                    "Continue with Google",
+                    style: TextStyle(fontSize: 16, color: Colors.black),
+                  ),
+                  onPressed: () async {
+                    try {
+                      await AuthService().signInWithGoogle();
+                    } catch (_) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Sign in failed. Please try again.'),
+                          ),
+                        );
+                      }
+                    }
+                  },
+                ),
+              ),
             ],
           ),
         ),
       ),
     );
   }
-} 
+}

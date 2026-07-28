@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../providers/budget_provider.dart';
 import '../home/home_page.dart';
 import '../bills/bills_page.dart';
 import '../savings/savings_page.dart';
@@ -16,24 +18,13 @@ class BottomNavScreen extends StatefulWidget {
 class _BottomNavScreenState extends State<BottomNavScreen> {
   int _selectedIndex = 0;
 
-  final List<Widget> _pages = const [
-    HomePage(),
-    BillsPage(),
-    SavingsPage(),
-    PersonalPage(),
-    AccountPage(),
-  ];
-
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
     });
   }
 
-  Widget _navItem({
-    required int index,
-    required String assetPath,
-  }) {
+  Widget _navItem({required int index, required String assetPath}) {
     final bool isSelected = _selectedIndex == index;
 
     return GestureDetector(
@@ -44,7 +35,7 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
           color: isSelected
-              ? const Color(0xFF121212).withOpacity(0.08)
+              ? const Color(0xFF121212).withValues(alpha: 0.08)
               : Colors.transparent,
           shape: BoxShape.circle,
         ),
@@ -63,18 +54,35 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final budget = context.watch<BudgetProvider>();
+    final pages = <Widget>[
+      const HomePage(),
+      BillsPage(
+        key: ValueKey(
+          'bills-${budget.income}-${budget.billsAmount}-${budget.billsPercentage}',
+        ),
+      ),
+      SavingsPage(
+        key: ValueKey(
+          'savings-${budget.income}-${budget.savingsAmount}-${budget.savingsPercentage}',
+        ),
+      ),
+      PersonalPage(
+        key: ValueKey(
+          'personal-${budget.income}-${budget.personalAmount}-${budget.personalPercentage}',
+        ),
+      ),
+      const AccountPage(),
+    ];
+
     return Scaffold(
       backgroundColor: Colors.white,
 
       body: Stack(
         children: [
           // Pages
-          IndexedStack(
-            index: _selectedIndex,
-            children: _pages,
-          ),
+          IndexedStack(index: _selectedIndex, children: pages),
 
-      
           Positioned(
             left: 20,
             right: 20,
@@ -88,7 +96,7 @@ class _BottomNavScreenState extends State<BottomNavScreen> {
                   borderRadius: BorderRadius.circular(40),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.08),
+                      color: Colors.black.withValues(alpha: 0.08),
                       blurRadius: 24,
                       spreadRadius: 2,
                       offset: const Offset(0, 8),
