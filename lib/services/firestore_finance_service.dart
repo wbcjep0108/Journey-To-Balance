@@ -19,8 +19,13 @@ class FirestoreFinanceService {
     return _user(uid).collection(category.collection);
   }
 
-  Future<Map<String, double>?> loadBudget(String uid) async {
-    final snapshot = await _user(uid).get();
+  Future<Map<String, double>?> loadBudget(
+    String uid, {
+    bool serverOnly = false,
+  }) async {
+    final snapshot = serverOnly
+        ? await _user(uid).get(const GetOptions(source: Source.server))
+        : await _user(uid).get();
     final budget = snapshot.data()?['budget'];
     if (budget is! Map) return null;
 
@@ -32,6 +37,23 @@ class FirestoreFinanceService {
       'personalPercentage':
           (budget['personalPercentage'] as num?)?.toDouble() ?? 30,
     };
+  }
+
+  Stream<Map<String, double>?> watchBudget(String uid) {
+    return _user(uid).snapshots().map((snapshot) {
+      final budget = snapshot.data()?['budget'];
+      if (budget is! Map) return null;
+
+      return {
+        'income': (budget['income'] as num?)?.toDouble() ?? 0,
+        'billsPercentage':
+            (budget['billsPercentage'] as num?)?.toDouble() ?? 50,
+        'savingsPercentage':
+            (budget['savingsPercentage'] as num?)?.toDouble() ?? 20,
+        'personalPercentage':
+            (budget['personalPercentage'] as num?)?.toDouble() ?? 30,
+      };
+    });
   }
 
   Future<void> saveBudget(
@@ -54,13 +76,30 @@ class FirestoreFinanceService {
 
   Future<List<FinancialEntry>> loadEntries(
     String uid,
-    FinancialCategory category,
-  ) async {
-    final snapshot = await _entries(
+    FinancialCategory category, {
+    bool serverOnly = false,
+  }) async {
+    final query = _entries(
       uid,
       category,
-    ).orderBy('createdAt', descending: true).get();
+    ).orderBy('createdAt', descending: true);
+    final snapshot = serverOnly
+        ? await query.get(const GetOptions(source: Source.server))
+        : await query.get();
     return snapshot.docs.map(FinancialEntry.fromFirestore).toList();
+  }
+
+  Stream<List<FinancialEntry>> watchEntries(
+    String uid,
+    FinancialCategory category,
+  ) {
+    return _entries(uid, category)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map(
+          (snapshot) =>
+              snapshot.docs.map(FinancialEntry.fromFirestore).toList(),
+        );
   }
 
   String createEntryId(String uid, FinancialCategory category) {

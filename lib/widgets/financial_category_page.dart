@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 
 import '../models/financial_entry.dart';
 import '../providers/budget_provider.dart';
+import 'app_refresh_indicator.dart';
+import 'budget_modal.dart';
 
 class FinancialCategoryPage extends StatelessWidget {
   const FinancialCategoryPage({
@@ -21,18 +23,16 @@ class FinancialCategoryPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final budget = context.watch<BudgetProvider>();
-    final entries = budget.entriesFor(category);
-    final allocation = switch (category) {
-      FinancialCategory.bills => budget.billsAmount,
-      FinancialCategory.savings => budget.savingsAmount,
-      FinancialCategory.personal => budget.personalAmount,
-    };
-    final usedAmount = entries.fold<double>(
-      0,
-      (total, entry) => total + entry.amount,
+    final budget = context.read<BudgetProvider>();
+    return ListenableBuilder(
+      listenable: budget,
+      builder: (context, _) => _buildContent(context, budget),
     );
-    final remainingBalance = allocation - usedAmount;
+  }
+
+  Widget _buildContent(BuildContext context, BudgetProvider budget) {
+    final entries = budget.entriesFor(category);
+    final remainingBalance = budget.remainingFor(category);
     final percentage = switch (category) {
       FinancialCategory.bills => budget.billsPercentage,
       FinancialCategory.savings => budget.savingsPercentage,
@@ -42,105 +42,106 @@ class FinancialCategoryPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-          child: Column(
-            children: [
-              Container(
-                height: 220,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(28),
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [Color(0xFF1A1A1A), Color(0xFF4A4A4A)],
+        child: AppRefreshIndicator(
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 108),
+            child: Column(
+              children: [
+                Container(
+                  height: 220,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(28),
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFF1A1A1A), Color(0xFF4A4A4A)],
+                    ),
                   ),
-                ),
-                child: Stack(
-                  children: [
-                    Positioned(
-                      right: 20,
-                      top: 20,
-                      child: Opacity(
-                        opacity: 0.25,
-                        child: Image.asset(
-                          iconPath,
-                          width: 140,
-                          height: 140,
-                          color: Colors.white,
+                  child: Stack(
+                    children: [
+                      Positioned(
+                        right: 20,
+                        top: 20,
+                        child: Opacity(
+                          opacity: 0.25,
+                          child: Image.asset(
+                            iconPath,
+                            width: 140,
+                            height: 140,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(28, 24, 28, 24),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            title.toUpperCase(),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 26,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 2,
-                            ),
-                          ),
-                          const Spacer(),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    '${NumberFormat('#,##0.##').format(remainingBalance)}php',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 40,
-                                      fontWeight: FontWeight.w800,
-                                      height: 1,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    'Remaining balance',
-                                    style: TextStyle(
-                                      color: Colors.grey.shade500,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    '${percentage.toStringAsFixed(0)}%',
-                                    style: TextStyle(
-                                      color: Colors.grey.shade400,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              IconButton.filledTonal(
-                                onPressed: () => _openEditor(context),
-                                icon: const Icon(Icons.add),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(28, 24, 28, 24),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              title.toUpperCase(),
+                              style: const TextStyle(
                                 color: Colors.white,
-                                style: IconButton.styleFrom(
-                                  backgroundColor: Colors.white.withValues(
-                                    alpha: 0.12,
+                                fontSize: 26,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 2,
+                              ),
+                            ),
+                            const Spacer(),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '${NumberFormat('#,##0.##').format(remainingBalance)}php',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 40,
+                                        fontWeight: FontWeight.w800,
+                                        height: 1,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      'Remaining balance',
+                                      style: TextStyle(
+                                        color: Colors.grey.shade500,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      '${percentage.toStringAsFixed(0)}%',
+                                      style: TextStyle(
+                                        color: Colors.grey.shade400,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                IconButton.filledTonal(
+                                  onPressed: () => _openEditor(context),
+                                  icon: const Icon(Icons.add),
+                                  color: Colors.white,
+                                  style: IconButton.styleFrom(
+                                    backgroundColor: Colors.white.withValues(
+                                      alpha: 0.12,
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ],
-                          ),
-                        ],
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 20),
-              Expanded(
-                child: Container(
+                const SizedBox(height: 20),
+                Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(28),
                   decoration: BoxDecoration(
@@ -159,9 +160,12 @@ class FinancialCategoryPage extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 20),
-                      Expanded(
-                        child: entries.isEmpty
-                            ? Center(
+                      entries.isEmpty
+                          ? Center(
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 42,
+                                ),
                                 child: Text(
                                   'No entries yet',
                                   style: TextStyle(
@@ -169,30 +173,30 @@ class FinancialCategoryPage extends StatelessWidget {
                                     fontSize: 15,
                                   ),
                                 ),
-                              )
-                            : ListView.separated(
-                                physics: const BouncingScrollPhysics(),
-                                itemCount: entries.length,
-                                separatorBuilder: (_, _) => Divider(
-                                  color: Colors.white.withValues(alpha: 0.1),
-                                  height: 28,
-                                ),
-                                itemBuilder: (context, index) {
-                                  final entry = entries[index];
-                                  return _EntryRow(
-                                    entry: entry,
-                                    category: category,
-                                    onEdit: () => _openEditor(context, entry),
-                                    onDelete: () => _delete(context, entry),
-                                  );
-                                },
                               ),
-                      ),
+                            )
+                          : ListView.separated(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              itemCount: entries.length,
+                              separatorBuilder: (_, _) => Divider(
+                                color: Colors.white.withValues(alpha: 0.1),
+                                height: 28,
+                              ),
+                              itemBuilder: (context, index) {
+                                final entry = entries[index];
+                                return _EntryRow(
+                                  entry: entry,
+                                  onEdit: () => _openEditor(context, entry),
+                                  onDelete: () => _delete(context, entry),
+                                );
+                              },
+                            ),
                     ],
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -203,29 +207,27 @@ class FinancialCategoryPage extends StatelessWidget {
     BuildContext context, [
     FinancialEntry? entry,
   ]) async {
-    final result = await showDialog<_EntryFormResult>(
-      context: context,
-      builder: (_) => _EntryDialog(title: title, entry: entry),
-    );
-    if (result == null || !context.mounted) return;
+    final provider = context.read<BudgetProvider>();
+    final availableBalance =
+        provider.remainingFor(category) + (entry?.amount ?? 0);
 
-    try {
-      final provider = context.read<BudgetProvider>();
-      if (entry == null) {
-        await provider.addEntry(
-          category,
-          title: result.title,
-          amount: result.amount,
-        );
-      } else {
-        await provider.updateEntry(
-          category,
-          entry.copyWith(title: result.title, amount: result.amount),
-        );
-      }
-    } catch (_) {
-      if (context.mounted) _showError(context);
-    }
+    await BudgetModal.show(
+      context: context,
+      category: category,
+      title: 'Use $title',
+      availableBalance: availableBalance,
+      initialEntry: entry,
+      onSave: (name, amount) async {
+        if (entry == null) {
+          await provider.addEntry(category, title: name, amount: amount);
+        } else {
+          await provider.updateEntry(
+            category,
+            entry.copyWith(title: name, amount: amount),
+          );
+        }
+      },
+    );
   }
 
   Future<void> _delete(BuildContext context, FinancialEntry entry) async {
@@ -268,19 +270,16 @@ class FinancialCategoryPage extends StatelessWidget {
 class _EntryRow extends StatelessWidget {
   const _EntryRow({
     required this.entry,
-    required this.category,
     required this.onEdit,
     required this.onDelete,
   });
 
   final FinancialEntry entry;
-  final FinancialCategory category;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
-    final sign = category == FinancialCategory.savings ? '+' : '-';
     return Row(
       children: [
         Expanded(
@@ -300,7 +299,7 @@ class _EntryRow extends StatelessWidget {
           ),
         ),
         Text(
-          '$sign${NumberFormat('#,##0.##').format(entry.amount)}php',
+          '-₱${NumberFormat('#,##0.##').format(entry.amount)}',
           style: const TextStyle(
             color: Colors.white,
             fontSize: 16,
@@ -318,90 +317,4 @@ class _EntryRow extends StatelessWidget {
       ],
     );
   }
-}
-
-class _EntryDialog extends StatefulWidget {
-  const _EntryDialog({required this.title, this.entry});
-
-  final String title;
-  final FinancialEntry? entry;
-
-  @override
-  State<_EntryDialog> createState() => _EntryDialogState();
-}
-
-class _EntryDialogState extends State<_EntryDialog> {
-  late final TextEditingController _titleController;
-  late final TextEditingController _amountController;
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _titleController = TextEditingController(text: widget.entry?.title ?? '');
-    _amountController = TextEditingController(
-      text: widget.entry?.amount.toString() ?? '',
-    );
-  }
-
-  @override
-  void dispose() {
-    _titleController.dispose();
-    _amountController.dispose();
-    super.dispose();
-  }
-
-  void _submit() {
-    final title = _titleController.text.trim();
-    final amount = double.tryParse(_amountController.text.trim());
-    if (title.isEmpty || amount == null || amount <= 0) {
-      setState(() => _error = 'Enter a name and an amount greater than zero.');
-      return;
-    }
-    Navigator.pop(context, _EntryFormResult(title: title, amount: amount));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text('${widget.entry == null ? 'Add' : 'Edit'} ${widget.title}'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            controller: _titleController,
-            autofocus: true,
-            textCapitalization: TextCapitalization.sentences,
-            decoration: const InputDecoration(labelText: 'Name'),
-          ),
-          TextField(
-            controller: _amountController,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(
-              labelText: 'Amount',
-              prefixText: '₱ ',
-            ),
-          ),
-          if (_error != null) ...[
-            const SizedBox(height: 12),
-            Text(_error!, style: const TextStyle(color: Colors.red)),
-          ],
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        TextButton(onPressed: _submit, child: const Text('Save')),
-      ],
-    );
-  }
-}
-
-class _EntryFormResult {
-  const _EntryFormResult({required this.title, required this.amount});
-
-  final String title;
-  final double amount;
 }
