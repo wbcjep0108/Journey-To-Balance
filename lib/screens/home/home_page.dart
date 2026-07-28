@@ -14,16 +14,19 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  late TextEditingController incomeController;
+  late TextEditingController salaryController;
+  late TextEditingController balanceController;
   late TextEditingController billsController;
   late TextEditingController savingsController;
   late TextEditingController personalController;
+  bool _isReceivingSalary = false;
 
   @override
   void initState() {
     super.initState();
 
-    incomeController = TextEditingController();
+    salaryController = TextEditingController();
+    balanceController = TextEditingController();
     billsController = TextEditingController();
     savingsController = TextEditingController();
     personalController = TextEditingController();
@@ -31,7 +34,8 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
-    incomeController.dispose();
+    salaryController.dispose();
+    balanceController.dispose();
     billsController.dispose();
     savingsController.dispose();
     personalController.dispose();
@@ -40,7 +44,7 @@ class _HomePageState extends State<HomePage> {
 
   void _showEditDialog() {
     final budget = context.read<BudgetProvider>();
-    incomeController.text = budget.income.toStringAsFixed(0);
+    salaryController.text = budget.monthlySalary.toStringAsFixed(0);
     billsController.text = budget.billsPercentage.toStringAsFixed(0);
     savingsController.text = budget.savingsPercentage.toStringAsFixed(0);
     personalController.text = budget.personalPercentage.toStringAsFixed(0);
@@ -72,8 +76,8 @@ class _HomePageState extends State<HomePage> {
                 ),
                 const SizedBox(height: 24),
                 _buildField(
-                  label: 'Income',
-                  controller: incomeController,
+                  label: 'Monthly Salary/Income',
+                  controller: salaryController,
                   prefixText: '₱ ',
                 ),
                 const SizedBox(height: 16),
@@ -111,8 +115,8 @@ class _HomePageState extends State<HomePage> {
                     const SizedBox(width: 12),
                     TextButton(
                       onPressed: () async {
-                        final income =
-                            double.tryParse(incomeController.text) ?? -1;
+                        final monthlySalary =
+                            double.tryParse(salaryController.text) ?? -1;
                         final billsPercentage =
                             double.tryParse(billsController.text) ?? 0;
                         final savingsPercentage =
@@ -124,12 +128,12 @@ class _HomePageState extends State<HomePage> {
                             savingsPercentage +
                             personalPercentage;
 
-                        if (income < 0 ||
+                        if (monthlySalary < 0 ||
                             (totalPercentage - 100).abs() > 0.001) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text(
-                                'Enter a valid income and percentages totaling 100%',
+                                'Enter a valid salary and percentages totaling 100%',
                               ),
                             ),
                           );
@@ -138,12 +142,13 @@ class _HomePageState extends State<HomePage> {
 
                         try {
                           await context.read<BudgetProvider>().updateBudget(
-                            income: income,
+                            monthlySalary: monthlySalary,
                             billsPercentage: billsPercentage,
                             savingsPercentage: savingsPercentage,
                             personalPercentage: personalPercentage,
                           );
                           if (context.mounted) Navigator.pop(context);
+                          if (mounted) setState(() {});
                         } catch (_) {
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
@@ -172,6 +177,167 @@ class _HomePageState extends State<HomePage> {
         ),
       ),
     );
+  }
+
+  void _showBalanceDialog() {
+    final budget = context.read<BudgetProvider>();
+    balanceController.text = budget.availableBalance.toStringAsFixed(0);
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Edit Available Balance',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF121212),
+                ),
+              ),
+              const SizedBox(height: 24),
+              _buildField(
+                label: 'Available Balance',
+                controller: balanceController,
+                prefixText: '₱ ',
+              ),
+              const SizedBox(height: 28),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    child: const Text(
+                      'Cancel',
+                      style: TextStyle(
+                        color: Color(0xFF6B7280),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  TextButton(
+                    onPressed: () async {
+                      final balance =
+                          double.tryParse(balanceController.text) ?? -1;
+                      if (balance < 0) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Enter a valid available balance.'),
+                          ),
+                        );
+                        return;
+                      }
+
+                      try {
+                        await budget.updateAvailableBalance(balance);
+                        if (dialogContext.mounted) {
+                          Navigator.pop(dialogContext);
+                        }
+                        if (mounted) setState(() {});
+                      } catch (_) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Available balance could not be updated.',
+                              ),
+                            ),
+                          );
+                        }
+                      }
+                    },
+                    child: const Text(
+                      'Save',
+                      style: TextStyle(
+                        color: Color(0xFF121212),
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _receiveSalary() async {
+    if (_isReceivingSalary) return;
+
+    final budget = context.read<BudgetProvider>();
+    if (budget.monthlySalary <= 0) return;
+
+    setState(() => _isReceivingSalary = true);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Text('Receive monthly salary?'),
+        content: Text(
+          'Add ₱${NumberFormat('#,##0').format(budget.monthlySalary)} '
+          'to your available balance?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: Color(0xFF6B7280)),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text(
+              'Receive',
+              style: TextStyle(
+                color: Color(0xFF121212),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted) return;
+    if (confirmed != true) {
+      setState(() => _isReceivingSalary = false);
+      return;
+    }
+
+    try {
+      await budget.receiveSalary();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Monthly salary added to your available balance.'),
+          ),
+        );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Unable to receive salary. Please try again.'),
+          ),
+        );
+    } finally {
+      if (mounted) setState(() => _isReceivingSalary = false);
+    }
   }
 
   Widget _buildField({
@@ -313,7 +479,7 @@ class _HomePageState extends State<HomePage> {
                                 crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
                                   Text(
-                                    'Income',
+                                    'Monthly Salary',
                                     style: TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w400,
@@ -325,14 +491,9 @@ class _HomePageState extends State<HomePage> {
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      Text(
-                                        NumberFormat(
-                                          '#,##0',
-                                        ).format(budget.income),
-                                        style: const TextStyle(
-                                          fontSize: 32,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.white,
+                                      Flexible(
+                                        child: _AnimatedCurrencyAmount(
+                                          amount: budget.monthlySalary,
                                         ),
                                       ),
                                       const SizedBox(width: 8),
@@ -391,7 +552,7 @@ class _HomePageState extends State<HomePage> {
                                 crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
                                   Text(
-                                    'Balance',
+                                    'Available Balance',
                                     style: TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w400,
@@ -400,15 +561,31 @@ class _HomePageState extends State<HomePage> {
                                     ),
                                   ),
                                   const SizedBox(height: 10),
-                                  Text(
-                                    NumberFormat(
-                                      '#,##0',
-                                    ).format(budget.totalRemainingBalance),
-                                    style: const TextStyle(
-                                      fontSize: 32,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                    ),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Flexible(
+                                        child: _AnimatedCurrencyAmount(
+                                          amount: budget.availableBalance,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      GestureDetector(
+                                        onTap: _showBalanceDialog,
+                                        child: Container(
+                                          padding: const EdgeInsets.all(6),
+                                          decoration: BoxDecoration(
+                                            color: Colors.grey[700],
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const Icon(
+                                            Icons.edit,
+                                            size: 16,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
@@ -417,7 +594,47 @@ class _HomePageState extends State<HomePage> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    if (budget.monthlySalary <= 0)
+                      TextButton(
+                        onPressed: _showEditDialog,
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text(
+                          'Set your monthly salary to receive it',
+                          textAlign: TextAlign.center,
+                        ),
+                      )
+                    else
+                      SizedBox(
+                        height: 42,
+                        child: ElevatedButton.icon(
+                          onPressed: _isReceivingSalary ? null : _receiveSalary,
+                          style: ElevatedButton.styleFrom(
+                            foregroundColor: Colors.black,
+                            backgroundColor: Colors.white,
+                            disabledBackgroundColor: Colors.grey.shade300,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 22),
+                          ),
+                          icon: _isReceivingSalary
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.black,
+                                  ),
+                                )
+                              : const Icon(Icons.account_balance_wallet),
+                          label: const Text(
+                            'Receive Salary',
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -471,6 +688,36 @@ class _HomePageState extends State<HomePage> {
               ),
               const SizedBox(height: 20),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AnimatedCurrencyAmount extends StatelessWidget {
+  const _AnimatedCurrencyAmount({required this.amount});
+
+  final double amount;
+
+  @override
+  Widget build(BuildContext context) {
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: amount),
+      duration: reduceMotion
+          ? Duration.zero
+          : const Duration(milliseconds: 350),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, _) => FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(
+          '₱${NumberFormat('#,##0').format(value)}',
+          style: const TextStyle(
+            fontSize: 32,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
           ),
         ),
       ),

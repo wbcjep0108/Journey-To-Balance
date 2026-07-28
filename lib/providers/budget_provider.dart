@@ -11,6 +11,7 @@ class BudgetProvider extends ChangeNotifier {
   final FirestoreFinanceService _service;
 
   double income = 0;
+  double monthlySalary = 0;
   double billsPercentage = 50;
   double savingsPercentage = 20;
   double personalPercentage = 30;
@@ -57,6 +58,8 @@ class BudgetProvider extends ChangeNotifier {
     );
   }
 
+  double get availableBalance => totalRemainingBalance;
+
   Future<void> loadForUser(String uid) async {
     _cancelRealtimeSync();
     _uid = uid;
@@ -75,6 +78,7 @@ class BudgetProvider extends ChangeNotifier {
 
       final budget = results[0] as Map<String, double>?;
       if (budget != null) {
+        monthlySalary = budget['monthlySalary']!;
         _applyBudget(
           income: budget['income']!,
           billsPercentage: budget['billsPercentage']!,
@@ -130,6 +134,7 @@ class BudgetProvider extends ChangeNotifier {
 
       final budget = results[0] as Map<String, double>?;
       if (budget == null) {
+        monthlySalary = 0;
         _applyBudget(
           income: 0,
           billsPercentage: 50,
@@ -137,6 +142,7 @@ class BudgetProvider extends ChangeNotifier {
           personalPercentage: 30,
         );
       } else {
+        monthlySalary = budget['monthlySalary']!;
         _applyBudget(
           income: budget['income']!,
           billsPercentage: budget['billsPercentage']!,
@@ -167,18 +173,19 @@ class BudgetProvider extends ChangeNotifier {
   }
 
   Future<void> updateBudget({
-    required double income,
+    required double monthlySalary,
     required double billsPercentage,
     required double savingsPercentage,
     required double personalPercentage,
   }) async {
     final uid = _requireUid();
     final total = billsPercentage + savingsPercentage + personalPercentage;
-    if ((total - 100).abs() > 0.001) {
+    if (monthlySalary < 0 || (total - 100).abs() > 0.001) {
       throw ArgumentError('Budget percentages must total 100.');
     }
 
     final previous = _budgetValues;
+    this.monthlySalary = monthlySalary;
     _applyBudget(
       income: income,
       billsPercentage: billsPercentage,
@@ -192,11 +199,13 @@ class BudgetProvider extends ChangeNotifier {
       await _service.saveBudget(
         uid,
         income: income,
+        monthlySalary: monthlySalary,
         billsPercentage: billsPercentage,
         savingsPercentage: savingsPercentage,
         personalPercentage: personalPercentage,
       );
     } catch (_) {
+      this.monthlySalary = previous['monthlySalary']!;
       _applyBudget(
         income: previous['income']!,
         billsPercentage: previous['billsPercentage']!,
@@ -204,6 +213,86 @@ class BudgetProvider extends ChangeNotifier {
         personalPercentage: previous['personalPercentage']!,
       );
       errorMessage = 'Budget changes could not be saved.';
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<void> receiveSalary() async {
+    final uid = _requireUid();
+    if (monthlySalary <= 0) {
+      throw StateError('Set a monthly salary before receiving it.');
+    }
+
+    final previousIncome = income;
+    _applyBudget(
+      income: income + monthlySalary,
+      billsPercentage: billsPercentage,
+      savingsPercentage: savingsPercentage,
+      personalPercentage: personalPercentage,
+    );
+    errorMessage = null;
+    notifyListeners();
+
+    try {
+      await _service.saveBudget(
+        uid,
+        income: income,
+        monthlySalary: monthlySalary,
+        billsPercentage: billsPercentage,
+        savingsPercentage: savingsPercentage,
+        personalPercentage: personalPercentage,
+      );
+    } catch (_) {
+      _applyBudget(
+        income: previousIncome,
+        billsPercentage: billsPercentage,
+        savingsPercentage: savingsPercentage,
+        personalPercentage: personalPercentage,
+      );
+      errorMessage = 'Salary could not be received. Please try again.';
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<void> updateAvailableBalance(double newBalance) async {
+    final uid = _requireUid();
+    if (newBalance < 0) {
+      throw ArgumentError('Available balance cannot be negative.');
+    }
+
+    final previousIncome = income;
+    final totalDeductions = FinancialCategory.values.fold<double>(
+      0,
+      (total, category) => total + totalUsedFor(category),
+    );
+    _applyBudget(
+      income: newBalance + totalDeductions,
+      billsPercentage: billsPercentage,
+      savingsPercentage: savingsPercentage,
+      personalPercentage: personalPercentage,
+    );
+    errorMessage = null;
+    notifyListeners();
+
+    try {
+      await _service.saveBudget(
+        uid,
+        income: income,
+        monthlySalary: monthlySalary,
+        billsPercentage: billsPercentage,
+        savingsPercentage: savingsPercentage,
+        personalPercentage: personalPercentage,
+      );
+    } catch (_) {
+      _applyBudget(
+        income: previousIncome,
+        billsPercentage: billsPercentage,
+        savingsPercentage: savingsPercentage,
+        personalPercentage: personalPercentage,
+      );
+      errorMessage = 'Available balance could not be updated.';
       notifyListeners();
       rethrow;
     }
@@ -306,12 +395,14 @@ class BudgetProvider extends ChangeNotifier {
 
   Map<String, double> get _budgetValues => {
     'income': income,
+    'monthlySalary': monthlySalary,
     'billsPercentage': billsPercentage,
     'savingsPercentage': savingsPercentage,
     'personalPercentage': personalPercentage,
   };
 
   void _setDefaults() {
+    monthlySalary = 0;
     _applyBudget(
       income: 0,
       billsPercentage: 50,
@@ -343,6 +434,7 @@ class BudgetProvider extends ChangeNotifier {
     _realtimeSubscriptions.add(
       _service.watchBudget(uid).listen((budget) {
         if (_uid != uid || budget == null) return;
+        monthlySalary = budget['monthlySalary']!;
         _applyBudget(
           income: budget['income']!,
           billsPercentage: budget['billsPercentage']!,

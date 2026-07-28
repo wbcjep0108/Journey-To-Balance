@@ -31,6 +31,10 @@ class FirestoreFinanceService {
 
     return {
       'income': (budget['income'] as num?)?.toDouble() ?? 0,
+      'monthlySalary':
+          (budget['monthlySalary'] as num?)?.toDouble() ??
+          (budget['income'] as num?)?.toDouble() ??
+          0,
       'billsPercentage': (budget['billsPercentage'] as num?)?.toDouble() ?? 50,
       'savingsPercentage':
           (budget['savingsPercentage'] as num?)?.toDouble() ?? 20,
@@ -46,6 +50,10 @@ class FirestoreFinanceService {
 
       return {
         'income': (budget['income'] as num?)?.toDouble() ?? 0,
+        'monthlySalary':
+            (budget['monthlySalary'] as num?)?.toDouble() ??
+            (budget['income'] as num?)?.toDouble() ??
+            0,
         'billsPercentage':
             (budget['billsPercentage'] as num?)?.toDouble() ?? 50,
         'savingsPercentage':
@@ -59,6 +67,7 @@ class FirestoreFinanceService {
   Future<void> saveBudget(
     String uid, {
     required double income,
+    required double monthlySalary,
     required double billsPercentage,
     required double savingsPercentage,
     required double personalPercentage,
@@ -66,6 +75,7 @@ class FirestoreFinanceService {
     return _user(uid).set({
       'budget': {
         'income': income,
+        'monthlySalary': monthlySalary,
         'billsPercentage': billsPercentage,
         'savingsPercentage': savingsPercentage,
         'personalPercentage': personalPercentage,
