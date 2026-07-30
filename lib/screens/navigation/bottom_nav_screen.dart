@@ -321,14 +321,14 @@ class _AnimatedNavItemState extends State<_AnimatedNavItem> {
                   duration: _duration,
                   curve: Curves.easeOutCubic,
                   child: AnimatedOpacity(
-                    opacity: widget.selected ? 1 : (_hovered ? 0.72 : 0.55),
+                    opacity: widget.selected ? 1 : (_hovered ? 0.88 : 0.78),
                     duration: _duration,
                     curve: Curves.easeOutCubic,
                     child: TweenAnimationBuilder<Color?>(
                       tween: ColorTween(
                         end: widget.selected
                             ? const Color(0xFF121212)
-                            : Colors.grey,
+                            : const Color(0xFF6B7280),
                       ),
                       duration: _duration,
                       curve: Curves.easeOutCubic,

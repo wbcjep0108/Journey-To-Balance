@@ -175,23 +175,7 @@ class FinancialCategoryPage extends StatelessWidget {
                                 ),
                               ),
                             )
-                          : ListView.separated(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              itemCount: entries.length,
-                              separatorBuilder: (_, _) => Divider(
-                                color: Colors.white.withValues(alpha: 0.1),
-                                height: 28,
-                              ),
-                              itemBuilder: (context, index) {
-                                final entry = entries[index];
-                                return _EntryRow(
-                                  entry: entry,
-                                  onEdit: () => _openEditor(context, entry),
-                                  onDelete: () => _delete(context, entry),
-                                );
-                              },
-                            ),
+                          : _buildGroupedHistory(context, entries),
                     ],
                   ),
                 ),
@@ -200,6 +184,62 @@ class FinancialCategoryPage extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildGroupedHistory(
+    BuildContext context,
+    List<FinancialEntry> entries,
+  ) {
+    final sortedEntries = [...entries]
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    final groups = <DateTime, List<FinancialEntry>>{};
+
+    for (final entry in sortedEntries) {
+      final localDate = entry.createdAt.toLocal();
+      final day = DateTime(localDate.year, localDate.month, localDate.day);
+      groups.putIfAbsent(day, () => []).add(entry);
+    }
+
+    final groupedDays = groups.entries.toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (
+          var groupIndex = 0;
+          groupIndex < groupedDays.length;
+          groupIndex++
+        ) ...[
+          if (groupIndex > 0) const SizedBox(height: 26),
+          Text(
+            DateFormat('MMMM d, yyyy').format(groupedDays[groupIndex].key),
+            style: TextStyle(
+              color: Colors.grey.shade400,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.2,
+            ),
+          ),
+          const SizedBox(height: 14),
+          for (
+            var entryIndex = 0;
+            entryIndex < groupedDays[groupIndex].value.length;
+            entryIndex++
+          ) ...[
+            _EntryRow(
+              entry: groupedDays[groupIndex].value[entryIndex],
+              onEdit: () => _openEditor(
+                context,
+                groupedDays[groupIndex].value[entryIndex],
+              ),
+              onDelete: () =>
+                  _delete(context, groupedDays[groupIndex].value[entryIndex]),
+            ),
+            if (entryIndex < groupedDays[groupIndex].value.length - 1)
+              Divider(color: Colors.white.withValues(alpha: 0.1), height: 28),
+          ],
+        ],
+      ],
     );
   }
 
