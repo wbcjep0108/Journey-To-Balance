@@ -2,8 +2,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../providers/app_lock_provider.dart';
 import '../../providers/budget_provider.dart';
 import '../../services/auth_service.dart';
+import 'security_settings_page.dart';
 
 class AccountPage extends StatefulWidget {
   const AccountPage({super.key, this.onHelpAndSupport, this.onAbout});
@@ -23,10 +25,12 @@ class _AccountPageState extends State<AccountPage> {
 
     setState(() => _isSigningOut = true);
     final budget = context.read<BudgetProvider>();
+    final lock = context.read<AppLockProvider>();
 
     try {
       await AuthService().signOut();
       budget.reset();
+      lock.clearUser();
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -34,6 +38,12 @@ class _AccountPageState extends State<AccountPage> {
       );
       setState(() => _isSigningOut = false);
     }
+  }
+
+  void _openSecurity() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const SecuritySettingsPage()),
+    );
   }
 
   void _openHelp() {
@@ -143,6 +153,7 @@ class _AccountPageState extends State<AccountPage> {
                         user: user,
                         isSigningOut: _isSigningOut,
                         onSwitchProfile: _signOut,
+                        onSecurity: _openSecurity,
                         onHelp: _openHelp,
                         onSignOut: _signOut,
                       ),
@@ -172,6 +183,7 @@ class _AccountCard extends StatelessWidget {
     required this.user,
     required this.isSigningOut,
     required this.onSwitchProfile,
+    required this.onSecurity,
     required this.onHelp,
     required this.onSignOut,
   });
@@ -179,6 +191,7 @@ class _AccountCard extends StatelessWidget {
   final User? user;
   final bool isSigningOut;
   final VoidCallback onSwitchProfile;
+  final VoidCallback onSecurity;
   final VoidCallback onHelp;
   final VoidCallback onSignOut;
 
@@ -245,37 +258,16 @@ class _AccountCard extends StatelessWidget {
           ),
           const SizedBox(height: 30),
           const Divider(height: 1, color: Color(0xFFE5E7EB)),
-          InkWell(
+          _AccountLinkTile(
+            icon: Icons.lock_outline_rounded,
+            label: 'Security',
+            onTap: onSecurity,
+          ),
+          const Divider(height: 1, color: Color(0xFFE5E7EB)),
+          _AccountLinkTile(
+            icon: Icons.help_outline,
+            label: 'Help & Support',
             onTap: onHelp,
-            borderRadius: BorderRadius.circular(12),
-            child: const Padding(
-              padding: EdgeInsets.symmetric(vertical: 18),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 19,
-                    backgroundColor: Colors.white,
-                    child: Icon(
-                      Icons.help_outline,
-                      size: 22,
-                      color: Colors.black,
-                    ),
-                  ),
-                  SizedBox(width: 14),
-                  Expanded(
-                    child: Text(
-                      'Help & Support',
-                      style: TextStyle(
-                        color: Colors.black,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                  Icon(Icons.chevron_right, color: Colors.black, size: 24),
-                ],
-              ),
-            ),
           ),
           const Divider(height: 1, color: Color(0xFFE5E7EB)),
           const SizedBox(height: 22),
@@ -296,6 +288,50 @@ class _AccountCard extends StatelessWidget {
                   ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _AccountLinkTile extends StatelessWidget {
+  const _AccountLinkTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 18),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 19,
+              backgroundColor: Colors.white,
+              child: Icon(icon, size: 22, color: Colors.black),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.black,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: Colors.black, size: 24),
+          ],
+        ),
       ),
     );
   }

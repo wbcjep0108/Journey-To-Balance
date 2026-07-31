@@ -4,8 +4,11 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 
 import 'firebase_options.dart';
+import 'providers/app_lock_provider.dart';
 import 'providers/budget_provider.dart';
 import 'screens/auth/login_screen.dart';
+import 'screens/auth/pin_setup_screen.dart';
+import 'screens/auth/pin_unlock_screen.dart';
 import 'screens/navigation/bottom_nav_screen.dart';
 import 'screens/splash/splash_screen.dart';
 import 'services/firestore_finance_service.dart';
@@ -23,6 +26,7 @@ void main() async {
           create: (context) =>
               BudgetProvider(context.read<FirestoreFinanceService>()),
         ),
+        ChangeNotifierProvider(create: (_) => AppLockProvider()),
       ],
       child: const MyApp(),
     ),
@@ -49,8 +53,15 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class AuthGate extends StatelessWidget {
+class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
+
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  String? _boundUid;
 
   @override
   Widget build(BuildContext context) {
@@ -62,11 +73,67 @@ class AuthGate extends StatelessWidget {
         }
 
         final user = snapshot.data;
-        if (user == null) return const LoginScreen();
+        if (user == null) {
+          if (_boundUid != null) {
+            _boundUid = null;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              context.read<AppLockProvider>().clearUser();
+            });
+          }
+          return const LoginScreen();
+        }
 
-        return _UserDataGate(key: ValueKey(user.uid), uid: user.uid);
+        _boundUid = user.uid;
+        return _SecurityGate(
+          key: ValueKey('security_${user.uid}'),
+          uid: user.uid,
+        );
       },
     );
+  }
+}
+
+class _SecurityGate extends StatefulWidget {
+  const _SecurityGate({super.key, required this.uid});
+
+  final String uid;
+
+  @override
+  State<_SecurityGate> createState() => _SecurityGateState();
+}
+
+class _SecurityGateState extends State<_SecurityGate> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AppLockProvider>().bindUser(widget.uid);
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant _SecurityGate oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.uid != widget.uid) {
+      context.read<AppLockProvider>().bindUser(widget.uid);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final status = context.watch<AppLockProvider>().status;
+
+    switch (status) {
+      case AppLockStatus.checking:
+        return const SplashScreen();
+      case AppLockStatus.needsSetup:
+        return const PinSetupScreen();
+      case AppLockStatus.locked:
+        return const PinUnlockScreen();
+      case AppLockStatus.unlocked:
+        return _UserDataGate(key: ValueKey(widget.uid), uid: widget.uid);
+    }
   }
 }
 
