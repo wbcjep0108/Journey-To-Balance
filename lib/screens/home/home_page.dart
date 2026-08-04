@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../models/financial_entry.dart';
 import '../../providers/budget_provider.dart';
 import '../../widgets/app_refresh_indicator.dart';
+import '../../widgets/weekly_spending_card.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -620,7 +621,7 @@ class _HomePageState extends State<HomePage> {
                                 crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
                                   Text(
-                                    'Monthly Salary',
+                                    'Income',
                                     style: TextStyle(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w400,
@@ -886,6 +887,10 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ],
                 ),
+              ),
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: WeeklySpendingCard(),
               ),
               const SizedBox(height: 20),
             ],

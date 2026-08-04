@@ -40,6 +40,10 @@ class FirestoreFinanceService {
           (budget['savingsPercentage'] as num?)?.toDouble() ?? 20,
       'personalPercentage':
           (budget['personalPercentage'] as num?)?.toDouble() ?? 30,
+      'forfeitedBills': (budget['forfeitedBills'] as num?)?.toDouble() ?? 0,
+      'forfeitedSavings': (budget['forfeitedSavings'] as num?)?.toDouble() ?? 0,
+      'forfeitedPersonal':
+          (budget['forfeitedPersonal'] as num?)?.toDouble() ?? 0,
     };
   }
 
@@ -60,6 +64,11 @@ class FirestoreFinanceService {
             (budget['savingsPercentage'] as num?)?.toDouble() ?? 20,
         'personalPercentage':
             (budget['personalPercentage'] as num?)?.toDouble() ?? 30,
+        'forfeitedBills': (budget['forfeitedBills'] as num?)?.toDouble() ?? 0,
+        'forfeitedSavings':
+            (budget['forfeitedSavings'] as num?)?.toDouble() ?? 0,
+        'forfeitedPersonal':
+            (budget['forfeitedPersonal'] as num?)?.toDouble() ?? 0,
       };
     });
   }
@@ -71,6 +80,9 @@ class FirestoreFinanceService {
     required double billsPercentage,
     required double savingsPercentage,
     required double personalPercentage,
+    double forfeitedBills = 0,
+    double forfeitedSavings = 0,
+    double forfeitedPersonal = 0,
   }) {
     return _user(uid).set({
       'budget': {
@@ -79,6 +91,9 @@ class FirestoreFinanceService {
         'billsPercentage': billsPercentage,
         'savingsPercentage': savingsPercentage,
         'personalPercentage': personalPercentage,
+        'forfeitedBills': forfeitedBills,
+        'forfeitedSavings': forfeitedSavings,
+        'forfeitedPersonal': forfeitedPersonal,
         'updatedAt': FieldValue.serverTimestamp(),
       },
     }, SetOptions(merge: true));

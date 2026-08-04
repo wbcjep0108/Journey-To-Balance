@@ -14,8 +14,8 @@ class BottomNavScreen extends StatefulWidget {
 }
 
 class _BottomNavScreenState extends State<BottomNavScreen>
-    with SingleTickerProviderStateMixin {
-  static const _pageTransitionDuration = Duration(milliseconds: 300);
+    with TickerProviderStateMixin {
+  static const _pageTransitionDuration = Duration(milliseconds: 360);
   static const _indicatorDuration = Duration(milliseconds: 420);
 
   final List<Widget> _pages = const [
@@ -35,12 +35,18 @@ class _BottomNavScreenState extends State<BottomNavScreen>
   ];
 
   late final AnimationController _entranceController;
+  late final AnimationController _pageController;
   late final Animation<double> _entranceOpacity;
   late final Animation<double> _entranceScale;
   late final Animation<Offset> _entranceSlide;
+  late final Animation<double> _pageCurve;
 
   int _selectedIndex = 0;
+  int _previousIndex = 0;
+  /// 1 = navigate toward a right tab, -1 = toward a left tab.
+  int _slideDirection = 1;
   bool _entranceStarted = false;
+  bool _isTransitioning = false;
 
   @override
   void initState() {
@@ -59,6 +65,21 @@ class _BottomNavScreenState extends State<BottomNavScreen>
       begin: const Offset(0, 0.35),
       end: Offset.zero,
     ).animate(entranceCurve);
+
+    _pageController = AnimationController(
+      vsync: this,
+      duration: _pageTransitionDuration,
+      value: 1,
+    );
+    _pageCurve = CurvedAnimation(
+      parent: _pageController,
+      curve: Curves.easeInOutCubic,
+    );
+    _pageController.addStatusListener((status) {
+      if (status == AnimationStatus.completed && mounted) {
+        setState(() => _isTransitioning = false);
+      }
+    });
   }
 
   @override
@@ -77,18 +98,38 @@ class _BottomNavScreenState extends State<BottomNavScreen>
   @override
   void dispose() {
     _entranceController.dispose();
+    _pageController.dispose();
     super.dispose();
   }
 
   void _onItemTapped(int index) {
-    if (index == _selectedIndex) return;
-    setState(() => _selectedIndex = index);
+    if (index == _selectedIndex || _isTransitioning) return;
+
+    final direction = index > _selectedIndex ? 1 : -1;
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    if (reduceMotion) {
+      setState(() {
+        _previousIndex = _selectedIndex;
+        _selectedIndex = index;
+        _slideDirection = direction;
+        _isTransitioning = false;
+      });
+      _pageController.value = 1;
+      return;
+    }
+
+    setState(() {
+      _previousIndex = _selectedIndex;
+      _selectedIndex = index;
+      _slideDirection = direction;
+      _isTransitioning = true;
+    });
+    _pageController.forward(from: 0);
   }
 
   @override
   Widget build(BuildContext context) {
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
-    final pageDuration = reduceMotion ? Duration.zero : _pageTransitionDuration;
     final indicatorDuration = reduceMotion ? Duration.zero : _indicatorDuration;
 
     return Scaffold(
@@ -98,7 +139,10 @@ class _BottomNavScreenState extends State<BottomNavScreen>
           _PreservedPageStack(
             pages: _pages,
             selectedIndex: _selectedIndex,
-            duration: pageDuration,
+            previousIndex: _previousIndex,
+            isTransitioning: _isTransitioning,
+            slideDirection: _slideDirection,
+            animation: _pageCurve,
           ),
           Positioned(
             left: 20,
@@ -133,43 +177,85 @@ class _PreservedPageStack extends StatelessWidget {
   const _PreservedPageStack({
     required this.pages,
     required this.selectedIndex,
-    required this.duration,
+    required this.previousIndex,
+    required this.isTransitioning,
+    required this.slideDirection,
+    required this.animation,
   });
 
   final List<Widget> pages;
   final int selectedIndex;
-  final Duration duration;
+  final int previousIndex;
+  final bool isTransitioning;
+  final int slideDirection;
+  final Animation<double> animation;
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        for (var index = 0; index < pages.length; index++)
-          IgnorePointer(
-            key: ValueKey(index),
-            ignoring: index != selectedIndex,
-            child: ExcludeSemantics(
-              excluding: index != selectedIndex,
-              child: AnimatedOpacity(
-                opacity: index == selectedIndex ? 1 : 0,
-                duration: duration,
-                curve: Curves.easeOutCubic,
-                child: AnimatedSlide(
-                  offset: index == selectedIndex
-                      ? Offset.zero
-                      : Offset(index < selectedIndex ? -0.045 : 0.045, 0),
-                  duration: duration,
-                  curve: Curves.easeOutCubic,
-                  child: TickerMode(
-                    enabled: index == selectedIndex,
-                    child: RepaintBoundary(child: pages[index]),
-                  ),
-                ),
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (context, _) {
+        return ClipRect(
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              for (var index = 0; index < pages.length; index++)
+                _buildPageLayer(index),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPageLayer(int index) {
+    final isIncoming = index == selectedIndex;
+    final isOutgoing =
+        isTransitioning &&
+        index == previousIndex &&
+        previousIndex != selectedIndex;
+    final isVisible = isIncoming || isOutgoing;
+
+    late final double opacity;
+    late final Offset translation;
+
+    if (isIncoming) {
+      if (isTransitioning && previousIndex != selectedIndex) {
+        // Right tab: enter from right. Left tab: enter from left.
+        translation = Offset(slideDirection * (1 - animation.value), 0);
+        opacity = 0.3 + (0.7 * animation.value);
+      } else {
+        translation = Offset.zero;
+        opacity = 1;
+      }
+    } else if (isOutgoing) {
+      // Right tab: exit left. Left tab: exit right.
+      translation = Offset(-slideDirection * animation.value, 0);
+      opacity = (1 - animation.value).clamp(0.0, 1.0);
+    } else {
+      translation = Offset.zero;
+      opacity = 0;
+    }
+
+    return IgnorePointer(
+      key: ValueKey(index),
+      ignoring: index != selectedIndex,
+      child: ExcludeSemantics(
+        excluding: index != selectedIndex,
+        child: Offstage(
+          offstage: !isVisible,
+          child: TickerMode(
+            enabled: isVisible,
+            child: Opacity(
+              opacity: opacity,
+              child: FractionalTranslation(
+                translation: translation,
+                child: RepaintBoundary(child: pages[index]),
               ),
             ),
           ),
-      ],
+        ),
+      ),
     );
   }
 }

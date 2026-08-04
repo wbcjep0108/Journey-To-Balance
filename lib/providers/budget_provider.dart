@@ -29,6 +29,9 @@ class BudgetProvider extends ChangeNotifier {
   final Map<FinancialCategory, List<FinancialEntry>> _entries = {
     for (final category in FinancialCategory.values) category: [],
   };
+  final Map<FinancialCategory, double> _forfeited = {
+    for (final category in FinancialCategory.values) category: 0,
+  };
   final List<StreamSubscription<Object?>> _realtimeSubscriptions = [];
 
   List<FinancialEntry> entriesFor(FinancialCategory category) {
@@ -36,7 +39,11 @@ class BudgetProvider extends ChangeNotifier {
   }
 
   double totalUsedFor(FinancialCategory category) {
-    return _entries[category]!.fold(0, (total, entry) => total + entry.amount);
+    final active = _entries[category]!.fold<double>(
+      0,
+      (total, entry) => total + entry.amount,
+    );
+    return active + _forfeited[category]!;
   }
 
   double allocationFor(FinancialCategory category) {
@@ -60,6 +67,66 @@ class BudgetProvider extends ChangeNotifier {
 
   double get availableBalance => totalRemainingBalance;
 
+  /// Monday–Sunday spending totals from Bills + Savings + Personal.
+  List<WeeklyDaySpend> get weeklySpending {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final monday = today.subtract(Duration(days: today.weekday - 1));
+
+    const shortLabels = ['M', 'T', 'W', 'Th', 'F', 'Sa', 'Su'];
+    const fullLabels = [
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday',
+    ];
+
+    final totals = List<double>.filled(7, 0);
+    for (final category in FinancialCategory.values) {
+      for (final entry in _entries[category]!) {
+        final local = entry.createdAt.toLocal();
+        final day = DateTime(local.year, local.month, local.day);
+        final offset = day.difference(monday).inDays;
+        if (offset >= 0 && offset < 7) {
+          totals[offset] += entry.amount;
+        }
+      }
+    }
+
+    return List<WeeklyDaySpend>.generate(7, (index) {
+      final date = monday.add(Duration(days: index));
+      return WeeklyDaySpend(
+        shortLabel: shortLabels[index],
+        fullLabel: fullLabels[index],
+        date: date,
+        amount: totals[index],
+        isToday: date == today,
+      );
+    });
+  }
+
+  /// All Bills / Savings / Personal transactions for a local calendar day.
+  List<DayTransaction> entriesForDay(DateTime day) {
+    final target = DateTime(day.year, day.month, day.day);
+    final results = <DayTransaction>[];
+
+    for (final category in FinancialCategory.values) {
+      for (final entry in _entries[category]!) {
+        final local = entry.createdAt.toLocal();
+        final entryDay = DateTime(local.year, local.month, local.day);
+        if (entryDay == target) {
+          results.add(DayTransaction(category: category, entry: entry));
+        }
+      }
+    }
+
+    results.sort((a, b) => b.entry.createdAt.compareTo(a.entry.createdAt));
+    return results;
+  }
+
   Future<void> loadForUser(String uid) async {
     _cancelRealtimeSync();
     _uid = uid;
@@ -79,6 +146,7 @@ class BudgetProvider extends ChangeNotifier {
       final budget = results[0] as Map<String, double>?;
       if (budget != null) {
         monthlySalary = budget['monthlySalary']!;
+        _applyForfeited(budget);
         _applyBudget(
           income: budget['income']!,
           billsPercentage: budget['billsPercentage']!,
@@ -135,6 +203,7 @@ class BudgetProvider extends ChangeNotifier {
       final budget = results[0] as Map<String, double>?;
       if (budget == null) {
         monthlySalary = 0;
+        _clearForfeited();
         _applyBudget(
           income: 0,
           billsPercentage: 50,
@@ -143,6 +212,7 @@ class BudgetProvider extends ChangeNotifier {
         );
       } else {
         monthlySalary = budget['monthlySalary']!;
+        _applyForfeited(budget);
         _applyBudget(
           income: budget['income']!,
           billsPercentage: budget['billsPercentage']!,
@@ -196,14 +266,7 @@ class BudgetProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _service.saveBudget(
-        uid,
-        income: income,
-        monthlySalary: monthlySalary,
-        billsPercentage: billsPercentage,
-        savingsPercentage: savingsPercentage,
-        personalPercentage: personalPercentage,
-      );
+      await _saveCurrentBudget(uid);
     } catch (_) {
       this.monthlySalary = previous['monthlySalary']!;
       _applyBudget(
@@ -235,14 +298,7 @@ class BudgetProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _service.saveBudget(
-        uid,
-        income: income,
-        monthlySalary: monthlySalary,
-        billsPercentage: billsPercentage,
-        savingsPercentage: savingsPercentage,
-        personalPercentage: personalPercentage,
-      );
+      await _saveCurrentBudget(uid);
     } catch (_) {
       _applyBudget(
         income: previousIncome,
@@ -273,14 +329,7 @@ class BudgetProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _service.saveBudget(
-        uid,
-        income: income,
-        monthlySalary: monthlySalary,
-        billsPercentage: billsPercentage,
-        savingsPercentage: savingsPercentage,
-        personalPercentage: personalPercentage,
-      );
+      await _saveCurrentBudget(uid);
     } catch (_) {
       _applyBudget(
         income: previousIncome,
@@ -315,14 +364,7 @@ class BudgetProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _service.saveBudget(
-        uid,
-        income: income,
-        monthlySalary: monthlySalary,
-        billsPercentage: billsPercentage,
-        savingsPercentage: savingsPercentage,
-        personalPercentage: personalPercentage,
-      );
+      await _saveCurrentBudget(uid);
     } catch (_) {
       _applyBudget(
         income: previousIncome,
@@ -401,13 +443,20 @@ class BudgetProvider extends ChangeNotifier {
     final index = list.indexWhere((item) => item.id == entry.id);
     if (index < 0) return;
 
+    final previousForfeited = _forfeited[category]!;
     list.removeAt(index);
+    // Keep the spend deducted from balances even after the row is removed.
+    _forfeited[category] = previousForfeited + entry.amount;
     errorMessage = null;
     notifyListeners();
     try {
-      await _service.deleteEntry(uid, category, entry.id);
+      await Future.wait([
+        _service.deleteEntry(uid, category, entry.id),
+        _saveCurrentBudget(uid),
+      ]);
     } catch (_) {
       list.insert(index, entry);
+      _forfeited[category] = previousForfeited;
       errorMessage = 'The entry could not be deleted.';
       notifyListeners();
       rethrow;
@@ -441,6 +490,7 @@ class BudgetProvider extends ChangeNotifier {
 
   void _setDefaults() {
     monthlySalary = 0;
+    _clearForfeited();
     _applyBudget(
       income: 0,
       billsPercentage: 50,
@@ -450,6 +500,32 @@ class BudgetProvider extends ChangeNotifier {
     for (final entries in _entries.values) {
       entries.clear();
     }
+  }
+
+  void _clearForfeited() {
+    for (final category in FinancialCategory.values) {
+      _forfeited[category] = 0;
+    }
+  }
+
+  void _applyForfeited(Map<String, double> budget) {
+    _forfeited[FinancialCategory.bills] = budget['forfeitedBills'] ?? 0;
+    _forfeited[FinancialCategory.savings] = budget['forfeitedSavings'] ?? 0;
+    _forfeited[FinancialCategory.personal] = budget['forfeitedPersonal'] ?? 0;
+  }
+
+  Future<void> _saveCurrentBudget(String uid) {
+    return _service.saveBudget(
+      uid,
+      income: income,
+      monthlySalary: monthlySalary,
+      billsPercentage: billsPercentage,
+      savingsPercentage: savingsPercentage,
+      personalPercentage: personalPercentage,
+      forfeitedBills: _forfeited[FinancialCategory.bills]!,
+      forfeitedSavings: _forfeited[FinancialCategory.savings]!,
+      forfeitedPersonal: _forfeited[FinancialCategory.personal]!,
+    );
   }
 
   void _applyBudget({
@@ -473,6 +549,7 @@ class BudgetProvider extends ChangeNotifier {
       _service.watchBudget(uid).listen((budget) {
         if (_uid != uid || budget == null) return;
         monthlySalary = budget['monthlySalary']!;
+        _applyForfeited(budget);
         _applyBudget(
           income: budget['income']!,
           billsPercentage: budget['billsPercentage']!,
@@ -512,4 +589,27 @@ class BudgetProvider extends ChangeNotifier {
     _cancelRealtimeSync();
     super.dispose();
   }
+}
+
+class WeeklyDaySpend {
+  const WeeklyDaySpend({
+    required this.shortLabel,
+    required this.fullLabel,
+    required this.date,
+    required this.amount,
+    required this.isToday,
+  });
+
+  final String shortLabel;
+  final String fullLabel;
+  final DateTime date;
+  final double amount;
+  final bool isToday;
+}
+
+class DayTransaction {
+  const DayTransaction({required this.category, required this.entry});
+
+  final FinancialCategory category;
+  final FinancialEntry entry;
 }

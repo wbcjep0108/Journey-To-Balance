@@ -114,25 +114,27 @@ class BrandMark extends StatelessWidget {
     return Container(
       width: size,
       height: size,
-      padding: EdgeInsets.all(size * 0.18),
       decoration: BoxDecoration(
-        color: Colors.black,
         borderRadius: BorderRadius.circular(size * 0.28),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.22),
+            color: Colors.black.withValues(alpha: 0.18),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
         ],
       ),
+      clipBehavior: Clip.antiAlias,
       child: Image.asset(
         'assets/images/logo.png',
-        fit: BoxFit.contain,
-        errorBuilder: (_, _, _) => Icon(
-          Icons.lock_outline_rounded,
-          color: Colors.white,
-          size: size * 0.42,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => ColoredBox(
+          color: Colors.black,
+          child: Icon(
+            Icons.lock_outline_rounded,
+            color: Colors.white,
+            size: size * 0.42,
+          ),
         ),
       ),
     );

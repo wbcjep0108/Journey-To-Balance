@@ -60,8 +60,8 @@ class _AccountPageState extends State<AccountPage> {
         surfaceTintColor: Colors.transparent,
         title: const Text('Help & Support'),
         content: const Text(
-          'For help with Journey to Balance, contact the application support '
-          'team or check the latest support information.',
+          'For help with Journey to Balance, contact the application support (bcueva1217@gmail.com) '
+          'team for the latest support information.',
         ),
         actions: [
           TextButton(
