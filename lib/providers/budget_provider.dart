@@ -256,6 +256,44 @@ class BudgetProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> addMoney(double amount) async {
+    final uid = _requireUid();
+    if (amount <= 0) {
+      throw ArgumentError('Amount must be greater than zero.');
+    }
+
+    final previousIncome = income;
+    _applyBudget(
+      income: income + amount,
+      billsPercentage: billsPercentage,
+      savingsPercentage: savingsPercentage,
+      personalPercentage: personalPercentage,
+    );
+    errorMessage = null;
+    notifyListeners();
+
+    try {
+      await _service.saveBudget(
+        uid,
+        income: income,
+        monthlySalary: monthlySalary,
+        billsPercentage: billsPercentage,
+        savingsPercentage: savingsPercentage,
+        personalPercentage: personalPercentage,
+      );
+    } catch (_) {
+      _applyBudget(
+        income: previousIncome,
+        billsPercentage: billsPercentage,
+        savingsPercentage: savingsPercentage,
+        personalPercentage: personalPercentage,
+      );
+      errorMessage = 'Money could not be added. Please try again.';
+      notifyListeners();
+      rethrow;
+    }
+  }
+
   Future<void> updateAvailableBalance(double newBalance) async {
     final uid = _requireUid();
     if (newBalance < 0) {

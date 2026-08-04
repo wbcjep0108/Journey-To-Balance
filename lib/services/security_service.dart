@@ -1,8 +1,11 @@
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:local_auth/local_auth.dart';
+import 'package:local_auth_android/local_auth_android.dart';
+import 'package:local_auth_darwin/local_auth_darwin.dart';
 
 enum AutoLockOption {
   immediately(0, 'Immediately'),
@@ -32,6 +35,11 @@ class SecurityService {
 
   final FlutterSecureStorage _storage;
   final LocalAuthentication _localAuth;
+
+  /// Zero-width space: Android requires non-empty title/reason strings, but
+  /// these keep the system biometric sheet free of "Authentication required"
+  /// / "Verify identity" copy.
+  static const String _silentPrompt = '\u200B';
 
   String _pinKey(String uid) => 'pin_hash_$uid';
   String _biometricKey(String uid) => 'biometric_enabled_$uid';
@@ -101,9 +109,22 @@ class SecurityService {
   }) async {
     try {
       return await _localAuth.authenticate(
-        localizedReason: reason,
+        // Android: title only. iOS: localizedReason is the visible prompt.
+        localizedReason: defaultTargetPlatform == TargetPlatform.iOS
+            ? reason
+            : _silentPrompt,
         biometricOnly: true,
+        // Avoid the extra "confirm" step some devices show after biometrics.
+        sensitiveTransaction: false,
         persistAcrossBackgrounding: true,
+        authMessages: <AuthMessages>[
+          AndroidAuthMessages(
+            signInTitle: reason,
+            signInHint: _silentPrompt,
+            cancelButton: 'Cancel',
+          ),
+          const IOSAuthMessages(localizedFallbackTitle: ''),
+        ],
       );
     } catch (_) {
       return false;

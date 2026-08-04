@@ -75,9 +75,7 @@ class AppLockProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (uid == null) return;
 
     if (enabled) {
-      final ok = await _security.authenticateWithBiometrics(
-        reason: 'Enable fingerprint unlock',
-      );
+      final ok = await _security.authenticateWithBiometrics();
       if (!ok) return;
     }
 
@@ -106,11 +104,16 @@ class AppLockProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<bool> unlockWithBiometric() async {
-    final uid = _uid;
-    if (uid == null || !_biometricEnabled) return false;
-    final ok = await _security.authenticateWithBiometrics();
+    final ok = await confirmWithBiometric();
     if (ok) unlock();
     return ok;
+  }
+
+  /// Verifies biometrics for a sensitive in-app action without changing lock state.
+  Future<bool> confirmWithBiometric() async {
+    final uid = _uid;
+    if (uid == null || !_biometricEnabled) return false;
+    return _security.authenticateWithBiometrics();
   }
 
   void unlock() {

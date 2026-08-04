@@ -6,6 +6,7 @@ import '../models/financial_entry.dart';
 import '../providers/budget_provider.dart';
 import 'app_refresh_indicator.dart';
 import 'budget_modal.dart';
+import 'sensitive_action_auth.dart';
 
 class FinancialCategoryPage extends StatelessWidget {
   const FinancialCategoryPage({
@@ -270,30 +271,21 @@ class FinancialCategoryPage extends StatelessWidget {
     );
   }
 
-  Future<void> _delete(BuildContext context, FinancialEntry entry) async {
-    final confirmed = await showDialog<bool>(
+  Future<bool> _delete(BuildContext context, FinancialEntry entry) async {
+    final authorized = await showSensitiveActionAuth(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete entry?'),
-        content: Text('Delete "${entry.title}" permanently?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+      title: 'Confirm delete',
+      description:
+          'Enter your PIN or use fingerprint to delete "${entry.title}".',
     );
-    if (confirmed != true || !context.mounted) return;
+    if (!authorized || !context.mounted) return false;
 
     try {
       await context.read<BudgetProvider>().deleteEntry(category, entry);
+      return true;
     } catch (_) {
       if (context.mounted) _showError(context);
+      return false;
     }
   }
 
@@ -316,45 +308,69 @@ class _EntryRow extends StatelessWidget {
 
   final FinancialEntry entry;
   final VoidCallback onEdit;
-  final VoidCallback onDelete;
+  final Future<bool> Function() onDelete;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: InkWell(
-            onTap: onEdit,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Text(
-                entry.title,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
+    return Dismissible(
+      key: ValueKey(entry.id),
+      direction: DismissDirection.endToStart,
+      confirmDismiss: (_) => onDelete(),
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        decoration: BoxDecoration(
+          color: const Color(0xFFE11D48),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            Icon(Icons.delete_outline_rounded, color: Colors.white, size: 26),
+            SizedBox(width: 8),
+            Text(
+              'Delete',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 14,
               ),
+            ),
+          ],
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onEdit,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    entry.title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                Text(
+                  '-₱${NumberFormat('#,##0.##').format(entry.amount)}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
-        Text(
-          '-₱${NumberFormat('#,##0.##').format(entry.amount)}',
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        PopupMenuButton<String>(
-          iconColor: Colors.white70,
-          onSelected: (value) => value == 'edit' ? onEdit() : onDelete(),
-          itemBuilder: (_) => const [
-            PopupMenuItem(value: 'edit', child: Text('Edit')),
-            PopupMenuItem(value: 'delete', child: Text('Delete')),
-          ],
-        ),
-      ],
+      ),
     );
   }
 }

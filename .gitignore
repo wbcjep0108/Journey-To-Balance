@@ -12,6 +12,14 @@
 .swiftpm/
 migrate_working_dir/
 
+# Local secrets / env
+.env
+.env.*
+
+# Cursor / debug session artifacts
+.cursor/
+debug-*.log
+
 # IntelliJ related
 *.iml
 *.ipr

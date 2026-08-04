@@ -16,10 +16,12 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   late TextEditingController salaryController;
   late TextEditingController balanceController;
+  late TextEditingController addMoneyController;
   late TextEditingController billsController;
   late TextEditingController savingsController;
   late TextEditingController personalController;
   bool _isReceivingSalary = false;
+  bool _isAddingMoney = false;
 
   @override
   void initState() {
@@ -27,6 +29,7 @@ class _HomePageState extends State<HomePage> {
 
     salaryController = TextEditingController();
     balanceController = TextEditingController();
+    addMoneyController = TextEditingController();
     billsController = TextEditingController();
     savingsController = TextEditingController();
     personalController = TextEditingController();
@@ -36,6 +39,7 @@ class _HomePageState extends State<HomePage> {
   void dispose() {
     salaryController.dispose();
     balanceController.dispose();
+    addMoneyController.dispose();
     billsController.dispose();
     savingsController.dispose();
     personalController.dispose();
@@ -340,6 +344,143 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  void _showAddMoneyDialog() {
+    final budget = context.read<BudgetProvider>();
+    addMoneyController.clear();
+    var isSaving = false;
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => Dialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(32),
+          ),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Add Money',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF121212),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Add funds to your available balance.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF6B7280),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                _buildField(
+                  label: 'Amount',
+                  controller: addMoneyController,
+                  prefixText: '₱ ',
+                ),
+                const SizedBox(height: 28),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: isSaving
+                          ? null
+                          : () => Navigator.pop(dialogContext),
+                      child: const Text(
+                        'Cancel',
+                        style: TextStyle(
+                          color: Color(0xFF6B7280),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    TextButton(
+                      onPressed: isSaving
+                          ? null
+                          : () async {
+                              final amount =
+                                  double.tryParse(addMoneyController.text) ??
+                                  0;
+                              if (amount <= 0) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Enter an amount greater than zero.',
+                                    ),
+                                  ),
+                                );
+                                return;
+                              }
+
+                              setDialogState(() => isSaving = true);
+                              if (mounted) {
+                                setState(() => _isAddingMoney = true);
+                              }
+                              try {
+                                await budget.addMoney(amount);
+                                if (dialogContext.mounted) {
+                                  Navigator.pop(dialogContext);
+                                }
+                                if (!mounted) return;
+                                ScaffoldMessenger.of(context)
+                                  ..hideCurrentSnackBar()
+                                  ..showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        '₱${NumberFormat('#,##0').format(amount)} '
+                                        'added to your available balance.',
+                                      ),
+                                    ),
+                                  );
+                              } catch (_) {
+                                if (dialogContext.mounted) {
+                                  setDialogState(() => isSaving = false);
+                                }
+                                if (!mounted) return;
+                                ScaffoldMessenger.of(context)
+                                  ..hideCurrentSnackBar()
+                                  ..showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Unable to add money. Please try again.',
+                                      ),
+                                    ),
+                                  );
+                              } finally {
+                                if (mounted) {
+                                  setState(() => _isAddingMoney = false);
+                                }
+                              }
+                            },
+                      child: const Text(
+                        'Add',
+                        style: TextStyle(
+                          color: Color(0xFF121212),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildField({
     required String label,
     required TextEditingController controller,
@@ -594,47 +735,107 @@ class _HomePageState extends State<HomePage> {
                         ),
                       ),
                     ),
-                    if (budget.monthlySalary <= 0)
-                      TextButton(
-                        onPressed: _showEditDialog,
-                        style: TextButton.styleFrom(
-                          foregroundColor: Colors.white,
-                        ),
-                        child: const Text(
-                          'Set your monthly salary to receive it',
-                          textAlign: TextAlign.center,
-                        ),
-                      )
-                    else
-                      SizedBox(
-                        height: 42,
-                        child: ElevatedButton.icon(
-                          onPressed: _isReceivingSalary ? null : _receiveSalary,
-                          style: ElevatedButton.styleFrom(
-                            foregroundColor: Colors.black,
-                            backgroundColor: Colors.white,
-                            disabledBackgroundColor: Colors.grey.shade300,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(24),
-                            ),
-                            padding: const EdgeInsets.symmetric(horizontal: 22),
-                          ),
-                          icon: _isReceivingSalary
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.black,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: budget.monthlySalary <= 0
+                              ? TextButton(
+                                  onPressed: _showEditDialog,
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                    ),
+                                  ),
+                                  child: const Text(
+                                    'Set monthly salary',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(fontSize: 13),
                                   ),
                                 )
-                              : const Icon(Icons.account_balance_wallet),
-                          label: const Text(
-                            'Receive Salary',
-                            style: TextStyle(fontWeight: FontWeight.w700),
+                              : SizedBox(
+                                  height: 42,
+                                  width: double.infinity,
+                                  child: ElevatedButton.icon(
+                                    onPressed: _isReceivingSalary
+                                        ? null
+                                        : _receiveSalary,
+                                    style: ElevatedButton.styleFrom(
+                                      foregroundColor: Colors.black,
+                                      backgroundColor: Colors.white,
+                                      disabledBackgroundColor:
+                                          Colors.grey.shade300,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(24),
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                      ),
+                                    ),
+                                    icon: _isReceivingSalary
+                                        ? const SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: Colors.black,
+                                            ),
+                                          )
+                                        : const Icon(
+                                            Icons.account_balance_wallet,
+                                            size: 18,
+                                          ),
+                                    label: const Text(
+                                      'Receive Salary',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                        ),
+                        const SizedBox(width: 30),
+                        Expanded(
+                          child: SizedBox(
+                            height: 42,
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed:
+                                  _isAddingMoney ? null : _showAddMoneyDialog,
+                              style: ElevatedButton.styleFrom(
+                                foregroundColor: Colors.black,
+                                backgroundColor: Colors.white,
+                                disabledBackgroundColor: Colors.grey.shade300,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(24),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                ),
+                              ),
+                              icon: _isAddingMoney
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.black,
+                                      ),
+                                    )
+                                  : const Icon(Icons.add_circle_outline, size: 18),
+                              label: const Text(
+                                'Add Money',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
                           ),
                         ),
-                      ),
+                      ],
+                    ),
                   ],
                 ),
               ),
