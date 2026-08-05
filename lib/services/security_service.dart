@@ -105,7 +105,7 @@ class SecurityService {
   }
 
   Future<bool> authenticateWithBiometrics({
-    String reason = 'Unlock Journey to Balance',
+    String reason = 'Biometrics Login',
   }) async {
     try {
       return await _localAuth.authenticate(
