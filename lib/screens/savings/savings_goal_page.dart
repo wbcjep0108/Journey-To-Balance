@@ -63,7 +63,7 @@ class _SavingsGoalPageState extends State<SavingsGoalPage> {
       decimalDigits: target % 1 == 0 ? 0 : 2,
     );
     final targetDateLabel = DateFormat(
-      'MMM yyyy',
+      'MMMM d, yyyy',
     ).format(budget.savingsGoalTargetDate);
 
     return Scaffold(
@@ -86,8 +86,10 @@ class _SavingsGoalPageState extends State<SavingsGoalPage> {
               currentLabel: currency.format(current),
               goalLabel: goalCurrency.format(target),
               progress: progress,
+              goalTitle: budget.savingsGoalTitle,
               targetDateLabel: targetDateLabel,
               onEditGoal: () => _editGoal(context, budget),
+              onEditTitle: () => _editTitle(context, budget),
               onEditDate: () => _editDate(context, budget),
             ),
             const SizedBox(height: 28),
@@ -190,6 +192,81 @@ class _SavingsGoalPageState extends State<SavingsGoalPage> {
     if (saved != true) return;
   }
 
+  Future<void> _editTitle(BuildContext context, BudgetProvider budget) async {
+    final controller = TextEditingController(text: budget.savingsGoalTitle);
+
+    final saved = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return Dialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Edit Goal Title',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF121212),
+                  ),
+                ),
+                const SizedBox(height: 22),
+                _TextField(label: 'What are you saving for?', controller: controller),
+                const SizedBox(height: 24),
+                _ConfirmButton(
+                  label: 'Confirm',
+                  onPressed: () async {
+                    final title = controller.text.trim();
+                    if (title.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Enter a goal title.'),
+                        ),
+                      );
+                      return;
+                    }
+                    try {
+                      await budget.updateSavingsGoalSettings(
+                        target: budget.savingsGoalTarget,
+                        targetDate: budget.savingsGoalTargetDate,
+                        title: title,
+                      );
+                      if (dialogContext.mounted) {
+                        Navigator.pop(dialogContext, true);
+                      }
+                    } catch (_) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Could not update goal title.'),
+                          ),
+                        );
+                      }
+                    }
+                  },
+                ),
+                _CancelButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    controller.dispose();
+    if (saved != true) return;
+  }
+
   Future<void> _editDate(BuildContext context, BudgetProvider budget) async {
     final picked = await showDatePicker(
       context: context,
@@ -197,6 +274,28 @@ class _SavingsGoalPageState extends State<SavingsGoalPage> {
       firstDate: DateTime(DateTime.now().year, DateTime.now().month, 1),
       lastDate: DateTime(DateTime.now().year + 30),
       helpText: 'Select target date',
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF121212),
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: Color(0xFF121212),
+            ),
+            dialogTheme: const DialogThemeData(
+              backgroundColor: Colors.white,
+            ),
+            datePickerTheme: const DatePickerThemeData(
+              backgroundColor: Colors.white,
+              surfaceTintColor: Colors.transparent,
+              headerBackgroundColor: Colors.white,
+              headerForegroundColor: Color(0xFF121212),
+            ),
+          ),
+          child: child!,
+        );
+      },
     );
     if (picked == null || !context.mounted) return;
 
@@ -410,16 +509,20 @@ class _GoalHeader extends StatelessWidget {
     required this.currentLabel,
     required this.goalLabel,
     required this.progress,
+    required this.goalTitle,
     required this.targetDateLabel,
     required this.onEditGoal,
+    required this.onEditTitle,
     required this.onEditDate,
   });
 
   final String currentLabel;
   final String goalLabel;
   final double progress;
+  final String goalTitle;
   final String targetDateLabel;
   final VoidCallback onEditGoal;
+  final VoidCallback onEditTitle;
   final VoidCallback onEditDate;
 
   @override
@@ -549,14 +652,24 @@ class _GoalHeader extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 6),
-              const Text(
-                'Savings Goal',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF121212),
+              InkWell(
+                onTap: onEditTitle,
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  child: Text(
+                    goalTitle,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF121212),
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 6),
@@ -569,7 +682,7 @@ class _GoalHeader extends StatelessWidget {
                     vertical: 4,
                   ),
                   child: Text(
-                    'Target Date: $targetDateLabel',
+                    'Target date: $targetDateLabel',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontFamily: 'Inter',
@@ -926,6 +1039,71 @@ class _AmountField extends StatelessWidget {
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
                 color: Color(0xFF121212),
+              ),
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 20,
+                vertical: 16,
+              ),
+              border: InputBorder.none,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TextField extends StatelessWidget {
+  const _TextField({
+    required this.label,
+    required this.controller,
+  });
+
+  final String label;
+  final TextEditingController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF121212),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(999),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.06),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: TextField(
+            controller: controller,
+            textCapitalization: TextCapitalization.words,
+            maxLength: 40,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF121212),
+            ),
+            decoration: const InputDecoration(
+              counterText: '',
+              hintText: 'e.g. Baguio trip',
+              hintStyle: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF9CA3AF),
               ),
               contentPadding: EdgeInsets.symmetric(
                 horizontal: 20,

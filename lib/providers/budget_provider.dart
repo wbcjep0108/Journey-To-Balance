@@ -25,6 +25,7 @@ class BudgetProvider extends ChangeNotifier {
   double savingsGoalTarget = 10000;
   double savingsGoalCurrent = 0;
   DateTime savingsGoalTargetDate = DateTime(2028, 12, 31);
+  String savingsGoalTitle = BudgetDocument.defaultSavingsGoalTitle;
 
   /// 1–2 = legacy AB×% models. 3 = independent category remainings.
   int budgetSchemaVersion = 1;
@@ -52,6 +53,7 @@ class BudgetProvider extends ChangeNotifier {
   double? _lockedSavingsGoalCurrent;
   double? _lockedSavingsGoalTarget;
   DateTime? _lockedSavingsGoalTargetDate;
+  String? _lockedSavingsGoalTitle;
   final Map<FinancialCategory, double?> _lockedForfeited = {
     for (final category in FinancialCategory.values) category: null,
   };
@@ -63,6 +65,7 @@ class BudgetProvider extends ChangeNotifier {
     _lockedSavingsGoalCurrent = savingsGoalCurrent;
     _lockedSavingsGoalTarget = savingsGoalTarget;
     _lockedSavingsGoalTargetDate = savingsGoalTargetDate;
+    _lockedSavingsGoalTitle = savingsGoalTitle;
   }
 
   List<FinancialEntry> _mergeEntriesWithPending(
@@ -276,13 +279,14 @@ class BudgetProvider extends ChangeNotifier {
       ]);
       if (_uid != uid) return;
 
-      final budget = results[0] as Map<String, double>?;
-      if (budget != null) {
+      final loaded = results[0] as BudgetDocument?;
+      if (loaded != null) {
+        final budget = loaded.values;
         monthlySalary = budget['monthlySalary']!;
         budgetSchemaVersion =
             (budget['schemaVersion'] ?? 1).round().clamp(1, currentBudgetSchemaVersion);
         _applyForfeited(budget);
-        _applySavingsGoal(budget);
+        _applySavingsGoal(budget, title: loaded.savingsGoalTitle);
         _applyBudget(
           availableBalance: budget['availableBalance']!,
           billsPercentage: budget['billsPercentage']!,
@@ -343,8 +347,8 @@ class BudgetProvider extends ChangeNotifier {
       ]);
       if (_uid != uid) return;
 
-      final budget = results[0] as Map<String, double>?;
-      if (budget == null) {
+      final loaded = results[0] as BudgetDocument?;
+      if (loaded == null) {
         monthlySalary = 0;
         _clearForfeited();
         _resetSavingsGoal();
@@ -358,6 +362,7 @@ class BudgetProvider extends ChangeNotifier {
           personalRemaining: 0,
         );
       } else {
+        final budget = loaded.values;
         monthlySalary = budget['monthlySalary']!;
         budgetSchemaVersion =
             (budget['schemaVersion'] ?? 1).round().clamp(1, currentBudgetSchemaVersion);
@@ -371,11 +376,13 @@ class BudgetProvider extends ChangeNotifier {
           personalRemaining: budget['personalRemaining'],
         );
         if (_lockedSavingsGoalCurrent == null) {
-          _applySavingsGoal(budget);
+          _applySavingsGoal(budget, title: loaded.savingsGoalTitle);
         } else {
           savingsGoalCurrent = _lockedSavingsGoalCurrent!;
           savingsGoalTarget = _lockedSavingsGoalTarget!;
           savingsGoalTargetDate = _lockedSavingsGoalTargetDate!;
+          savingsGoalTitle =
+              _lockedSavingsGoalTitle ?? BudgetDocument.defaultSavingsGoalTitle;
         }
         if (_lockedForfeited.values.every((value) => value == null)) {
           _applyForfeited(budget);
@@ -648,6 +655,7 @@ class BudgetProvider extends ChangeNotifier {
           savingsGoalCurrent: savingsGoalCurrent,
           savingsGoalTargetDateMs: savingsGoalTargetDate.millisecondsSinceEpoch
               .toDouble(),
+          savingsGoalTitle: savingsGoalTitle,
           schemaVersion: budgetSchemaVersion.toDouble(),
         );
       } catch (_) {
@@ -706,6 +714,7 @@ class BudgetProvider extends ChangeNotifier {
         savingsGoalCurrent: savingsGoalCurrent,
         savingsGoalTargetDateMs: savingsGoalTargetDate.millisecondsSinceEpoch
             .toDouble(),
+        savingsGoalTitle: savingsGoalTitle,
         schemaVersion: budgetSchemaVersion.toDouble(),
       );
     } catch (_) {
@@ -720,20 +729,27 @@ class BudgetProvider extends ChangeNotifier {
   Future<void> updateSavingsGoalSettings({
     required double target,
     required DateTime targetDate,
+    String? title,
   }) async {
     final uid = _requireUid();
     if (target <= 0) {
       throw ArgumentError('Goal amount must be greater than zero.');
     }
+    final nextTitle = (title ?? savingsGoalTitle).trim();
+    if (nextTitle.isEmpty) {
+      throw ArgumentError('Goal title cannot be empty.');
+    }
 
     final previousTarget = savingsGoalTarget;
     final previousDate = savingsGoalTargetDate;
+    final previousTitle = savingsGoalTitle;
     savingsGoalTarget = target;
     savingsGoalTargetDate = DateTime(
       targetDate.year,
       targetDate.month,
       targetDate.day,
     );
+    savingsGoalTitle = nextTitle;
     errorMessage = null;
     _lockSavingsGoal();
     notifyListeners();
@@ -745,6 +761,7 @@ class BudgetProvider extends ChangeNotifier {
       } catch (_) {
         savingsGoalTarget = previousTarget;
         savingsGoalTargetDate = previousDate;
+        savingsGoalTitle = previousTitle;
         _lockSavingsGoal();
         errorMessage = 'Savings goal could not be updated.';
         notifyListeners();
@@ -809,6 +826,7 @@ class BudgetProvider extends ChangeNotifier {
           savingsGoalCurrent: savingsGoalCurrent,
           savingsGoalTargetDateMs: savingsGoalTargetDate.millisecondsSinceEpoch
               .toDouble(),
+          savingsGoalTitle: savingsGoalTitle,
           schemaVersion: budgetSchemaVersion.toDouble(),
         );
       } catch (_) {
@@ -877,6 +895,7 @@ class BudgetProvider extends ChangeNotifier {
           savingsGoalCurrent: savingsGoalCurrent,
           savingsGoalTargetDateMs: savingsGoalTargetDate.millisecondsSinceEpoch
               .toDouble(),
+          savingsGoalTitle: savingsGoalTitle,
           schemaVersion: budgetSchemaVersion.toDouble(),
         );
       } catch (_) {
@@ -905,6 +924,7 @@ class BudgetProvider extends ChangeNotifier {
     _lockedSavingsGoalCurrent = null;
     _lockedSavingsGoalTarget = null;
     _lockedSavingsGoalTargetDate = null;
+    _lockedSavingsGoalTitle = null;
     for (final category in FinancialCategory.values) {
       _lockedForfeited[category] = null;
     }
@@ -978,6 +998,7 @@ class BudgetProvider extends ChangeNotifier {
     savingsGoalTarget = 10000;
     savingsGoalCurrent = 0;
     savingsGoalTargetDate = DateTime(2028, 12, 31);
+    savingsGoalTitle = BudgetDocument.defaultSavingsGoalTitle;
   }
 
   void _applyForfeited(Map<String, double> budget) {
@@ -986,13 +1007,19 @@ class BudgetProvider extends ChangeNotifier {
     _forfeited[FinancialCategory.personal] = budget['forfeitedPersonal'] ?? 0;
   }
 
-  void _applySavingsGoal(Map<String, double> budget) {
+  void _applySavingsGoal(Map<String, double> budget, {String? title}) {
     savingsGoalTarget = budget['savingsGoalTarget'] ?? 10000;
     savingsGoalCurrent = budget['savingsGoalCurrent'] ?? 0;
     final ms = budget['savingsGoalTargetDateMs'];
     savingsGoalTargetDate = ms == null
         ? DateTime(2028, 12, 31)
         : DateTime.fromMillisecondsSinceEpoch(ms.round());
+    if (title != null) {
+      final trimmed = title.trim();
+      savingsGoalTitle = trimmed.isEmpty
+          ? BudgetDocument.defaultSavingsGoalTitle
+          : trimmed;
+    }
   }
 
   Future<void> _saveCurrentBudget(String uid) {
@@ -1013,6 +1040,7 @@ class BudgetProvider extends ChangeNotifier {
       savingsGoalCurrent: savingsGoalCurrent,
       savingsGoalTargetDateMs: savingsGoalTargetDate.millisecondsSinceEpoch
           .toDouble(),
+      savingsGoalTitle: savingsGoalTitle,
       schemaVersion: budgetSchemaVersion.toDouble(),
     );
   }
@@ -1043,7 +1071,8 @@ class BudgetProvider extends ChangeNotifier {
     _realtimeSubscriptions.add(
       _service.watchBudget(uid).listen((snapshot) {
         if (_uid != uid || snapshot.budget == null) return;
-        final budget = snapshot.budget!;
+        final loaded = snapshot.budget!;
+        final budget = loaded.values;
 
         final remoteGoal = budget['savingsGoalCurrent'] ?? 0;
         final remoteTarget = budget['savingsGoalTarget'] ?? 10000;
@@ -1056,6 +1085,7 @@ class BudgetProvider extends ChangeNotifier {
           _lockedSavingsGoalCurrent = null;
           _lockedSavingsGoalTarget = null;
           _lockedSavingsGoalTargetDate = null;
+          _lockedSavingsGoalTitle = null;
         }
 
         if (canConfirm) {
@@ -1099,11 +1129,13 @@ class BudgetProvider extends ChangeNotifier {
         }
 
         if (_lockedSavingsGoalCurrent == null) {
-          _applySavingsGoal(budget);
+          _applySavingsGoal(budget, title: loaded.savingsGoalTitle);
         } else {
           savingsGoalCurrent = _lockedSavingsGoalCurrent!;
           savingsGoalTarget = _lockedSavingsGoalTarget!;
           savingsGoalTargetDate = _lockedSavingsGoalTargetDate!;
+          savingsGoalTitle =
+              _lockedSavingsGoalTitle ?? BudgetDocument.defaultSavingsGoalTitle;
         }
 
         if (_lockedForfeited.values.every((value) => value == null)) {

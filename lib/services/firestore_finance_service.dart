@@ -19,7 +19,7 @@ class FirestoreFinanceService {
     return _user(uid).collection(category.collection);
   }
 
-  Map<String, double> _parseBudget(Map budget) {
+  Map<String, double> _parseBudgetValues(Map budget) {
     return {
       'availableBalance':
           (budget['availableBalance'] as num?)?.toDouble() ??
@@ -56,6 +56,16 @@ class FirestoreFinanceService {
     };
   }
 
+  BudgetDocument _parseBudgetDocument(Map budget) {
+    final rawTitle = (budget['savingsGoalTitle'] as String?)?.trim();
+    return BudgetDocument(
+      values: _parseBudgetValues(budget),
+      savingsGoalTitle: (rawTitle == null || rawTitle.isEmpty)
+          ? BudgetDocument.defaultSavingsGoalTitle
+          : rawTitle,
+    );
+  }
+
   Map<String, dynamic> _budgetPayload({
     required double availableBalance,
     required double monthlySalary,
@@ -71,6 +81,7 @@ class FirestoreFinanceService {
     double savingsGoalTarget = 10000,
     double savingsGoalCurrent = 0,
     double? savingsGoalTargetDateMs,
+    String savingsGoalTitle = BudgetDocument.defaultSavingsGoalTitle,
     double schemaVersion = 3,
   }) {
     return {
@@ -92,12 +103,13 @@ class FirestoreFinanceService {
       'savingsGoalTargetDateMs':
           savingsGoalTargetDateMs ??
           DateTime(2028, 12, 31).millisecondsSinceEpoch.toDouble(),
+      'savingsGoalTitle': savingsGoalTitle,
       'schemaVersion': schemaVersion,
       'updatedAt': FieldValue.serverTimestamp(),
     };
   }
 
-  Future<Map<String, double>?> loadBudget(
+  Future<BudgetDocument?> loadBudget(
     String uid, {
     bool serverOnly = false,
   }) async {
@@ -106,7 +118,7 @@ class FirestoreFinanceService {
         : await _user(uid).get();
     final budget = snapshot.data()?['budget'];
     if (budget is! Map) return null;
-    return _parseBudget(budget);
+    return _parseBudgetDocument(budget);
   }
 
   Stream<BudgetSnapshot> watchBudget(String uid) {
@@ -123,7 +135,7 @@ class FirestoreFinanceService {
       return BudgetSnapshot(
         hasPendingWrites: snapshot.metadata.hasPendingWrites,
         isFromCache: snapshot.metadata.isFromCache,
-        budget: _parseBudget(budget),
+        budget: _parseBudgetDocument(budget),
       );
     });
   }
@@ -144,6 +156,7 @@ class FirestoreFinanceService {
     double savingsGoalTarget = 10000,
     double savingsGoalCurrent = 0,
     double? savingsGoalTargetDateMs,
+    String savingsGoalTitle = BudgetDocument.defaultSavingsGoalTitle,
     double schemaVersion = 3,
   }) {
     return _user(uid).set({
@@ -162,6 +175,7 @@ class FirestoreFinanceService {
         savingsGoalTarget: savingsGoalTarget,
         savingsGoalCurrent: savingsGoalCurrent,
         savingsGoalTargetDateMs: savingsGoalTargetDateMs,
+        savingsGoalTitle: savingsGoalTitle,
         schemaVersion: schemaVersion,
       ),
     }, SetOptions(merge: true));
@@ -237,6 +251,7 @@ class FirestoreFinanceService {
     double savingsGoalTarget = 10000,
     double savingsGoalCurrent = 0,
     double? savingsGoalTargetDateMs,
+    String savingsGoalTitle = BudgetDocument.defaultSavingsGoalTitle,
     double schemaVersion = 3,
   }) {
     final batch = _firestore.batch();
@@ -257,6 +272,7 @@ class FirestoreFinanceService {
         savingsGoalTarget: savingsGoalTarget,
         savingsGoalCurrent: savingsGoalCurrent,
         savingsGoalTargetDateMs: savingsGoalTargetDateMs,
+        savingsGoalTitle: savingsGoalTitle,
         schemaVersion: schemaVersion,
       ),
     }, SetOptions(merge: true));
@@ -282,6 +298,7 @@ class FirestoreFinanceService {
     double savingsGoalTarget = 10000,
     double savingsGoalCurrent = 0,
     double? savingsGoalTargetDateMs,
+    String savingsGoalTitle = BudgetDocument.defaultSavingsGoalTitle,
     double schemaVersion = 3,
   }) {
     final batch = _firestore.batch();
@@ -302,11 +319,24 @@ class FirestoreFinanceService {
         savingsGoalTarget: savingsGoalTarget,
         savingsGoalCurrent: savingsGoalCurrent,
         savingsGoalTargetDateMs: savingsGoalTargetDateMs,
+        savingsGoalTitle: savingsGoalTitle,
         schemaVersion: schemaVersion,
       ),
     }, SetOptions(merge: true));
     return batch.commit();
   }
+}
+
+class BudgetDocument {
+  const BudgetDocument({
+    required this.values,
+    this.savingsGoalTitle = defaultSavingsGoalTitle,
+  });
+
+  static const defaultSavingsGoalTitle = 'Saving Goal';
+
+  final Map<String, double> values;
+  final String savingsGoalTitle;
 }
 
 class BudgetSnapshot {
@@ -316,7 +346,7 @@ class BudgetSnapshot {
     required this.isFromCache,
   });
 
-  final Map<String, double>? budget;
+  final BudgetDocument? budget;
   final bool hasPendingWrites;
   final bool isFromCache;
 }
