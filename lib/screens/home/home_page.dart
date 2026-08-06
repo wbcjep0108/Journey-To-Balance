@@ -900,49 +900,18 @@ class _HomePageState extends State<HomePage> {
               Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
-                  vertical: 20,
+                  vertical: 16,
                 ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: _BuildGridCard(
-                        amount: NumberFormat(
-                          '#,##0.##',
-                        ).format(budget.billsAmount),
-                        label: 'BILLS',
-                        gradientColors: const [
-                          Color(0xFF333333),
-                          Color(0xFF000000),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _BuildGridCard(
-                        amount: NumberFormat('#,##0.##').format(
-                          budget.savingsAmount,
-                        ),
-                        label: 'SAVINGS',
-                        gradientColors: const [
-                          Color(0xFF333333),
-                          Color(0xFF000000),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _BuildGridCard(
-                        amount: NumberFormat('#,##0.##').format(
-                          budget.personalAmount,
-                        ),
-                        label: 'PERSONAL',
-                        gradientColors: const [
-                          Color(0xFF333333),
-                          Color(0xFF000000),
-                        ],
-                      ),
-                    ),
-                  ],
+                child: _CategoryCardsRow(
+                  billsAmount: NumberFormat(
+                    '#,##0.##',
+                  ).format(budget.billsAmount),
+                  savingsAmount: NumberFormat(
+                    '#,##0.##',
+                  ).format(budget.savingsAmount),
+                  personalAmount: NumberFormat(
+                    '#,##0.##',
+                  ).format(budget.personalAmount),
                 ),
               ),
               const Padding(
@@ -1140,28 +1109,113 @@ class _AnimatedCurrencyAmount extends StatelessWidget {
   }
 }
 
+class _CategoryCardsRow extends StatelessWidget {
+  const _CategoryCardsRow({
+    required this.billsAmount,
+    required this.savingsAmount,
+    required this.personalAmount,
+  });
+
+  final String billsAmount;
+  final String savingsAmount;
+  final String personalAmount;
+
+  static const _gap = 10.0;
+  static const _gradient = [Color(0xFF333333), Color(0xFF000000)];
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final shortest = MediaQuery.sizeOf(context).shortestSide;
+    // Keep a fixed comfortable card height across screen sizes.
+    final cardHeight = 160.0;
+    final amountFontSize = (shortest * 0.028).clamp(16.0, 20.0);
+    final labelFontSize = (shortest * 0.016).clamp(10.0, 12.0);
+
+    final cards = [
+      (amount: billsAmount, label: 'BILLS'),
+      (amount: savingsAmount, label: 'SAVINGS'),
+      (amount: personalAmount, label: 'PERSONAL'),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final available = constraints.maxWidth;
+        final equalWidth = (available - _gap * 2) / 3;
+        // On narrow screens, keep a readable min width and allow horizontal scroll.
+        final minCardWidth = width < 360 ? 112.0 : 120.0;
+        final cardWidth = equalWidth < minCardWidth ? minCardWidth : equalWidth;
+        final needsScroll = cardWidth * 3 + _gap * 2 > available + 0.5;
+
+        Widget buildCard(({String amount, String label}) item, {double? width}) {
+          final card = _BuildGridCard(
+            amount: item.amount,
+            label: item.label,
+            height: cardHeight,
+            amountFontSize: amountFontSize,
+            labelFontSize: labelFontSize,
+            gradientColors: _gradient,
+          );
+          if (width == null) return card;
+          return SizedBox(width: width, child: card);
+        }
+
+        if (!needsScroll) {
+          return Row(
+            children: [
+              for (var i = 0; i < cards.length; i++) ...[
+                if (i > 0) const SizedBox(width: _gap),
+                Expanded(child: buildCard(cards[i])),
+              ],
+            ],
+          );
+        }
+
+        return SizedBox(
+          height: cardHeight,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            itemCount: cards.length,
+            separatorBuilder: (_, _) => const SizedBox(width: _gap),
+            itemBuilder: (context, index) =>
+                buildCard(cards[index], width: cardWidth),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _BuildGridCard extends StatelessWidget {
   final String amount;
   final String label;
+  final double height;
+  final double amountFontSize;
+  final double labelFontSize;
   final List<Color> gradientColors;
 
   const _BuildGridCard({
     required this.amount,
     required this.label,
+    required this.height,
+    required this.amountFontSize,
+    required this.labelFontSize,
     required this.gradientColors,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 160,
+      height: height,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: gradientColors,
         ),
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.08),
@@ -1174,19 +1228,23 @@ class _BuildGridCard extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(
-              amount,
-              style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                amount,
+                maxLines: 1,
+                style: TextStyle(
+                  fontSize: amountFontSize,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Text(
               label,
-              style: const TextStyle(
-                fontSize: 12,
+              style: TextStyle(
+                fontSize: labelFontSize,
                 fontWeight: FontWeight.w700,
                 color: Colors.white,
                 letterSpacing: 1.2,
