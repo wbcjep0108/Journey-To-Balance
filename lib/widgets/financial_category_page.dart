@@ -8,7 +8,7 @@ import 'app_refresh_indicator.dart';
 import 'budget_modal.dart';
 import 'sensitive_action_auth.dart';
 
-class FinancialCategoryPage extends StatelessWidget {
+class FinancialCategoryPage extends StatefulWidget {
   const FinancialCategoryPage({
     super.key,
     required this.category,
@@ -23,15 +23,44 @@ class FinancialCategoryPage extends StatelessWidget {
   final String iconPath;
 
   @override
-  Widget build(BuildContext context) {
+  State<FinancialCategoryPage> createState() => _FinancialCategoryPageState();
+}
+
+class _FinancialCategoryPageState extends State<FinancialCategoryPage> {
+  BudgetProvider? _budget;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
     final budget = context.read<BudgetProvider>();
-    return ListenableBuilder(
-      listenable: budget,
-      builder: (context, _) => _buildContent(context, budget),
-    );
+    if (!identical(_budget, budget)) {
+      _budget?.removeListener(_onBudgetChanged);
+      _budget = budget;
+      _budget?.addListener(_onBudgetChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    _budget?.removeListener(_onBudgetChanged);
+    super.dispose();
+  }
+
+  void _onBudgetChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final budget = _budget ?? context.watch<BudgetProvider>();
+    return _buildContent(context, budget);
   }
 
   Widget _buildContent(BuildContext context, BudgetProvider budget) {
+    final category = widget.category;
+    final title = widget.title;
+    final sectionTitle = widget.sectionTitle;
+    final iconPath = widget.iconPath;
     final entries = budget.entriesFor(category);
     final remainingBalance = budget.remainingFor(category);
     final percentage = switch (category) {
@@ -250,20 +279,24 @@ class FinancialCategoryPage extends StatelessWidget {
   ]) async {
     final provider = context.read<BudgetProvider>();
     final availableBalance =
-        provider.remainingFor(category) + (entry?.amount ?? 0);
+        provider.remainingFor(widget.category) + (entry?.amount ?? 0);
 
     await BudgetModal.show(
       context: context,
-      category: category,
-      title: 'Use $title',
+      category: widget.category,
+      title: 'Use ${widget.title}',
       availableBalance: availableBalance,
       initialEntry: entry,
       onSave: (name, amount) async {
         if (entry == null) {
-          await provider.addEntry(category, title: name, amount: amount);
+          await provider.addEntry(
+            widget.category,
+            title: name,
+            amount: amount,
+          );
         } else {
           await provider.updateEntry(
-            category,
+            widget.category,
             entry.copyWith(title: name, amount: amount),
           );
         }
@@ -281,7 +314,10 @@ class FinancialCategoryPage extends StatelessWidget {
     if (!authorized || !context.mounted) return false;
 
     try {
-      await context.read<BudgetProvider>().deleteEntry(category, entry);
+      await context.read<BudgetProvider>().deleteEntry(
+        widget.category,
+        entry,
+      );
       return true;
     } catch (_) {
       if (context.mounted) _showError(context);

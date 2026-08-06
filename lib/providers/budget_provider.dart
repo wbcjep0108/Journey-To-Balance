@@ -19,6 +19,11 @@ class BudgetProvider extends ChangeNotifier {
   double savingsAmount = 0;
   double personalAmount = 0;
   double remainingAmount = 0;
+  double savingsGoalTarget = 10000;
+  double savingsGoalCurrent = 0;
+  DateTime savingsGoalTargetDate = DateTime(2028, 12, 31);
+
+  static const savingsGoalEntryTitle = 'Savings Goal';
 
   String? _uid;
   bool isLoading = false;
@@ -33,6 +38,66 @@ class BudgetProvider extends ChangeNotifier {
     for (final category in FinancialCategory.values) category: 0,
   };
   final List<StreamSubscription<Object?>> _realtimeSubscriptions = [];
+
+  /// Local writes in flight — remote snapshots must not clobber these.
+  final Set<String> _pendingUpsertKeys = {};
+  final Set<String> _pendingDeleteKeys = {};
+  double? _lockedSavingsGoalCurrent;
+  double? _lockedSavingsGoalTarget;
+  DateTime? _lockedSavingsGoalTargetDate;
+  final Map<FinancialCategory, double?> _lockedForfeited = {
+    for (final category in FinancialCategory.values) category: null,
+  };
+
+  String _entryKey(FinancialCategory category, String id) =>
+      '${category.name}|$id';
+
+  void _lockSavingsGoal() {
+    _lockedSavingsGoalCurrent = savingsGoalCurrent;
+    _lockedSavingsGoalTarget = savingsGoalTarget;
+    _lockedSavingsGoalTargetDate = savingsGoalTargetDate;
+  }
+
+  void _lockForfeited(FinancialCategory category) {
+    _lockedForfeited[category] = _forfeited[category];
+  }
+
+  List<FinancialEntry> _mergeEntriesWithPending(
+    FinancialCategory category,
+    List<FinancialEntry> remote, {
+    required bool confirmPending,
+  }) {
+    final previous = _entries[category]!;
+    final pendingLocals = previous
+        .where(
+          (entry) =>
+              _pendingUpsertKeys.contains(_entryKey(category, entry.id)),
+        )
+        .where((entry) => !remote.any((item) => item.id == entry.id))
+        .toList();
+    final filteredRemote = remote
+        .where(
+          (entry) =>
+              !_pendingDeleteKeys.contains(_entryKey(category, entry.id)),
+        )
+        .toList();
+
+    // Only clear pending markers after backend ack (not local pending writes).
+    if (confirmPending) {
+      for (final entry in remote) {
+        _pendingUpsertKeys.remove(_entryKey(category, entry.id));
+      }
+      _pendingDeleteKeys.removeWhere((key) {
+        if (!key.startsWith('${category.name}|')) return false;
+        final id = key.substring(category.name.length + 1);
+        return !remote.any((entry) => entry.id == id);
+      });
+    }
+
+    final merged = [...pendingLocals, ...filteredRemote];
+    merged.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return merged;
+  }
 
   List<FinancialEntry> entriesFor(FinancialCategory category) {
     return List.unmodifiable(_entries[category]!);
@@ -66,6 +131,25 @@ class BudgetProvider extends ChangeNotifier {
   }
 
   double get availableBalance => totalRemainingBalance;
+
+  double get savingsGoalProgress {
+    if (savingsGoalTarget <= 0) return 0;
+    return (savingsGoalCurrent / savingsGoalTarget).clamp(0.0, 1.0);
+  }
+
+  /// Contributions to the savings goal from Bills / Savings / Personal.
+  List<DayTransaction> get savingsGoalActivity {
+    final results = <DayTransaction>[];
+    for (final category in FinancialCategory.values) {
+      for (final entry in _entries[category]!) {
+        if (entry.title == savingsGoalEntryTitle) {
+          results.add(DayTransaction(category: category, entry: entry));
+        }
+      }
+    }
+    results.sort((a, b) => b.entry.createdAt.compareTo(a.entry.createdAt));
+    return results;
+  }
 
   /// Monday–Sunday spending totals from Bills + Savings + Personal.
   List<WeeklyDaySpend> get weeklySpending {
@@ -147,6 +231,7 @@ class BudgetProvider extends ChangeNotifier {
       if (budget != null) {
         monthlySalary = budget['monthlySalary']!;
         _applyForfeited(budget);
+        _applySavingsGoal(budget);
         _applyBudget(
           income: budget['income']!,
           billsPercentage: budget['billsPercentage']!,
@@ -204,6 +289,7 @@ class BudgetProvider extends ChangeNotifier {
       if (budget == null) {
         monthlySalary = 0;
         _clearForfeited();
+        _resetSavingsGoal();
         _applyBudget(
           income: 0,
           billsPercentage: 50,
@@ -212,18 +298,45 @@ class BudgetProvider extends ChangeNotifier {
         );
       } else {
         monthlySalary = budget['monthlySalary']!;
-        _applyForfeited(budget);
         _applyBudget(
           income: budget['income']!,
           billsPercentage: budget['billsPercentage']!,
           savingsPercentage: budget['savingsPercentage']!,
           personalPercentage: budget['personalPercentage']!,
         );
+        if (_lockedSavingsGoalCurrent == null) {
+          _applySavingsGoal(budget);
+        } else {
+          savingsGoalCurrent = _lockedSavingsGoalCurrent!;
+          savingsGoalTarget = _lockedSavingsGoalTarget!;
+          savingsGoalTargetDate = _lockedSavingsGoalTargetDate!;
+        }
+        if (_lockedForfeited.values.every((value) => value == null)) {
+          _applyForfeited(budget);
+        } else {
+          for (final category in FinancialCategory.values) {
+            final locked = _lockedForfeited[category];
+            if (locked != null) {
+              _forfeited[category] = locked;
+            } else {
+              _forfeited[category] = switch (category) {
+                FinancialCategory.bills => budget['forfeitedBills'] ?? 0,
+                FinancialCategory.savings => budget['forfeitedSavings'] ?? 0,
+                FinancialCategory.personal => budget['forfeitedPersonal'] ?? 0,
+              };
+            }
+          }
+        }
       }
 
       for (var index = 0; index < FinancialCategory.values.length; index++) {
-        _entries[FinancialCategory.values[index]] =
-            results[index + 1] as List<FinancialEntry>;
+        final category = FinancialCategory.values[index];
+        final remote = results[index + 1] as List<FinancialEntry>;
+        _entries[category] = _mergeEntriesWithPending(
+          category,
+          remote,
+          confirmPending: true,
+        );
       }
       errorMessage = null;
       notifyListeners();
@@ -434,6 +547,101 @@ class BudgetProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> updateSavingsGoalSettings({
+    required double target,
+    required DateTime targetDate,
+  }) async {
+    final uid = _requireUid();
+    if (target <= 0) {
+      throw ArgumentError('Goal amount must be greater than zero.');
+    }
+
+    final previousTarget = savingsGoalTarget;
+    final previousDate = savingsGoalTargetDate;
+    savingsGoalTarget = target;
+    savingsGoalTargetDate = DateTime(
+      targetDate.year,
+      targetDate.month,
+      targetDate.day,
+    );
+    errorMessage = null;
+    _lockSavingsGoal();
+    notifyListeners();
+
+    // Persist in background so the edit UI is not blocked on network.
+    unawaited(() async {
+      try {
+        await _saveCurrentBudget(uid);
+      } catch (_) {
+        savingsGoalTarget = previousTarget;
+        savingsGoalTargetDate = previousDate;
+        _lockSavingsGoal();
+        errorMessage = 'Savings goal could not be updated.';
+        notifyListeners();
+      }
+    }());
+  }
+
+  Future<void> contributeToSavingsGoal({
+    required FinancialCategory source,
+    required double amount,
+  }) async {
+    final uid = _requireUid();
+    if (amount <= 0) {
+      throw ArgumentError('Amount must be greater than zero.');
+    }
+    if (amount > remainingFor(source) + 0.001) {
+      throw ArgumentError('Amount exceeds the available category balance.');
+    }
+
+    final previousCurrent = savingsGoalCurrent;
+    final entry = FinancialEntry(
+      id: _service.createEntryId(uid, source),
+      title: savingsGoalEntryTitle,
+      amount: amount,
+      createdAt: DateTime.now(),
+    );
+    final key = _entryKey(source, entry.id);
+
+    _entries[source]!.insert(0, entry);
+    savingsGoalCurrent = previousCurrent + amount;
+    _pendingUpsertKeys.add(key);
+    _lockSavingsGoal();
+    errorMessage = null;
+    notifyListeners();
+
+    // Persist in background so the contribute modal can close immediately.
+    // Pending upsert/goal locks stay until remote snapshots confirm.
+    unawaited(() async {
+      try {
+        await _service.saveEntryAndBudget(
+          uid,
+          category: source,
+          entry: entry,
+          income: income,
+          monthlySalary: monthlySalary,
+          billsPercentage: billsPercentage,
+          savingsPercentage: savingsPercentage,
+          personalPercentage: personalPercentage,
+          forfeitedBills: _forfeited[FinancialCategory.bills]!,
+          forfeitedSavings: _forfeited[FinancialCategory.savings]!,
+          forfeitedPersonal: _forfeited[FinancialCategory.personal]!,
+          savingsGoalTarget: savingsGoalTarget,
+          savingsGoalCurrent: savingsGoalCurrent,
+          savingsGoalTargetDateMs: savingsGoalTargetDate.millisecondsSinceEpoch
+              .toDouble(),
+        );
+      } catch (_) {
+        _entries[source]!.removeWhere((item) => item.id == entry.id);
+        _pendingUpsertKeys.remove(key);
+        savingsGoalCurrent = previousCurrent;
+        _lockSavingsGoal();
+        errorMessage = 'Could not add to your savings goal.';
+        notifyListeners();
+      }
+    }());
+  }
+
   Future<void> deleteEntry(
     FinancialCategory category,
     FinancialEntry entry,
@@ -444,23 +652,61 @@ class BudgetProvider extends ChangeNotifier {
     if (index < 0) return;
 
     final previousForfeited = _forfeited[category]!;
+    final previousGoalCurrent = savingsGoalCurrent;
+    final isGoalContribution = entry.title == savingsGoalEntryTitle;
+    final key = _entryKey(category, entry.id);
+
     list.removeAt(index);
-    // Keep the spend deducted from balances even after the row is removed.
-    _forfeited[category] = previousForfeited + entry.amount;
+    if (isGoalContribution) {
+      // Return the amount to the source category (do not forfeit).
+      savingsGoalCurrent = (previousGoalCurrent - entry.amount).clamp(
+        0,
+        double.infinity,
+      );
+      _lockSavingsGoal();
+    } else {
+      // Keep normal spend deducted from balances after the row is removed.
+      _forfeited[category] = previousForfeited + entry.amount;
+      _lockForfeited(category);
+    }
+    _pendingDeleteKeys.add(key);
     errorMessage = null;
     notifyListeners();
-    try {
-      await Future.wait([
-        _service.deleteEntry(uid, category, entry.id),
-        _saveCurrentBudget(uid),
-      ]);
-    } catch (_) {
-      list.insert(index, entry);
-      _forfeited[category] = previousForfeited;
-      errorMessage = 'The entry could not be deleted.';
-      notifyListeners();
-      rethrow;
-    }
+
+    // Persist in background so swipe-delete / confirmDismiss is not blocked.
+    unawaited(() async {
+      try {
+        await _service.deleteEntryAndBudget(
+          uid,
+          category: category,
+          entryId: entry.id,
+          income: income,
+          monthlySalary: monthlySalary,
+          billsPercentage: billsPercentage,
+          savingsPercentage: savingsPercentage,
+          personalPercentage: personalPercentage,
+          forfeitedBills: _forfeited[FinancialCategory.bills]!,
+          forfeitedSavings: _forfeited[FinancialCategory.savings]!,
+          forfeitedPersonal: _forfeited[FinancialCategory.personal]!,
+          savingsGoalTarget: savingsGoalTarget,
+          savingsGoalCurrent: savingsGoalCurrent,
+          savingsGoalTargetDateMs: savingsGoalTargetDate.millisecondsSinceEpoch
+              .toDouble(),
+        );
+      } catch (_) {
+        list.insert(index, entry);
+        _forfeited[category] = previousForfeited;
+        savingsGoalCurrent = previousGoalCurrent;
+        _pendingDeleteKeys.remove(key);
+        if (isGoalContribution) {
+          _lockSavingsGoal();
+        } else {
+          _lockedForfeited[category] = null;
+        }
+        errorMessage = 'The entry could not be deleted.';
+        notifyListeners();
+      }
+    }());
   }
 
   void reset() {
@@ -470,6 +716,14 @@ class BudgetProvider extends ChangeNotifier {
     isRefreshing = false;
     _refreshOperation = null;
     errorMessage = null;
+    _pendingUpsertKeys.clear();
+    _pendingDeleteKeys.clear();
+    _lockedSavingsGoalCurrent = null;
+    _lockedSavingsGoalTarget = null;
+    _lockedSavingsGoalTargetDate = null;
+    for (final category in FinancialCategory.values) {
+      _lockedForfeited[category] = null;
+    }
     _setDefaults();
     notifyListeners();
   }
@@ -491,6 +745,7 @@ class BudgetProvider extends ChangeNotifier {
   void _setDefaults() {
     monthlySalary = 0;
     _clearForfeited();
+    _resetSavingsGoal();
     _applyBudget(
       income: 0,
       billsPercentage: 50,
@@ -508,10 +763,25 @@ class BudgetProvider extends ChangeNotifier {
     }
   }
 
+  void _resetSavingsGoal() {
+    savingsGoalTarget = 10000;
+    savingsGoalCurrent = 0;
+    savingsGoalTargetDate = DateTime(2028, 12, 31);
+  }
+
   void _applyForfeited(Map<String, double> budget) {
     _forfeited[FinancialCategory.bills] = budget['forfeitedBills'] ?? 0;
     _forfeited[FinancialCategory.savings] = budget['forfeitedSavings'] ?? 0;
     _forfeited[FinancialCategory.personal] = budget['forfeitedPersonal'] ?? 0;
+  }
+
+  void _applySavingsGoal(Map<String, double> budget) {
+    savingsGoalTarget = budget['savingsGoalTarget'] ?? 10000;
+    savingsGoalCurrent = budget['savingsGoalCurrent'] ?? 0;
+    final ms = budget['savingsGoalTargetDateMs'];
+    savingsGoalTargetDate = ms == null
+        ? DateTime(2028, 12, 31)
+        : DateTime.fromMillisecondsSinceEpoch(ms.round());
   }
 
   Future<void> _saveCurrentBudget(String uid) {
@@ -525,6 +795,10 @@ class BudgetProvider extends ChangeNotifier {
       forfeitedBills: _forfeited[FinancialCategory.bills]!,
       forfeitedSavings: _forfeited[FinancialCategory.savings]!,
       forfeitedPersonal: _forfeited[FinancialCategory.personal]!,
+      savingsGoalTarget: savingsGoalTarget,
+      savingsGoalCurrent: savingsGoalCurrent,
+      savingsGoalTargetDateMs: savingsGoalTargetDate.millisecondsSinceEpoch
+          .toDouble(),
     );
   }
 
@@ -546,25 +820,84 @@ class BudgetProvider extends ChangeNotifier {
 
   void _startRealtimeSync(String uid) {
     _realtimeSubscriptions.add(
-      _service.watchBudget(uid).listen((budget) {
-        if (_uid != uid || budget == null) return;
+      _service.watchBudget(uid).listen((snapshot) {
+        if (_uid != uid || snapshot.budget == null) return;
+        final budget = snapshot.budget!;
+
+        final remoteGoal = budget['savingsGoalCurrent'] ?? 0;
+        final remoteTarget = budget['savingsGoalTarget'] ?? 10000;
+        final canConfirm = !snapshot.hasPendingWrites;
+
+        if (canConfirm &&
+            _lockedSavingsGoalCurrent != null &&
+            (remoteGoal - _lockedSavingsGoalCurrent!).abs() < 0.001 &&
+            (remoteTarget - _lockedSavingsGoalTarget!).abs() < 0.001) {
+          _lockedSavingsGoalCurrent = null;
+          _lockedSavingsGoalTarget = null;
+          _lockedSavingsGoalTargetDate = null;
+        }
+
+        if (canConfirm) {
+          for (final category in FinancialCategory.values) {
+            final locked = _lockedForfeited[category];
+            if (locked == null) continue;
+            final remoteForfeit = switch (category) {
+              FinancialCategory.bills => budget['forfeitedBills'] ?? 0,
+              FinancialCategory.savings => budget['forfeitedSavings'] ?? 0,
+              FinancialCategory.personal => budget['forfeitedPersonal'] ?? 0,
+            };
+            if ((remoteForfeit - locked).abs() < 0.001) {
+              _lockedForfeited[category] = null;
+            }
+          }
+        }
+
         monthlySalary = budget['monthlySalary']!;
-        _applyForfeited(budget);
         _applyBudget(
           income: budget['income']!,
           billsPercentage: budget['billsPercentage']!,
           savingsPercentage: budget['savingsPercentage']!,
           personalPercentage: budget['personalPercentage']!,
         );
+
+        if (_lockedSavingsGoalCurrent == null) {
+          _applySavingsGoal(budget);
+        } else {
+          savingsGoalCurrent = _lockedSavingsGoalCurrent!;
+          savingsGoalTarget = _lockedSavingsGoalTarget!;
+          savingsGoalTargetDate = _lockedSavingsGoalTargetDate!;
+        }
+
+        if (_lockedForfeited.values.every((value) => value == null)) {
+          _applyForfeited(budget);
+        } else {
+          for (final category in FinancialCategory.values) {
+            final locked = _lockedForfeited[category];
+            if (locked != null) {
+              _forfeited[category] = locked;
+            } else {
+              _forfeited[category] = switch (category) {
+                FinancialCategory.bills => budget['forfeitedBills'] ?? 0,
+                FinancialCategory.savings => budget['forfeitedSavings'] ?? 0,
+                FinancialCategory.personal => budget['forfeitedPersonal'] ?? 0,
+              };
+            }
+          }
+        }
+
         notifyListeners();
       }, onError: (_) => _handleRealtimeError(uid)),
     );
 
     for (final category in FinancialCategory.values) {
       _realtimeSubscriptions.add(
-        _service.watchEntries(uid, category).listen((entries) {
+        _service.watchEntries(uid, category).listen((snapshot) {
           if (_uid != uid) return;
-          _entries[category] = entries;
+          _entries[category] = _mergeEntriesWithPending(
+            category,
+            snapshot.entries,
+            confirmPending: !snapshot.hasPendingWrites,
+          );
           notifyListeners();
         }, onError: (_) => _handleRealtimeError(uid)),
       );

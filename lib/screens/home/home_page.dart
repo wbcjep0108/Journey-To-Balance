@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+
 import '../../models/financial_entry.dart';
 import '../../providers/budget_provider.dart';
 import '../../widgets/app_refresh_indicator.dart';
 import '../../widgets/weekly_spending_card.dart';
+import '../savings/savings_goal_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -23,6 +25,7 @@ class _HomePageState extends State<HomePage> {
   late TextEditingController personalController;
   bool _isReceivingSalary = false;
   bool _isAddingMoney = false;
+  BudgetProvider? _budget;
 
   @override
   void initState() {
@@ -37,7 +40,23 @@ class _HomePageState extends State<HomePage> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final budget = context.read<BudgetProvider>();
+    if (!identical(_budget, budget)) {
+      _budget?.removeListener(_onBudgetChanged);
+      _budget = budget;
+      _budget?.addListener(_onBudgetChanged);
+    }
+  }
+
+  void _onBudgetChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
   void dispose() {
+    _budget?.removeListener(_onBudgetChanged);
     salaryController.dispose();
     balanceController.dispose();
     addMoneyController.dispose();
@@ -534,7 +553,7 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final budget = context.watch<BudgetProvider>();
+    final budget = _budget ?? context.watch<BudgetProvider>();
     final screenHeight = MediaQuery.of(context).size.height;
     final headerHeight = screenHeight * 0.38;
     final user = FirebaseAuth.instance.currentUser;
@@ -850,7 +869,7 @@ class _HomePageState extends State<HomePage> {
                     Expanded(
                       child: _BuildGridCard(
                         amount: NumberFormat(
-                          '#,##0',
+                          '#,##0.##',
                         ).format(budget.remainingFor(FinancialCategory.bills)),
                         label: 'BILLS',
                         gradientColors: const [
@@ -862,7 +881,7 @@ class _HomePageState extends State<HomePage> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: _BuildGridCard(
-                        amount: NumberFormat('#,##0').format(
+                        amount: NumberFormat('#,##0.##').format(
                           budget.remainingFor(FinancialCategory.savings),
                         ),
                         label: 'SAVINGS',
@@ -875,7 +894,7 @@ class _HomePageState extends State<HomePage> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: _BuildGridCard(
-                        amount: NumberFormat('#,##0').format(
+                        amount: NumberFormat('#,##0.##').format(
                           budget.remainingFor(FinancialCategory.personal),
                         ),
                         label: 'PERSONAL',
@@ -892,9 +911,153 @@ class _HomePageState extends State<HomePage> {
                 padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
                 child: WeeklySpendingCard(),
               ),
-              const SizedBox(height: 20),
+              const Padding(
+                padding: EdgeInsets.fromLTRB(28, 8, 28, 8),
+                child: _QuickActionsRow(),
+              ),
+              // Clear the floating bottom navigation bar.
+              const SizedBox(height: 120),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _QuickActionsRow extends StatelessWidget {
+  const _QuickActionsRow();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: [
+        _SavingsProgressAction(),
+        _FilledIconAction(
+          assetPath: 'assets/images/icons/loan.png',
+          label: 'Loan',
+        ),
+        _FilledIconAction(
+          assetPath: 'assets/images/icons/calendar.png',
+          label: 'Calendar',
+        ),
+      ],
+    );
+  }
+}
+
+class _SavingsProgressAction extends StatelessWidget {
+  const _SavingsProgressAction();
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = context.watch<BudgetProvider>().savingsGoalProgress;
+
+    return Semantics(
+      button: true,
+      label: 'Savings Goal',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const SavingsGoalPage(),
+              ),
+            );
+          },
+          child: SizedBox(
+            width: 74,
+            height: 74,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                SizedBox(
+                  width: 74,
+                  height: 74,
+                  child: TweenAnimationBuilder<double>(
+                    key: ValueKey(progress.toStringAsFixed(4)),
+                    tween: Tween<double>(begin: 0, end: progress),
+                    duration: const Duration(milliseconds: 700),
+                    curve: Curves.easeOutCubic,
+                    builder: (context, value, _) {
+                      return CircularProgressIndicator(
+                        value: value <= 0 ? 0.001 : value,
+                        strokeWidth: 10.5,
+                        strokeCap: StrokeCap.round,
+                        backgroundColor: const Color(0xFF121212),
+                        color: const Color(0xFFD6C4A3),
+                      );
+                    },
+                  ),
+                ),
+                Container(
+                  width: 54,
+                  height: 54,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.08),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  padding: const EdgeInsets.all(12),
+                  child: Image.asset(
+                    'assets/images/icons/piggybank.png',
+                    fit: BoxFit.contain,
+                    color: const Color(0xFF121212),
+                    colorBlendMode: BlendMode.srcIn,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FilledIconAction extends StatelessWidget {
+  const _FilledIconAction({
+    required this.assetPath,
+    required this.label,
+  });
+
+  final String assetPath;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: label,
+      child: Container(
+        width: 64,
+        height: 64,
+        decoration: BoxDecoration(
+          color: const Color(0xFF121212),
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.12),
+              blurRadius: 12,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        alignment: Alignment.center,
+        padding: const EdgeInsets.all(15),
+        child: Image.asset(
+          assetPath,
+          fit: BoxFit.contain,
+          alignment: Alignment.center,
         ),
       ),
     );
