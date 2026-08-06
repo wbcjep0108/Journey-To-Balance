@@ -10,20 +10,22 @@ class BudgetProvider extends ChangeNotifier {
 
   final FirestoreFinanceService _service;
 
-  double income = 0;
+  /// Single source of truth: actual money remaining.
+  /// Allocations are always `availableBalance * percentage / 100`.
+  double availableBalance = 0;
   double monthlySalary = 0;
   double billsPercentage = 50;
   double savingsPercentage = 20;
   double personalPercentage = 30;
-  double billsAmount = 0;
-  double savingsAmount = 0;
-  double personalAmount = 0;
-  double remainingAmount = 0;
   double savingsGoalTarget = 10000;
   double savingsGoalCurrent = 0;
   DateTime savingsGoalTargetDate = DateTime(2028, 12, 31);
 
+  /// 1 = legacy pot model (allocation − used). 2 = AB is spendable cash.
+  int budgetSchemaVersion = 1;
+
   static const savingsGoalEntryTitle = 'Savings Goal';
+  static const currentBudgetSchemaVersion = 2;
 
   String? _uid;
   bool isLoading = false;
@@ -56,10 +58,6 @@ class BudgetProvider extends ChangeNotifier {
     _lockedSavingsGoalCurrent = savingsGoalCurrent;
     _lockedSavingsGoalTarget = savingsGoalTarget;
     _lockedSavingsGoalTargetDate = savingsGoalTargetDate;
-  }
-
-  void _lockForfeited(FinancialCategory category) {
-    _lockedForfeited[category] = _forfeited[category];
   }
 
   List<FinancialEntry> _mergeEntriesWithPending(
@@ -111,6 +109,11 @@ class BudgetProvider extends ChangeNotifier {
     return active + _forfeited[category]!;
   }
 
+  double get billsAmount => availableBalance * (billsPercentage / 100);
+  double get savingsAmount => availableBalance * (savingsPercentage / 100);
+  double get personalAmount => availableBalance * (personalPercentage / 100);
+
+  /// Category slice of the current Available Balance.
   double allocationFor(FinancialCategory category) {
     return switch (category) {
       FinancialCategory.bills => billsAmount,
@@ -119,23 +122,19 @@ class BudgetProvider extends ChangeNotifier {
     };
   }
 
-  double remainingFor(FinancialCategory category) {
-    return allocationFor(category) - totalUsedFor(category);
-  }
+  /// Spendable in a category equals its live allocation (AB already reflects spends).
+  double remainingFor(FinancialCategory category) => allocationFor(category);
 
-  double get totalRemainingBalance {
-    return FinancialCategory.values.fold(
-      0,
-      (total, category) => total + remainingFor(category),
-    );
-  }
+  double get totalRemainingBalance => availableBalance;
 
-  double get availableBalance => totalRemainingBalance;
+  /// Same as Available Balance under the spendable-cash model.
+  double get spendableBalance => availableBalance;
 
   double get savingsGoalProgress {
     if (savingsGoalTarget <= 0) return 0;
     return (savingsGoalCurrent / savingsGoalTarget).clamp(0.0, 1.0);
   }
+
 
   /// Contributions to the savings goal from Bills / Savings / Personal.
   List<DayTransaction> get savingsGoalActivity {
@@ -230,10 +229,12 @@ class BudgetProvider extends ChangeNotifier {
       final budget = results[0] as Map<String, double>?;
       if (budget != null) {
         monthlySalary = budget['monthlySalary']!;
+        budgetSchemaVersion =
+            (budget['schemaVersion'] ?? 1).round().clamp(1, currentBudgetSchemaVersion);
         _applyForfeited(budget);
         _applySavingsGoal(budget);
         _applyBudget(
-          income: budget['income']!,
+          availableBalance: budget['availableBalance']!,
           billsPercentage: budget['billsPercentage']!,
           savingsPercentage: budget['savingsPercentage']!,
           personalPercentage: budget['personalPercentage']!,
@@ -244,7 +245,11 @@ class BudgetProvider extends ChangeNotifier {
         _entries[FinancialCategory.values[index]] =
             results[index + 1] as List<FinancialEntry>;
       }
+      final migrated = _migrateToSpendableAvailableBalanceIfNeeded();
       _startRealtimeSync(uid);
+      if (migrated) {
+        unawaited(_saveCurrentBudget(uid));
+      }
     } catch (_) {
       if (_uid == uid) {
         errorMessage =
@@ -291,15 +296,17 @@ class BudgetProvider extends ChangeNotifier {
         _clearForfeited();
         _resetSavingsGoal();
         _applyBudget(
-          income: 0,
+          availableBalance: 0,
           billsPercentage: 50,
           savingsPercentage: 20,
           personalPercentage: 30,
         );
       } else {
         monthlySalary = budget['monthlySalary']!;
+        budgetSchemaVersion =
+            (budget['schemaVersion'] ?? 1).round().clamp(1, currentBudgetSchemaVersion);
         _applyBudget(
-          income: budget['income']!,
+          availableBalance: budget['availableBalance']!,
           billsPercentage: budget['billsPercentage']!,
           savingsPercentage: budget['savingsPercentage']!,
           personalPercentage: budget['personalPercentage']!,
@@ -357,23 +364,27 @@ class BudgetProvider extends ChangeNotifier {
 
   Future<void> updateBudget({
     required double monthlySalary,
-    required double billsPercentage,
-    required double savingsPercentage,
-    required double personalPercentage,
+    double? billsPercentage,
+    double? savingsPercentage,
+    double? personalPercentage,
   }) async {
     final uid = _requireUid();
-    final total = billsPercentage + savingsPercentage + personalPercentage;
+    final nextBills = billsPercentage ?? this.billsPercentage;
+    final nextSavings = savingsPercentage ?? this.savingsPercentage;
+    final nextPersonal = personalPercentage ?? this.personalPercentage;
+    final total = nextBills + nextSavings + nextPersonal;
     if (monthlySalary < 0 || (total - 100).abs() > 0.001) {
       throw ArgumentError('Budget percentages must total 100.');
     }
 
     final previous = _budgetValues;
+    final previousSalary = this.monthlySalary;
     this.monthlySalary = monthlySalary;
     _applyBudget(
-      income: income,
-      billsPercentage: billsPercentage,
-      savingsPercentage: savingsPercentage,
-      personalPercentage: personalPercentage,
+      availableBalance: availableBalance,
+      billsPercentage: nextBills,
+      savingsPercentage: nextSavings,
+      personalPercentage: nextPersonal,
     );
     errorMessage = null;
     notifyListeners();
@@ -381,9 +392,9 @@ class BudgetProvider extends ChangeNotifier {
     try {
       await _saveCurrentBudget(uid);
     } catch (_) {
-      this.monthlySalary = previous['monthlySalary']!;
+      this.monthlySalary = previousSalary;
       _applyBudget(
-        income: previous['income']!,
+        availableBalance: previous['availableBalance']!,
         billsPercentage: previous['billsPercentage']!,
         savingsPercentage: previous['savingsPercentage']!,
         personalPercentage: previous['personalPercentage']!,
@@ -400,9 +411,9 @@ class BudgetProvider extends ChangeNotifier {
       throw StateError('Set a monthly salary before receiving it.');
     }
 
-    final previousIncome = income;
+    final previousAvailableBalance = availableBalance;
     _applyBudget(
-      income: income + monthlySalary,
+      availableBalance: availableBalance + monthlySalary,
       billsPercentage: billsPercentage,
       savingsPercentage: savingsPercentage,
       personalPercentage: personalPercentage,
@@ -414,7 +425,7 @@ class BudgetProvider extends ChangeNotifier {
       await _saveCurrentBudget(uid);
     } catch (_) {
       _applyBudget(
-        income: previousIncome,
+        availableBalance: previousAvailableBalance,
         billsPercentage: billsPercentage,
         savingsPercentage: savingsPercentage,
         personalPercentage: personalPercentage,
@@ -431,9 +442,9 @@ class BudgetProvider extends ChangeNotifier {
       throw ArgumentError('Amount must be greater than zero.');
     }
 
-    final previousIncome = income;
+    final previousAvailableBalance = availableBalance;
     _applyBudget(
-      income: income + amount,
+      availableBalance: availableBalance + amount,
       billsPercentage: billsPercentage,
       savingsPercentage: savingsPercentage,
       personalPercentage: personalPercentage,
@@ -445,7 +456,7 @@ class BudgetProvider extends ChangeNotifier {
       await _saveCurrentBudget(uid);
     } catch (_) {
       _applyBudget(
-        income: previousIncome,
+        availableBalance: previousAvailableBalance,
         billsPercentage: billsPercentage,
         savingsPercentage: savingsPercentage,
         personalPercentage: personalPercentage,
@@ -462,13 +473,9 @@ class BudgetProvider extends ChangeNotifier {
       throw ArgumentError('Available balance cannot be negative.');
     }
 
-    final previousIncome = income;
-    final totalDeductions = FinancialCategory.values.fold<double>(
-      0,
-      (total, category) => total + totalUsedFor(category),
-    );
+    final previousAvailableBalance = availableBalance;
     _applyBudget(
-      income: newBalance + totalDeductions,
+      availableBalance: newBalance,
       billsPercentage: billsPercentage,
       savingsPercentage: savingsPercentage,
       personalPercentage: personalPercentage,
@@ -480,12 +487,69 @@ class BudgetProvider extends ChangeNotifier {
       await _saveCurrentBudget(uid);
     } catch (_) {
       _applyBudget(
-        income: previousIncome,
+        availableBalance: previousAvailableBalance,
         billsPercentage: billsPercentage,
         savingsPercentage: savingsPercentage,
         personalPercentage: personalPercentage,
       );
       errorMessage = 'Available balance could not be updated.';
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<void> updatePercentages({
+    required double billsPercentage,
+    required double savingsPercentage,
+    required double personalPercentage,
+  }) async {
+    final uid = _requireUid();
+    final total = billsPercentage + savingsPercentage + personalPercentage;
+    if ((total - 100).abs() > 0.001) {
+      throw ArgumentError('Budget percentages must total 100.');
+    }
+
+    final previous = _budgetValues;
+    _applyBudget(
+      availableBalance: availableBalance,
+      billsPercentage: billsPercentage,
+      savingsPercentage: savingsPercentage,
+      personalPercentage: personalPercentage,
+    );
+    errorMessage = null;
+    notifyListeners();
+
+    try {
+      await _saveCurrentBudget(uid);
+    } catch (_) {
+      _applyBudget(
+        availableBalance: previous['availableBalance']!,
+        billsPercentage: previous['billsPercentage']!,
+        savingsPercentage: previous['savingsPercentage']!,
+        personalPercentage: previous['personalPercentage']!,
+      );
+      errorMessage = 'Percentages could not be updated.';
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<void> updateMonthlySalary(double monthlySalary) async {
+    final uid = _requireUid();
+    if (monthlySalary < 0) {
+      throw ArgumentError('Monthly salary cannot be negative.');
+    }
+
+    final previousSalary = this.monthlySalary;
+    this.monthlySalary = monthlySalary;
+    errorMessage = null;
+    notifyListeners();
+
+    try {
+      await _saveCurrentBudget(uid);
+    } catch (_) {
+      this.monthlySalary = previousSalary;
+      errorMessage = 'Monthly salary could not be updated.';
       notifyListeners();
       rethrow;
     }
@@ -506,18 +570,43 @@ class BudgetProvider extends ChangeNotifier {
       amount: amount,
       createdAt: DateTime.now(),
     );
+    final key = _entryKey(category, entry.id);
+    final previousBalance = availableBalance;
 
     _entries[category]!.insert(0, entry);
+    availableBalance = (previousBalance - amount).clamp(0, double.infinity);
+    _pendingUpsertKeys.add(key);
     errorMessage = null;
     notifyListeners();
-    try {
-      await _service.saveEntry(uid, category, entry);
-    } catch (_) {
-      _entries[category]!.removeWhere((item) => item.id == entry.id);
-      errorMessage = 'The entry could not be saved.';
-      notifyListeners();
-      rethrow;
-    }
+
+    unawaited(() async {
+      try {
+        await _service.saveEntryAndBudget(
+          uid,
+          category: category,
+          entry: entry,
+          availableBalance: availableBalance,
+          monthlySalary: monthlySalary,
+          billsPercentage: billsPercentage,
+          savingsPercentage: savingsPercentage,
+          personalPercentage: personalPercentage,
+          forfeitedBills: _forfeited[FinancialCategory.bills]!,
+          forfeitedSavings: _forfeited[FinancialCategory.savings]!,
+          forfeitedPersonal: _forfeited[FinancialCategory.personal]!,
+          savingsGoalTarget: savingsGoalTarget,
+          savingsGoalCurrent: savingsGoalCurrent,
+          savingsGoalTargetDateMs: savingsGoalTargetDate.millisecondsSinceEpoch
+              .toDouble(),
+          schemaVersion: budgetSchemaVersion.toDouble(),
+        );
+      } catch (_) {
+        _entries[category]!.removeWhere((item) => item.id == entry.id);
+        _pendingUpsertKeys.remove(key);
+        availableBalance = previousBalance;
+        errorMessage = 'The entry could not be saved.';
+        notifyListeners();
+      }
+    }());
   }
 
   Future<void> updateEntry(
@@ -530,17 +619,40 @@ class BudgetProvider extends ChangeNotifier {
     if (index < 0) return;
 
     final previous = list[index];
+    final delta = updated.amount - previous.amount;
     final availableForEdit = remainingFor(category) + previous.amount;
     if (updated.amount <= 0 || updated.amount > availableForEdit + 0.001) {
       throw ArgumentError('Amount exceeds the available category balance.');
     }
+
+    final previousBalance = availableBalance;
     list[index] = updated;
+    availableBalance = (previousBalance - delta).clamp(0, double.infinity);
     errorMessage = null;
     notifyListeners();
+
     try {
-      await _service.saveEntry(uid, category, updated);
+      await _service.saveEntryAndBudget(
+        uid,
+        category: category,
+        entry: updated,
+        availableBalance: availableBalance,
+        monthlySalary: monthlySalary,
+        billsPercentage: billsPercentage,
+        savingsPercentage: savingsPercentage,
+        personalPercentage: personalPercentage,
+        forfeitedBills: _forfeited[FinancialCategory.bills]!,
+        forfeitedSavings: _forfeited[FinancialCategory.savings]!,
+        forfeitedPersonal: _forfeited[FinancialCategory.personal]!,
+        savingsGoalTarget: savingsGoalTarget,
+        savingsGoalCurrent: savingsGoalCurrent,
+        savingsGoalTargetDateMs: savingsGoalTargetDate.millisecondsSinceEpoch
+            .toDouble(),
+        schemaVersion: budgetSchemaVersion.toDouble(),
+      );
     } catch (_) {
       list[index] = previous;
+      availableBalance = previousBalance;
       errorMessage = 'The entry could not be updated.';
       notifyListeners();
       rethrow;
@@ -595,6 +707,7 @@ class BudgetProvider extends ChangeNotifier {
     }
 
     final previousCurrent = savingsGoalCurrent;
+    final previousBalance = availableBalance;
     final entry = FinancialEntry(
       id: _service.createEntryId(uid, source),
       title: savingsGoalEntryTitle,
@@ -604,6 +717,7 @@ class BudgetProvider extends ChangeNotifier {
     final key = _entryKey(source, entry.id);
 
     _entries[source]!.insert(0, entry);
+    availableBalance = (previousBalance - amount).clamp(0, double.infinity);
     savingsGoalCurrent = previousCurrent + amount;
     _pendingUpsertKeys.add(key);
     _lockSavingsGoal();
@@ -618,7 +732,7 @@ class BudgetProvider extends ChangeNotifier {
           uid,
           category: source,
           entry: entry,
-          income: income,
+          availableBalance: availableBalance,
           monthlySalary: monthlySalary,
           billsPercentage: billsPercentage,
           savingsPercentage: savingsPercentage,
@@ -630,10 +744,12 @@ class BudgetProvider extends ChangeNotifier {
           savingsGoalCurrent: savingsGoalCurrent,
           savingsGoalTargetDateMs: savingsGoalTargetDate.millisecondsSinceEpoch
               .toDouble(),
+          schemaVersion: budgetSchemaVersion.toDouble(),
         );
       } catch (_) {
         _entries[source]!.removeWhere((item) => item.id == entry.id);
         _pendingUpsertKeys.remove(key);
+        availableBalance = previousBalance;
         savingsGoalCurrent = previousCurrent;
         _lockSavingsGoal();
         errorMessage = 'Could not add to your savings goal.';
@@ -651,24 +767,22 @@ class BudgetProvider extends ChangeNotifier {
     final index = list.indexWhere((item) => item.id == entry.id);
     if (index < 0) return;
 
-    final previousForfeited = _forfeited[category]!;
     final previousGoalCurrent = savingsGoalCurrent;
+    final previousBalance = availableBalance;
     final isGoalContribution = entry.title == savingsGoalEntryTitle;
     final key = _entryKey(category, entry.id);
 
     list.removeAt(index);
     if (isGoalContribution) {
-      // Return the amount to the source category (do not forfeit).
+      // Refund: money returns to Available Balance.
+      availableBalance = previousBalance + entry.amount;
       savingsGoalCurrent = (previousGoalCurrent - entry.amount).clamp(
         0,
         double.infinity,
       );
       _lockSavingsGoal();
-    } else {
-      // Keep normal spend deducted from balances after the row is removed.
-      _forfeited[category] = previousForfeited + entry.amount;
-      _lockForfeited(category);
     }
+    // Normal expense delete keeps Available Balance reduced (already spent).
     _pendingDeleteKeys.add(key);
     errorMessage = null;
     notifyListeners();
@@ -680,7 +794,7 @@ class BudgetProvider extends ChangeNotifier {
           uid,
           category: category,
           entryId: entry.id,
-          income: income,
+          availableBalance: availableBalance,
           monthlySalary: monthlySalary,
           billsPercentage: billsPercentage,
           savingsPercentage: savingsPercentage,
@@ -692,16 +806,15 @@ class BudgetProvider extends ChangeNotifier {
           savingsGoalCurrent: savingsGoalCurrent,
           savingsGoalTargetDateMs: savingsGoalTargetDate.millisecondsSinceEpoch
               .toDouble(),
+          schemaVersion: budgetSchemaVersion.toDouble(),
         );
       } catch (_) {
         list.insert(index, entry);
-        _forfeited[category] = previousForfeited;
+        availableBalance = previousBalance;
         savingsGoalCurrent = previousGoalCurrent;
         _pendingDeleteKeys.remove(key);
         if (isGoalContribution) {
           _lockSavingsGoal();
-        } else {
-          _lockedForfeited[category] = null;
         }
         errorMessage = 'The entry could not be deleted.';
         notifyListeners();
@@ -735,19 +848,21 @@ class BudgetProvider extends ChangeNotifier {
   }
 
   Map<String, double> get _budgetValues => {
-    'income': income,
+    'availableBalance': availableBalance,
     'monthlySalary': monthlySalary,
     'billsPercentage': billsPercentage,
     'savingsPercentage': savingsPercentage,
     'personalPercentage': personalPercentage,
+    'schemaVersion': budgetSchemaVersion.toDouble(),
   };
 
   void _setDefaults() {
     monthlySalary = 0;
+    budgetSchemaVersion = currentBudgetSchemaVersion;
     _clearForfeited();
     _resetSavingsGoal();
     _applyBudget(
-      income: 0,
+      availableBalance: 0,
       billsPercentage: 50,
       savingsPercentage: 20,
       personalPercentage: 30,
@@ -755,6 +870,23 @@ class BudgetProvider extends ChangeNotifier {
     for (final entries in _entries.values) {
       entries.clear();
     }
+  }
+
+  /// Converts legacy "pot − used" balances into spendable Available Balance once.
+  bool _migrateToSpendableAvailableBalanceIfNeeded() {
+    if (budgetSchemaVersion >= currentBudgetSchemaVersion) {
+      return false;
+    }
+
+    var legacySpendable = 0.0;
+    for (final category in FinancialCategory.values) {
+      final allocated = allocationFor(category);
+      legacySpendable += allocated - totalUsedFor(category);
+    }
+    availableBalance = legacySpendable.clamp(0, double.infinity);
+    budgetSchemaVersion = currentBudgetSchemaVersion;
+    _clearForfeited();
+    return true;
   }
 
   void _clearForfeited() {
@@ -787,7 +919,7 @@ class BudgetProvider extends ChangeNotifier {
   Future<void> _saveCurrentBudget(String uid) {
     return _service.saveBudget(
       uid,
-      income: income,
+      availableBalance: availableBalance,
       monthlySalary: monthlySalary,
       billsPercentage: billsPercentage,
       savingsPercentage: savingsPercentage,
@@ -799,23 +931,20 @@ class BudgetProvider extends ChangeNotifier {
       savingsGoalCurrent: savingsGoalCurrent,
       savingsGoalTargetDateMs: savingsGoalTargetDate.millisecondsSinceEpoch
           .toDouble(),
+      schemaVersion: budgetSchemaVersion.toDouble(),
     );
   }
 
   void _applyBudget({
-    required double income,
+    required double availableBalance,
     required double billsPercentage,
     required double savingsPercentage,
     required double personalPercentage,
   }) {
-    this.income = income;
+    this.availableBalance = availableBalance;
     this.billsPercentage = billsPercentage;
     this.savingsPercentage = savingsPercentage;
     this.personalPercentage = personalPercentage;
-    billsAmount = income * (billsPercentage / 100);
-    savingsAmount = income * (savingsPercentage / 100);
-    personalAmount = income * (personalPercentage / 100);
-    remainingAmount = income - billsAmount - savingsAmount - personalAmount;
   }
 
   void _startRealtimeSync(String uid) {
@@ -853,8 +982,12 @@ class BudgetProvider extends ChangeNotifier {
         }
 
         monthlySalary = budget['monthlySalary']!;
+        budgetSchemaVersion =
+            (budget['schemaVersion'] ?? budgetSchemaVersion.toDouble())
+                .round()
+                .clamp(1, currentBudgetSchemaVersion);
         _applyBudget(
-          income: budget['income']!,
+          availableBalance: budget['availableBalance']!,
           billsPercentage: budget['billsPercentage']!,
           savingsPercentage: budget['savingsPercentage']!,
           personalPercentage: budget['personalPercentage']!,

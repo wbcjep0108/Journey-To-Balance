@@ -62,7 +62,7 @@ class _FinancialCategoryPageState extends State<FinancialCategoryPage> {
     final sectionTitle = widget.sectionTitle;
     final iconPath = widget.iconPath;
     final entries = budget.entriesFor(category);
-    final remainingBalance = budget.remainingFor(category);
+    final allocatedBalance = budget.allocationFor(category);
     final percentage = switch (category) {
       FinancialCategory.bills => budget.billsPercentage,
       FinancialCategory.savings => budget.savingsPercentage,
@@ -126,7 +126,7 @@ class _FinancialCategoryPageState extends State<FinancialCategoryPage> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      '${NumberFormat('#,##0.##').format(remainingBalance)}php',
+                                      '${NumberFormat('#,##0.##').format(allocatedBalance)}php',
                                       style: const TextStyle(
                                         color: Colors.white,
                                         fontSize: 40,
@@ -136,18 +136,10 @@ class _FinancialCategoryPageState extends State<FinancialCategoryPage> {
                                     ),
                                     const SizedBox(height: 6),
                                     Text(
-                                      'Remaining balance',
+                                      '${percentage.toStringAsFixed(0)}% of Available Balance',
                                       style: TextStyle(
                                         color: Colors.grey.shade500,
                                         fontSize: 13,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      '${percentage.toStringAsFixed(0)}%',
-                                      style: TextStyle(
-                                        color: Colors.grey.shade400,
-                                        fontSize: 14,
                                       ),
                                     ),
                                   ],

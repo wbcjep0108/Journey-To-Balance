@@ -30,9 +30,13 @@ class FirestoreFinanceService {
     if (budget is! Map) return null;
 
     return {
-      'income': (budget['income'] as num?)?.toDouble() ?? 0,
+      'availableBalance':
+          (budget['availableBalance'] as num?)?.toDouble() ??
+          (budget['income'] as num?)?.toDouble() ??
+          0,
       'monthlySalary':
           (budget['monthlySalary'] as num?)?.toDouble() ??
+          (budget['availableBalance'] as num?)?.toDouble() ??
           (budget['income'] as num?)?.toDouble() ??
           0,
       'billsPercentage': (budget['billsPercentage'] as num?)?.toDouble() ?? 50,
@@ -51,6 +55,7 @@ class FirestoreFinanceService {
       'savingsGoalTargetDateMs':
           (budget['savingsGoalTargetDateMs'] as num?)?.toDouble() ??
           DateTime(2028, 12, 31).millisecondsSinceEpoch.toDouble(),
+      'schemaVersion': (budget['schemaVersion'] as num?)?.toDouble() ?? 1,
     };
   }
 
@@ -69,9 +74,13 @@ class FirestoreFinanceService {
         hasPendingWrites: snapshot.metadata.hasPendingWrites,
         isFromCache: snapshot.metadata.isFromCache,
         budget: {
-          'income': (budget['income'] as num?)?.toDouble() ?? 0,
+          'availableBalance':
+              (budget['availableBalance'] as num?)?.toDouble() ??
+              (budget['income'] as num?)?.toDouble() ??
+              0,
           'monthlySalary':
               (budget['monthlySalary'] as num?)?.toDouble() ??
+              (budget['availableBalance'] as num?)?.toDouble() ??
               (budget['income'] as num?)?.toDouble() ??
               0,
           'billsPercentage':
@@ -92,6 +101,7 @@ class FirestoreFinanceService {
           'savingsGoalTargetDateMs':
               (budget['savingsGoalTargetDateMs'] as num?)?.toDouble() ??
               DateTime(2028, 12, 31).millisecondsSinceEpoch.toDouble(),
+          'schemaVersion': (budget['schemaVersion'] as num?)?.toDouble() ?? 1,
         },
       );
     });
@@ -99,7 +109,7 @@ class FirestoreFinanceService {
 
   Future<void> saveBudget(
     String uid, {
-    required double income,
+    required double availableBalance,
     required double monthlySalary,
     required double billsPercentage,
     required double savingsPercentage,
@@ -110,10 +120,13 @@ class FirestoreFinanceService {
     double savingsGoalTarget = 10000,
     double savingsGoalCurrent = 0,
     double? savingsGoalTargetDateMs,
+    double schemaVersion = 2,
   }) {
     return _user(uid).set({
       'budget': {
-        'income': income,
+        // Keep `income` for backward compatibility with older app builds.
+        'income': availableBalance,
+        'availableBalance': availableBalance,
         'monthlySalary': monthlySalary,
         'billsPercentage': billsPercentage,
         'savingsPercentage': savingsPercentage,
@@ -126,6 +139,7 @@ class FirestoreFinanceService {
         'savingsGoalTargetDateMs':
             savingsGoalTargetDateMs ??
             DateTime(2028, 12, 31).millisecondsSinceEpoch.toDouble(),
+        'schemaVersion': schemaVersion,
         'updatedAt': FieldValue.serverTimestamp(),
       },
     }, SetOptions(merge: true));
@@ -187,7 +201,7 @@ class FirestoreFinanceService {
     String uid, {
     required FinancialCategory category,
     required FinancialEntry entry,
-    required double income,
+    required double availableBalance,
     required double monthlySalary,
     required double billsPercentage,
     required double savingsPercentage,
@@ -198,12 +212,14 @@ class FirestoreFinanceService {
     double savingsGoalTarget = 10000,
     double savingsGoalCurrent = 0,
     double? savingsGoalTargetDateMs,
+    double schemaVersion = 2,
   }) {
     final batch = _firestore.batch();
     batch.set(_entries(uid, category).doc(entry.id), entry.toFirestore());
     batch.set(_user(uid), {
       'budget': {
-        'income': income,
+        'income': availableBalance,
+        'availableBalance': availableBalance,
         'monthlySalary': monthlySalary,
         'billsPercentage': billsPercentage,
         'savingsPercentage': savingsPercentage,
@@ -216,6 +232,7 @@ class FirestoreFinanceService {
         'savingsGoalTargetDateMs':
             savingsGoalTargetDateMs ??
             DateTime(2028, 12, 31).millisecondsSinceEpoch.toDouble(),
+        'schemaVersion': schemaVersion,
         'updatedAt': FieldValue.serverTimestamp(),
       },
     }, SetOptions(merge: true));
@@ -227,7 +244,7 @@ class FirestoreFinanceService {
     String uid, {
     required FinancialCategory category,
     required String entryId,
-    required double income,
+    required double availableBalance,
     required double monthlySalary,
     required double billsPercentage,
     required double savingsPercentage,
@@ -238,12 +255,14 @@ class FirestoreFinanceService {
     double savingsGoalTarget = 10000,
     double savingsGoalCurrent = 0,
     double? savingsGoalTargetDateMs,
+    double schemaVersion = 2,
   }) {
     final batch = _firestore.batch();
     batch.delete(_entries(uid, category).doc(entryId));
     batch.set(_user(uid), {
       'budget': {
-        'income': income,
+        'income': availableBalance,
+        'availableBalance': availableBalance,
         'monthlySalary': monthlySalary,
         'billsPercentage': billsPercentage,
         'savingsPercentage': savingsPercentage,
@@ -256,6 +275,7 @@ class FirestoreFinanceService {
         'savingsGoalTargetDateMs':
             savingsGoalTargetDateMs ??
             DateTime(2028, 12, 31).millisecondsSinceEpoch.toDouble(),
+        'schemaVersion': schemaVersion,
         'updatedAt': FieldValue.serverTimestamp(),
       },
     }, SetOptions(merge: true));

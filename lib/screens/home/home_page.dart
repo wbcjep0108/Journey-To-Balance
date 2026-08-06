@@ -3,7 +3,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
-import '../../models/financial_entry.dart';
 import '../../providers/budget_provider.dart';
 import '../../widgets/app_refresh_indicator.dart';
 import '../../widgets/weekly_spending_card.dart';
@@ -69,9 +68,6 @@ class _HomePageState extends State<HomePage> {
   void _showEditDialog() {
     final budget = context.read<BudgetProvider>();
     salaryController.text = budget.monthlySalary.toStringAsFixed(0);
-    billsController.text = budget.billsPercentage.toStringAsFixed(0);
-    savingsController.text = budget.savingsPercentage.toStringAsFixed(0);
-    personalController.text = budget.personalPercentage.toStringAsFixed(0);
 
     showDialog(
       context: context,
@@ -104,24 +100,6 @@ class _HomePageState extends State<HomePage> {
                   controller: salaryController,
                   prefixText: '₱ ',
                 ),
-                const SizedBox(height: 16),
-                _buildField(
-                  label: 'Bills %',
-                  controller: billsController,
-                  suffixText: '%',
-                ),
-                const SizedBox(height: 16),
-                _buildField(
-                  label: 'Savings %',
-                  controller: savingsController,
-                  suffixText: '%',
-                ),
-                const SizedBox(height: 16),
-                _buildField(
-                  label: 'Personal %',
-                  controller: personalController,
-                  suffixText: '%',
-                ),
                 const SizedBox(height: 28),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
@@ -141,36 +119,20 @@ class _HomePageState extends State<HomePage> {
                       onPressed: () async {
                         final monthlySalary =
                             double.tryParse(salaryController.text) ?? -1;
-                        final billsPercentage =
-                            double.tryParse(billsController.text) ?? 0;
-                        final savingsPercentage =
-                            double.tryParse(savingsController.text) ?? 0;
-                        final personalPercentage =
-                            double.tryParse(personalController.text) ?? 0;
-                        final totalPercentage =
-                            billsPercentage +
-                            savingsPercentage +
-                            personalPercentage;
 
-                        if (monthlySalary < 0 ||
-                            (totalPercentage - 100).abs() > 0.001) {
+                        if (monthlySalary < 0) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text(
-                                'Enter a valid salary and percentages totaling 100%',
-                              ),
+                              content: Text('Enter a valid monthly salary.'),
                             ),
                           );
                           return;
                         }
 
                         try {
-                          await context.read<BudgetProvider>().updateBudget(
-                            monthlySalary: monthlySalary,
-                            billsPercentage: billsPercentage,
-                            savingsPercentage: savingsPercentage,
-                            personalPercentage: personalPercentage,
-                          );
+                          await context
+                              .read<BudgetProvider>()
+                              .updateMonthlySalary(monthlySalary);
                           if (context.mounted) Navigator.pop(context);
                           if (mounted) setState(() {});
                         } catch (_) {
@@ -197,6 +159,132 @@ class _HomePageState extends State<HomePage> {
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showPercentagesDialog() {
+    final budget = context.read<BudgetProvider>();
+    billsController.text = budget.billsPercentage.toStringAsFixed(0);
+    savingsController.text = budget.savingsPercentage.toStringAsFixed(0);
+    personalController.text = budget.personalPercentage.toStringAsFixed(0);
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Budget Percentages',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF121212),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Split your Available Balance across categories.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+              ),
+              const SizedBox(height: 24),
+              _buildField(
+                label: 'Bills %',
+                controller: billsController,
+                suffixText: '%',
+              ),
+              const SizedBox(height: 16),
+              _buildField(
+                label: 'Savings %',
+                controller: savingsController,
+                suffixText: '%',
+              ),
+              const SizedBox(height: 16),
+              _buildField(
+                label: 'Personal %',
+                controller: personalController,
+                suffixText: '%',
+              ),
+              const SizedBox(height: 28),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    child: const Text(
+                      'Cancel',
+                      style: TextStyle(
+                        color: Color(0xFF6B7280),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  TextButton(
+                    onPressed: () async {
+                      final billsPercentage =
+                          double.tryParse(billsController.text) ?? 0;
+                      final savingsPercentage =
+                          double.tryParse(savingsController.text) ?? 0;
+                      final personalPercentage =
+                          double.tryParse(personalController.text) ?? 0;
+                      final totalPercentage =
+                          billsPercentage +
+                          savingsPercentage +
+                          personalPercentage;
+
+                      if ((totalPercentage - 100).abs() > 0.001) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Percentages must total 100%.'),
+                          ),
+                        );
+                        return;
+                      }
+
+                      try {
+                        await budget.updatePercentages(
+                          billsPercentage: billsPercentage,
+                          savingsPercentage: savingsPercentage,
+                          personalPercentage: personalPercentage,
+                        );
+                        if (dialogContext.mounted) {
+                          Navigator.pop(dialogContext);
+                        }
+                        if (mounted) setState(() {});
+                      } catch (_) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Percentages could not be updated.',
+                              ),
+                            ),
+                          );
+                        }
+                      }
+                    },
+                    child: const Text(
+                      'Save',
+                      style: TextStyle(
+                        color: Color(0xFF121212),
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
       ),
@@ -748,6 +836,33 @@ class _HomePageState extends State<HomePage> {
                                       ),
                                     ],
                                   ),
+                                  const SizedBox(height: 12),
+                                  GestureDetector(
+                                    onTap: _showPercentagesDialog,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 6,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withValues(
+                                          alpha: 0.12,
+                                        ),
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      child: Text(
+                                        'Bills ${budget.billsPercentage.toStringAsFixed(0)}% · '
+                                        'Savings ${budget.savingsPercentage.toStringAsFixed(0)}% · '
+                                        'Personal ${budget.personalPercentage.toStringAsFixed(0)}%',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          color: Colors.grey[300],
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
@@ -870,7 +985,7 @@ class _HomePageState extends State<HomePage> {
                       child: _BuildGridCard(
                         amount: NumberFormat(
                           '#,##0.##',
-                        ).format(budget.remainingFor(FinancialCategory.bills)),
+                        ).format(budget.billsAmount),
                         label: 'BILLS',
                         gradientColors: const [
                           Color(0xFF333333),
@@ -882,7 +997,7 @@ class _HomePageState extends State<HomePage> {
                     Expanded(
                       child: _BuildGridCard(
                         amount: NumberFormat('#,##0.##').format(
-                          budget.remainingFor(FinancialCategory.savings),
+                          budget.savingsAmount,
                         ),
                         label: 'SAVINGS',
                         gradientColors: const [
@@ -895,7 +1010,7 @@ class _HomePageState extends State<HomePage> {
                     Expanded(
                       child: _BuildGridCard(
                         amount: NumberFormat('#,##0.##').format(
-                          budget.remainingFor(FinancialCategory.personal),
+                          budget.personalAmount,
                         ),
                         label: 'PERSONAL',
                         gradientColors: const [
