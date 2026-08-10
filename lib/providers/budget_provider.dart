@@ -870,10 +870,17 @@ class BudgetProvider extends ChangeNotifier {
     }());
   }
 
+  /// Removes [entry].
+  ///
+  /// When [refund] is true, money returns to Available Balance and the source
+  /// category (and Savings Goal decreases for goal contributions).
+  /// When [refund] is false, only the transaction is removed — balances stay
+  /// as they are.
   Future<void> deleteEntry(
     FinancialCategory category,
-    FinancialEntry entry,
-  ) async {
+    FinancialEntry entry, {
+    bool refund = true,
+  }) async {
     final uid = _requireUid();
     final list = _entries[category]!;
     final index = list.indexWhere((item) => item.id == entry.id);
@@ -885,24 +892,22 @@ class BudgetProvider extends ChangeNotifier {
     final key = _entryKey(category, entry.id);
 
     list.removeAt(index);
-    if (isGoalContribution) {
-      // Refund only to the original source category.
+    if (refund) {
       availableBalance = previous['availableBalance']! + entry.amount;
       _adjustRemaining(category, entry.amount);
-      savingsGoalCurrent = (previousGoalCurrent - entry.amount).clamp(
-        0,
-        double.infinity,
-      );
-      _lockSavingsGoal();
-    } else {
-      availableBalance = previous['availableBalance']! + entry.amount;
-      _adjustRemaining(category, entry.amount);
+      if (isGoalContribution) {
+        savingsGoalCurrent = (previousGoalCurrent - entry.amount).clamp(
+          0,
+          double.infinity,
+        );
+        _lockSavingsGoal();
+      }
     }
     _pendingDeleteKeys.add(key);
     errorMessage = null;
     notifyListeners();
 
-    // Persist in background so swipe-delete / confirmDismiss is not blocked.
+    // Persist in background so swipe actions are not blocked on network.
     unawaited(() async {
       try {
         await _service.deleteEntryAndBudget(
@@ -932,10 +937,12 @@ class BudgetProvider extends ChangeNotifier {
         _restoreRemainings(previous);
         savingsGoalCurrent = previousGoalCurrent;
         _pendingDeleteKeys.remove(key);
-        if (isGoalContribution) {
+        if (refund && isGoalContribution) {
           _lockSavingsGoal();
         }
-        errorMessage = 'The entry could not be deleted.';
+        errorMessage = refund
+            ? 'The entry could not be refunded.'
+            : 'The entry could not be deleted.';
         notifyListeners();
       }
     }());

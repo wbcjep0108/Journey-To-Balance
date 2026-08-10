@@ -28,6 +28,7 @@ class FinancialCategoryPage extends StatefulWidget {
 
 class _FinancialCategoryPageState extends State<FinancialCategoryPage> {
   BudgetProvider? _budget;
+  bool _showOlderEntries = false;
 
   @override
   void didChangeDependencies() {
@@ -68,6 +69,23 @@ class _FinancialCategoryPageState extends State<FinancialCategoryPage> {
       FinancialCategory.savings => budget.savingsPercentage,
       FinancialCategory.personal => budget.personalPercentage,
     };
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    // Keep today + yesterday visible; hide anything 2+ days old until "View more".
+    final recentCutoff = today.subtract(const Duration(days: 1));
+    final recentEntries = <FinancialEntry>[];
+    final olderEntries = <FinancialEntry>[];
+    for (final entry in entries) {
+      final local = entry.createdAt.toLocal();
+      final day = DateTime(local.year, local.month, local.day);
+      if (day.isBefore(recentCutoff)) {
+        olderEntries.add(entry);
+      } else {
+        recentEntries.add(entry);
+      }
+    }
+    final visibleEntries =
+        _showOlderEntries ? [...recentEntries, ...olderEntries] : recentEntries;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -197,7 +215,43 @@ class _FinancialCategoryPageState extends State<FinancialCategoryPage> {
                                 ),
                               ),
                             )
-                          : _buildGroupedHistory(context, entries),
+                          : visibleEntries.isEmpty && !_showOlderEntries
+                          ? Column(
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 28,
+                                  ),
+                                  child: Text(
+                                    'No recent transactions',
+                                    style: TextStyle(
+                                      color: Colors.grey.shade500,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                ),
+                                if (olderEntries.isNotEmpty)
+                                  _ViewMoreButton(
+                                    onPressed: () {
+                                      setState(() => _showOlderEntries = true);
+                                    },
+                                  ),
+                              ],
+                            )
+                          : Column(
+                              children: [
+                                _buildGroupedHistory(context, visibleEntries),
+                                if (olderEntries.isNotEmpty &&
+                                    !_showOlderEntries) ...[
+                                  const SizedBox(height: 22),
+                                  _ViewMoreButton(
+                                    onPressed: () {
+                                      setState(() => _showOlderEntries = true);
+                                    },
+                                  ),
+                                ],
+                              ],
+                            ),
                     ],
                   ),
                 ),
@@ -254,8 +308,16 @@ class _FinancialCategoryPageState extends State<FinancialCategoryPage> {
                 context,
                 groupedDays[groupIndex].value[entryIndex],
               ),
-              onDelete: () =>
-                  _delete(context, groupedDays[groupIndex].value[entryIndex]),
+              onRefund: () => _refundOrDelete(
+                context,
+                groupedDays[groupIndex].value[entryIndex],
+                refund: true,
+              ),
+              onDelete: () => _refundOrDelete(
+                context,
+                groupedDays[groupIndex].value[entryIndex],
+                refund: false,
+              ),
             ),
             if (entryIndex < groupedDays[groupIndex].value.length - 1)
               Divider(color: Colors.white.withValues(alpha: 0.1), height: 28),
@@ -296,12 +358,20 @@ class _FinancialCategoryPageState extends State<FinancialCategoryPage> {
     );
   }
 
-  Future<bool> _delete(BuildContext context, FinancialEntry entry) async {
+  Future<bool> _refundOrDelete(
+    BuildContext context,
+    FinancialEntry entry, {
+    required bool refund,
+  }) async {
+    final amountLabel = NumberFormat('#,##0.##').format(entry.amount);
     final authorized = await showSensitiveActionAuth(
       context: context,
-      title: 'Confirm delete',
-      description:
-          'Enter your PIN or use fingerprint to delete "${entry.title}".',
+      title: refund ? 'Confirm refund' : 'Confirm delete',
+      description: refund
+          ? 'Enter your PIN or use fingerprint to refund ₱$amountLabel '
+                'back to ${widget.title}.'
+          : 'Enter your PIN or use fingerprint to delete "${entry.title}". '
+                'This will not return the money.',
     );
     if (!authorized || !context.mounted) return false;
 
@@ -309,7 +379,21 @@ class _FinancialCategoryPageState extends State<FinancialCategoryPage> {
       await context.read<BudgetProvider>().deleteEntry(
         widget.category,
         entry,
+        refund: refund,
       );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(
+                refund
+                    ? '₱$amountLabel returned to ${widget.title}.'
+                    : '"${entry.title}" deleted.',
+              ),
+            ),
+          );
+      }
       return true;
     } catch (_) {
       if (context.mounted) _showError(context);
@@ -327,75 +411,223 @@ class _FinancialCategoryPageState extends State<FinancialCategoryPage> {
   }
 }
 
-class _EntryRow extends StatelessWidget {
+class _ViewMoreButton extends StatelessWidget {
+  const _ViewMoreButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: TextButton(
+        onPressed: onPressed,
+        style: TextButton.styleFrom(
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        ),
+        child: const Text(
+          'View more',
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.2,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EntryRow extends StatefulWidget {
   const _EntryRow({
     required this.entry,
     required this.onEdit,
+    required this.onRefund,
     required this.onDelete,
   });
 
   final FinancialEntry entry;
   final VoidCallback onEdit;
+  final Future<bool> Function() onRefund;
   final Future<bool> Function() onDelete;
 
   @override
+  State<_EntryRow> createState() => _EntryRowState();
+}
+
+class _EntryRowState extends State<_EntryRow> {
+  static const _actionsWidth = 168.0;
+  double _dragExtent = 0;
+  bool _busy = false;
+
+  void _close() {
+    if (_dragExtent == 0) return;
+    setState(() => _dragExtent = 0);
+  }
+
+  Future<void> _runAction(Future<bool> Function() action) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    final done = await action();
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      if (done) {
+        _dragExtent = 0;
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Dismissible(
-      key: ValueKey(entry.id),
-      direction: DismissDirection.endToStart,
-      confirmDismiss: (_) => onDelete(),
-      background: Container(
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        decoration: BoxDecoration(
-          color: const Color(0xFFE11D48),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: const Row(
-          mainAxisAlignment: MainAxisAlignment.end,
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: SizedBox(
+        width: double.infinity,
+        height: 56,
+        child: Stack(
+          fit: StackFit.expand,
           children: [
-            Icon(Icons.delete_outline_rounded, color: Colors.white, size: 26),
-            SizedBox(width: 8),
-            Text(
-              'Delete',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-                fontSize: 14,
+            // Actions stay behind the row until the user swipes.
+            Align(
+              alignment: Alignment.centerRight,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _SlideAction(
+                    width: _actionsWidth / 2,
+                    color: const Color(0xFF2563EB),
+                    icon: Icons.replay_rounded,
+                    label: 'Refund',
+                    onTap: _busy ? null : () => _runAction(widget.onRefund),
+                  ),
+                  _SlideAction(
+                    width: _actionsWidth / 2,
+                    color: const Color(0xFFE11D48),
+                    icon: Icons.delete_outline_rounded,
+                    label: 'Delete',
+                    onTap: _busy ? null : () => _runAction(widget.onDelete),
+                  ),
+                ],
+              ),
+            ),
+            // Full-width cover so amounts never sit on top of the action colors.
+            GestureDetector(
+              onHorizontalDragUpdate: (details) {
+                if (_busy) return;
+                setState(() {
+                  _dragExtent = (_dragExtent + details.delta.dx).clamp(
+                    -_actionsWidth,
+                    0.0,
+                  );
+                });
+              },
+              onHorizontalDragEnd: (details) {
+                if (_busy) return;
+                final velocity = details.primaryVelocity ?? 0;
+                setState(() {
+                  if (velocity < -400 || _dragExtent < -_actionsWidth / 2) {
+                    _dragExtent = -_actionsWidth;
+                  } else {
+                    _dragExtent = 0;
+                  }
+                });
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 160),
+                curve: Curves.easeOutCubic,
+                transform: Matrix4.translationValues(_dragExtent, 0, 0),
+                width: double.infinity,
+                height: double.infinity,
+                color: const Color(0xFF161616),
+                alignment: Alignment.centerLeft,
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () {
+                      if (_dragExtent < 0) {
+                        _close();
+                        return;
+                      }
+                      widget.onEdit();
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              widget.entry.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            '-₱${NumberFormat('#,##0.##').format(widget.entry.amount)}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
           ],
         ),
       ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onEdit,
-          borderRadius: BorderRadius.circular(12),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    entry.title,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
+    );
+  }
+}
+
+class _SlideAction extends StatelessWidget {
+  const _SlideAction({
+    required this.width,
+    required this.color,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final double width;
+  final Color color;
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: color,
+      child: InkWell(
+        onTap: onTap,
+        child: SizedBox(
+          width: width,
+          height: double.infinity,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: Colors.white, size: 20),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
                 ),
-                Text(
-                  '-₱${NumberFormat('#,##0.##').format(entry.amount)}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
