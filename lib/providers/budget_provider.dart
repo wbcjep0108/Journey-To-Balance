@@ -162,40 +162,10 @@ class BudgetProvider extends ChangeNotifier {
     _personalRemaining += amount * (personalPercentage / 100);
   }
 
-  /// Reduce envelopes by percentages applied ONLY to [amount] (AB decrease delta).
-  /// Does not reset categories from the full Available Balance.
-  void _withdrawFundsByPercentage(double amount) {
-    if (amount <= 0) return;
-    var billsCut = amount * (billsPercentage / 100);
-    var savingsCut = amount * (savingsPercentage / 100);
-    var personalCut = amount * (personalPercentage / 100);
-
-    if (billsCut > _billsRemaining) billsCut = _billsRemaining;
-    if (savingsCut > _savingsRemaining) savingsCut = _savingsRemaining;
-    if (personalCut > _personalRemaining) personalCut = _personalRemaining;
-
-    _billsRemaining -= billsCut;
-    _savingsRemaining -= savingsCut;
-    _personalRemaining -= personalCut;
-
-    var shortfall = amount - (billsCut + savingsCut + personalCut);
-    if (shortfall > 0.001) {
-      for (final category in [
-        FinancialCategory.bills,
-        FinancialCategory.personal,
-        FinancialCategory.savings,
-      ]) {
-        if (shortfall <= 0.001) break;
-        final available = allocationFor(category);
-        final take = available < shortfall ? available : shortfall;
-        _adjustRemaining(category, -take);
-        shortfall -= take;
-      }
-    }
-  }
-
-  /// One-time seed only (migration). Never use for spending / edits / new money.
-  void _seedRemainingsFromAvailableBalance() {
+  /// Recalculate all envelopes from the current Available Balance × user %.
+  /// Used for manual Available Balance edits and one-time schema migration.
+  /// Do NOT use for spending or receive/add money.
+  void _reallocateAllFromAvailableBalance() {
     _billsRemaining = availableBalance * (billsPercentage / 100);
     _savingsRemaining = availableBalance * (savingsPercentage / 100);
     _personalRemaining = availableBalance * (personalPercentage / 100);
@@ -557,15 +527,10 @@ class BudgetProvider extends ChangeNotifier {
     }
 
     final previous = _remainingSnapshot();
-    final delta = newBalance - availableBalance;
     availableBalance = newBalance;
-    if (delta > 0) {
-      // New money: distribute only the difference.
-      _distributeAddedFunds(delta);
-    } else if (delta < 0) {
-      // Decrease: withdraw only the difference by %, never reset from full AB.
-      _withdrawFundsByPercentage(-delta);
-    }
+    // Manual AB edit: always recalculate all categories from the new total
+    // using the user's current percentages (not incremental delta).
+    _reallocateAllFromAvailableBalance();
     errorMessage = null;
     notifyListeners();
 
@@ -1061,7 +1026,7 @@ class BudgetProvider extends ChangeNotifier {
       _clearForfeited();
     }
 
-    _seedRemainingsFromAvailableBalance();
+    _reallocateAllFromAvailableBalance();
     budgetSchemaVersion = currentBudgetSchemaVersion;
     return true;
   }

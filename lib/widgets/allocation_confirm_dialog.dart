@@ -3,7 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-enum AllocationConfirmKind { receiveSalary, addMoney, increaseBalance }
+enum AllocationConfirmKind { receiveSalary, addMoney }
 
 class AllocationConfirmDialog {
   AllocationConfirmDialog._();
@@ -47,11 +47,6 @@ class AllocationConfirmDialog {
         footer =
             'Only this new $amountLabel will be distributed.\n'
             'Your existing category balances will remain unchanged.';
-      case AllocationConfirmKind.increaseBalance:
-        lead =
-            'You\'re increasing your Available Balance by $amountLabel.\n\n'
-            'This additional $amountLabel will be distributed according to your current percentages:';
-        footer = 'Your existing category balances will remain unchanged.';
     }
 
     final result = await _showAnimatedDialog<bool>(
@@ -113,12 +108,21 @@ class AllocationConfirmDialog {
     return result == true;
   }
 
-  static Future<bool> showDecreaseBalanceConfirm({
+  /// Confirm manual Available Balance edit: all categories are recalculated
+  /// from the new total using the user's percentages.
+  static Future<bool> showEditBalanceRecalculateConfirm({
     required BuildContext context,
-    required double decreaseAmount,
+    required double newAvailableBalance,
+    required double billsPercentage,
+    required double savingsPercentage,
+    required double personalPercentage,
   }) async {
-    if (decreaseAmount <= 0) return false;
-    final amountLabel = formatPeso(decreaseAmount);
+    if (newAvailableBalance < 0) return false;
+
+    final balanceLabel = formatPeso(newAvailableBalance);
+    final billsAmount = newAvailableBalance * (billsPercentage / 100);
+    final personalAmount = newAvailableBalance * (personalPercentage / 100);
+    final savingsAmount = newAvailableBalance * (savingsPercentage / 100);
 
     final result = await _showAnimatedDialog<bool>(
       context: context,
@@ -129,15 +133,44 @@ class AllocationConfirmDialog {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'You\'re decreasing your Available Balance by $amountLabel.\n\n'
-              'This will reduce the total available money, it might affected the calculation but your Bills, '
-              'Personal, and Savings percentages will not be recalculated '
-              'automatically.',
+              'You\'re setting your Available Balance to $balanceLabel.\n\n'
+              'All category balances will be recalculated using your current percentages:',
               style: const TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
                 height: 1.45,
                 color: Color(0xFF4B5563),
+              ),
+            ),
+            const SizedBox(height: 18),
+            _NewMoneyBox(
+              amountLabel: balanceLabel,
+              caption: 'New Available Balance',
+            ),
+            const SizedBox(height: 14),
+            _AllocationRow(
+              label: 'Bills',
+              percentage: billsPercentage,
+              amountLabel: formatPeso(billsAmount),
+            ),
+            _AllocationRow(
+              label: 'Personal',
+              percentage: personalPercentage,
+              amountLabel: formatPeso(personalAmount),
+            ),
+            _AllocationRow(
+              label: 'Savings',
+              percentage: savingsPercentage,
+              amountLabel: formatPeso(savingsAmount),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Previous spending will not be subtracted again after this update.',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                height: 1.4,
+                color: Color(0xFF6B7280),
               ),
             ),
             const SizedBox(height: 22),
@@ -243,9 +276,13 @@ class _ConfirmCard extends StatelessWidget {
 }
 
 class _NewMoneyBox extends StatelessWidget {
-  const _NewMoneyBox({required this.amountLabel});
+  const _NewMoneyBox({
+    required this.amountLabel,
+    this.caption = 'New Money',
+  });
 
   final String amountLabel;
+  final String caption;
 
   @override
   Widget build(BuildContext context) {
@@ -259,7 +296,7 @@ class _NewMoneyBox extends StatelessWidget {
       child: Column(
         children: [
           Text(
-            'New Money',
+            caption,
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,

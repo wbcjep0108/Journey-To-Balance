@@ -287,22 +287,14 @@ class _HomePageState extends State<HomePage> {
                         final previousBalance = budget.availableBalance;
                         final delta = balance - previousBalance;
 
-                        if (delta > 0) {
-                          final confirmed =
-                              await AllocationConfirmDialog.showNewMoneyConfirm(
+                        if (delta != 0) {
+                          final confirmed = await AllocationConfirmDialog
+                              .showEditBalanceRecalculateConfirm(
                             context: context,
-                            kind: AllocationConfirmKind.increaseBalance,
-                            amount: delta,
+                            newAvailableBalance: balance,
                             billsPercentage: billsPercentage,
                             savingsPercentage: savingsPercentage,
                             personalPercentage: personalPercentage,
-                          );
-                          if (confirmed != true) return;
-                        } else if (delta < 0) {
-                          final confirmed = await AllocationConfirmDialog
-                              .showDecreaseBalanceConfirm(
-                            context: context,
-                            decreaseAmount: -delta,
                           );
                           if (confirmed != true) return;
                         }
@@ -318,8 +310,8 @@ class _HomePageState extends State<HomePage> {
                         if (!context.mounted || authorized != true) return;
 
                         try {
-                          // Apply percentage rates first so any AB increase
-                          // distributes using the newly entered percentages.
+                          // Apply percentage rates first so AB reallocation
+                          // uses the newly entered percentages.
                           await budget.updatePercentages(
                             billsPercentage: billsPercentage,
                             savingsPercentage: savingsPercentage,
