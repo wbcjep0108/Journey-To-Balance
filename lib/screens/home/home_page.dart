@@ -645,8 +645,11 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     final budget = _budget ?? context.watch<BudgetProvider>();
-    final screenHeight = MediaQuery.of(context).size.height;
+    final media = MediaQuery.of(context);
+    final screenHeight = media.size.height;
     final headerHeight = screenHeight * 0.38;
+    // Floating bottom nav (~72) + gap (24) + home-indicator safe area + buffer.
+    final bottomScrollPadding = media.padding.bottom + 168;
     final user = FirebaseAuth.instance.currentUser;
 
     return Scaffold(
@@ -654,6 +657,7 @@ class _HomePageState extends State<HomePage> {
       body: AppRefreshIndicator(
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.only(bottom: bottomScrollPadding),
           child: Column(
             children: [
               Container(
@@ -972,11 +976,9 @@ class _HomePageState extends State<HomePage> {
                 child: WeeklySpendingCard(),
               ),
               const Padding(
-                padding: EdgeInsets.fromLTRB(28, 8, 28, 8),
+                padding: EdgeInsets.fromLTRB(28, 16, 28, 8),
                 child: _QuickActionsRow(),
               ),
-              // Clear the floating bottom navigation bar.
-              const SizedBox(height: 120),
             ],
           ),
         ),
@@ -1173,18 +1175,10 @@ class _CategoryCardsRow extends StatelessWidget {
   final String savingsAmount;
   final String personalAmount;
 
-  static const _gap = 10.0;
   static const _gradient = [Color(0xFF333333), Color(0xFF000000)];
 
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.sizeOf(context).width;
-    final shortest = MediaQuery.sizeOf(context).shortestSide;
-    // Keep a fixed comfortable card height across screen sizes.
-    final cardHeight = 160.0;
-    final amountFontSize = (shortest * 0.028).clamp(16.0, 20.0);
-    final labelFontSize = (shortest * 0.016).clamp(10.0, 12.0);
-
     final cards = [
       (amount: billsAmount, label: 'BILLS'),
       (amount: savingsAmount, label: 'SAVINGS'),
@@ -1194,46 +1188,33 @@ class _CategoryCardsRow extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final available = constraints.maxWidth;
-        final equalWidth = (available - _gap * 2) / 3;
-        // On narrow screens, keep a readable min width and allow horizontal scroll.
-        final minCardWidth = width < 360 ? 112.0 : 120.0;
-        final cardWidth = equalWidth < minCardWidth ? minCardWidth : equalWidth;
-        final needsScroll = cardWidth * 3 + _gap * 2 > available + 0.5;
+        // Keep all 3 cards on one row; tighten gaps on narrow phones.
+        final gap = available < 340 ? 6.0 : (available < 380 ? 8.0 : 10.0);
+        final cardWidth = (available - gap * 2) / 3;
+        final cardHeight = (cardWidth * 1.45).clamp(120.0, 160.0);
+        final horizontalPad = (cardWidth * 0.08).clamp(4.0, 10.0);
+        final amountFontSize = (cardWidth * 0.18).clamp(12.0, 20.0);
+        final labelFontSize = (cardWidth * 0.095).clamp(8.5, 12.0);
+        final letterSpacing = available < 360 ? 0.4 : 1.0;
 
-        Widget buildCard(({String amount, String label}) item, {double? width}) {
-          final card = _BuildGridCard(
-            amount: item.amount,
-            label: item.label,
-            height: cardHeight,
-            amountFontSize: amountFontSize,
-            labelFontSize: labelFontSize,
-            gradientColors: _gradient,
-          );
-          if (width == null) return card;
-          return SizedBox(width: width, child: card);
-        }
-
-        if (!needsScroll) {
-          return Row(
-            children: [
-              for (var i = 0; i < cards.length; i++) ...[
-                if (i > 0) const SizedBox(width: _gap),
-                Expanded(child: buildCard(cards[i])),
-              ],
+        return Row(
+          children: [
+            for (var i = 0; i < cards.length; i++) ...[
+              if (i > 0) SizedBox(width: gap),
+              Expanded(
+                child: _BuildGridCard(
+                  amount: cards[i].amount,
+                  label: cards[i].label,
+                  height: cardHeight,
+                  horizontalPadding: horizontalPad,
+                  amountFontSize: amountFontSize,
+                  labelFontSize: labelFontSize,
+                  letterSpacing: letterSpacing,
+                  gradientColors: _gradient,
+                ),
+              ),
             ],
-          );
-        }
-
-        return SizedBox(
-          height: cardHeight,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            itemCount: cards.length,
-            separatorBuilder: (_, _) => const SizedBox(width: _gap),
-            itemBuilder: (context, index) =>
-                buildCard(cards[index], width: cardWidth),
-          ),
+          ],
         );
       },
     );
@@ -1244,16 +1225,20 @@ class _BuildGridCard extends StatelessWidget {
   final String amount;
   final String label;
   final double height;
+  final double horizontalPadding;
   final double amountFontSize;
   final double labelFontSize;
+  final double letterSpacing;
   final List<Color> gradientColors;
 
   const _BuildGridCard({
     required this.amount,
     required this.label,
     required this.height,
+    required this.horizontalPadding,
     required this.amountFontSize,
     required this.labelFontSize,
+    required this.letterSpacing,
     required this.gradientColors,
   });
 
@@ -1261,7 +1246,11 @@ class _BuildGridCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: height,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(
+        horizontal: horizontalPadding,
+        vertical: 12,
+      ),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
@@ -1277,15 +1266,17 @@ class _BuildGridCard extends StatelessWidget {
           ),
         ],
       ),
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            FittedBox(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: double.infinity,
+            child: FittedBox(
               fit: BoxFit.scaleDown,
               child: Text(
                 amount,
                 maxLines: 1,
+                softWrap: false,
                 style: TextStyle(
                   fontSize: amountFontSize,
                   fontWeight: FontWeight.bold,
@@ -1293,18 +1284,26 @@ class _BuildGridCard extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: labelFontSize,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-                letterSpacing: 1.2,
+          ),
+          const SizedBox(height: 6),
+          SizedBox(
+            width: double.infinity,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                label,
+                maxLines: 1,
+                softWrap: false,
+                style: TextStyle(
+                  fontSize: labelFontSize,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                  letterSpacing: letterSpacing,
+                ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
