@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/budget_provider.dart';
+import '../../widgets/allocation_confirm_dialog.dart';
 import '../../widgets/app_refresh_indicator.dart';
 import '../../widgets/weekly_spending_card.dart';
 import '../savings/savings_goal_page.dart';
@@ -282,13 +283,40 @@ class _HomePageState extends State<HomePage> {
                           return;
                         }
 
+                        final previousBalance = budget.availableBalance;
+                        final delta = balance - previousBalance;
+
+                        if (delta > 0) {
+                          final confirmed =
+                              await AllocationConfirmDialog.showNewMoneyConfirm(
+                            context: context,
+                            kind: AllocationConfirmKind.increaseBalance,
+                            amount: delta,
+                            billsPercentage: billsPercentage,
+                            savingsPercentage: savingsPercentage,
+                            personalPercentage: personalPercentage,
+                          );
+                          if (confirmed != true) return;
+                        } else if (delta < 0) {
+                          final confirmed = await AllocationConfirmDialog
+                              .showDecreaseBalanceConfirm(
+                            context: context,
+                            decreaseAmount: -delta,
+                          );
+                          if (confirmed != true) return;
+                        }
+
                         try {
-                          await budget.updateAvailableBalance(balance);
+                          // Apply percentage rates first so any AB increase
+                          // distributes using the newly entered percentages.
                           await budget.updatePercentages(
                             billsPercentage: billsPercentage,
                             savingsPercentage: savingsPercentage,
                             personalPercentage: personalPercentage,
                           );
+                          if (delta != 0) {
+                            await budget.updateAvailableBalance(balance);
+                          }
                           if (dialogContext.mounted) {
                             Navigator.pop(dialogContext);
                           }
@@ -333,35 +361,13 @@ class _HomePageState extends State<HomePage> {
     if (budget.monthlySalary <= 0) return;
 
     setState(() => _isReceivingSalary = true);
-    final confirmed = await showDialog<bool>(
+    final confirmed = await AllocationConfirmDialog.showNewMoneyConfirm(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text('Receive monthly salary?'),
-        content: Text(
-          'Add ₱${NumberFormat('#,##0').format(budget.monthlySalary)} '
-          'to your available balance?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(color: Color(0xFF6B7280)),
-            ),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text(
-              'Receive',
-              style: TextStyle(
-                color: Color(0xFF121212),
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
+      kind: AllocationConfirmKind.receiveSalary,
+      amount: budget.monthlySalary,
+      billsPercentage: budget.billsPercentage,
+      savingsPercentage: budget.savingsPercentage,
+      personalPercentage: budget.personalPercentage,
     );
 
     if (!mounted) return;
@@ -473,6 +479,17 @@ class _HomePageState extends State<HomePage> {
                                 return;
                               }
 
+                              final confirmed = await AllocationConfirmDialog
+                                  .showNewMoneyConfirm(
+                                context: context,
+                                kind: AllocationConfirmKind.addMoney,
+                                amount: amount,
+                                billsPercentage: budget.billsPercentage,
+                                savingsPercentage: budget.savingsPercentage,
+                                personalPercentage: budget.personalPercentage,
+                              );
+                              if (confirmed != true) return;
+
                               setDialogState(() => isSaving = true);
                               if (mounted) {
                                 setState(() => _isAddingMoney = true);
@@ -488,7 +505,7 @@ class _HomePageState extends State<HomePage> {
                                   ..showSnackBar(
                                     SnackBar(
                                       content: Text(
-                                        '₱${NumberFormat('#,##0').format(amount)} '
+                                        '${AllocationConfirmDialog.formatPeso(amount)} '
                                         'added to your available balance.',
                                       ),
                                     ),

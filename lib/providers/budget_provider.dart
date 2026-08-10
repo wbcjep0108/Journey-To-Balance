@@ -155,6 +155,7 @@ class BudgetProvider extends ChangeNotifier {
   }
 
   /// Add funds into envelopes by percentage (salary / add money / AB increase).
+  /// Applies percentages ONLY to [amount], never to the full Available Balance.
   void _distributeAddedFunds(double amount) {
     if (amount == 0) return;
     _billsRemaining += amount * (billsPercentage / 100);
@@ -162,8 +163,40 @@ class BudgetProvider extends ChangeNotifier {
     _personalRemaining += amount * (personalPercentage / 100);
   }
 
-  /// Reset envelopes to match current Available Balance × percentages.
-  void _reallocateAllFromAvailableBalance() {
+  /// Reduce envelopes by percentages applied ONLY to [amount] (AB decrease delta).
+  /// Does not reset categories from the full Available Balance.
+  void _withdrawFundsByPercentage(double amount) {
+    if (amount <= 0) return;
+    var billsCut = amount * (billsPercentage / 100);
+    var savingsCut = amount * (savingsPercentage / 100);
+    var personalCut = amount * (personalPercentage / 100);
+
+    if (billsCut > _billsRemaining) billsCut = _billsRemaining;
+    if (savingsCut > _savingsRemaining) savingsCut = _savingsRemaining;
+    if (personalCut > _personalRemaining) personalCut = _personalRemaining;
+
+    _billsRemaining -= billsCut;
+    _savingsRemaining -= savingsCut;
+    _personalRemaining -= personalCut;
+
+    var shortfall = amount - (billsCut + savingsCut + personalCut);
+    if (shortfall > 0.001) {
+      for (final category in [
+        FinancialCategory.bills,
+        FinancialCategory.personal,
+        FinancialCategory.savings,
+      ]) {
+        if (shortfall <= 0.001) break;
+        final available = allocationFor(category);
+        final take = available < shortfall ? available : shortfall;
+        _adjustRemaining(category, -take);
+        shortfall -= take;
+      }
+    }
+  }
+
+  /// One-time seed only (migration). Never use for spending / edits / new money.
+  void _seedRemainingsFromAvailableBalance() {
     _billsRemaining = availableBalance * (billsPercentage / 100);
     _savingsRemaining = availableBalance * (savingsPercentage / 100);
     _personalRemaining = availableBalance * (personalPercentage / 100);
@@ -452,14 +485,10 @@ class BudgetProvider extends ChangeNotifier {
       personal: this.personalPercentage,
     );
     this.monthlySalary = monthlySalary;
+    // Percentages only affect future new money — never reset envelopes.
     this.billsPercentage = nextBills;
     this.savingsPercentage = nextSavings;
     this.personalPercentage = nextPersonal;
-    if ((nextBills - previousPct.bills).abs() > 0.001 ||
-        (nextSavings - previousPct.savings).abs() > 0.001 ||
-        (nextPersonal - previousPct.personal).abs() > 0.001) {
-      _reallocateAllFromAvailableBalance();
-    }
     errorMessage = null;
     notifyListeners();
 
@@ -531,9 +560,11 @@ class BudgetProvider extends ChangeNotifier {
     final delta = newBalance - availableBalance;
     availableBalance = newBalance;
     if (delta > 0) {
+      // New money: distribute only the difference.
       _distributeAddedFunds(delta);
     } else if (delta < 0) {
-      _reallocateAllFromAvailableBalance();
+      // Decrease: withdraw only the difference by %, never reset from full AB.
+      _withdrawFundsByPercentage(-delta);
     }
     errorMessage = null;
     notifyListeners();
@@ -559,26 +590,24 @@ class BudgetProvider extends ChangeNotifier {
       throw ArgumentError('Budget percentages must total 100.');
     }
 
-    final previous = _remainingSnapshot();
     final previousPct = (
       bills: this.billsPercentage,
       savings: this.savingsPercentage,
       personal: this.personalPercentage,
     );
+    // Only update rates for future new money — keep existing envelopes intact.
     this.billsPercentage = billsPercentage;
     this.savingsPercentage = savingsPercentage;
     this.personalPercentage = personalPercentage;
-    _reallocateAllFromAvailableBalance();
     errorMessage = null;
     notifyListeners();
 
     try {
       await _saveCurrentBudget(uid);
     } catch (_) {
-      billsPercentage = previousPct.bills;
-      savingsPercentage = previousPct.savings;
-      personalPercentage = previousPct.personal;
-      _restoreRemainings(previous);
+      this.billsPercentage = previousPct.bills;
+      this.savingsPercentage = previousPct.savings;
+      this.personalPercentage = previousPct.personal;
       errorMessage = 'Percentages could not be updated.';
       notifyListeners();
       rethrow;
@@ -983,7 +1012,7 @@ class BudgetProvider extends ChangeNotifier {
       _clearForfeited();
     }
 
-    _reallocateAllFromAvailableBalance();
+    _seedRemainingsFromAvailableBalance();
     budgetSchemaVersion = currentBudgetSchemaVersion;
     return true;
   }
