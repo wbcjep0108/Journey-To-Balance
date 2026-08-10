@@ -77,6 +77,14 @@ class _SavingsGoalPageState extends State<SavingsGoalPage> {
           'Savings Goal',
           style: TextStyle(fontWeight: FontWeight.w700),
         ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: _SavingsGoalInfoButton(
+              onPressed: () => _showSavingsGoalInfo(context),
+            ),
+          ),
+        ],
       ),
       body: SafeArea(
         child: ListView(
@@ -318,6 +326,119 @@ class _SavingsGoalPageState extends State<SavingsGoalPage> {
   ) async {
     await showContributeToGoalModal(context: context, category: category);
   }
+
+  Future<void> _showSavingsGoalInfo(BuildContext context) {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return Dialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'About Savings Goal',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF121212),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'The Savings Goal is completely up to you. You can save the money '
+                  'wherever you prefer, such as your wallet, bank account, e-wallet, '
+                  'or any other place you use to keep your savings.\n\n'
+                  'This feature only helps you set a goal and track your savings '
+                  'progress. It does not store or transfer your money.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    height: 1.45,
+                    color: Color(0xFF4B5563),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF121212),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                    child: const Text(
+                      'Got it',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _SavingsGoalInfoButton extends StatelessWidget {
+  const _SavingsGoalInfoButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'About Savings Goal',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onPressed,
+          customBorder: const CircleBorder(),
+          child: Ink(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFF9CA3AF), width: 1.5),
+            ),
+            child: const Center(
+              child: Text(
+                '?',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF6B7280),
+                  height: 1,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 Future<void> showContributeToGoalModal({
@@ -421,6 +542,13 @@ class _ContributeToGoalModalState extends State<_ContributeToGoalModal> {
 
   @override
   Widget build(BuildContext context) {
+    final budget = context.watch<BudgetProvider>();
+    final remaining = budget.remainingFor(widget.category);
+    final remainingLabel = NumberFormat.currency(
+      locale: 'en_PH',
+      symbol: '₱',
+      decimalDigits: remaining % 1 == 0 ? 0 : 2,
+    ).format(remaining);
     final title = 'From ${SavingsGoalPage.categoryLabel(widget.category)}';
 
     return Center(
@@ -465,7 +593,29 @@ class _ContributeToGoalModalState extends State<_ContributeToGoalModal> {
                           color: Color(0xFF121212),
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
+                      Text(
+                        remainingLabel,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF121212),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Available in ${SavingsGoalPage.categoryLabel(widget.category)}',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.grey.shade500,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
                       const Text(
                         'How much would you like to save today?',
                         textAlign: TextAlign.center,

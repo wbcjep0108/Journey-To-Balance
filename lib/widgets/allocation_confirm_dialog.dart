@@ -130,8 +130,8 @@ class AllocationConfirmDialog {
           children: [
             Text(
               'You\'re decreasing your Available Balance by $amountLabel.\n\n'
-              'This will reduce the total available money, but your Bills, '
-              'Personal, and Savings allocations will not be recalculated '
+              'This will reduce the total available money, it might affected the calculation but your Bills, '
+              'Personal, and Savings percentages will not be recalculated '
               'automatically.',
               style: const TextStyle(
                 fontSize: 14,
