@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../providers/budget_provider.dart';
 import '../../widgets/allocation_confirm_dialog.dart';
 import '../../widgets/app_refresh_indicator.dart';
+import '../../widgets/sensitive_action_auth.dart';
 import '../../widgets/weekly_spending_card.dart';
 import '../savings/savings_goal_page.dart';
 
@@ -306,6 +307,16 @@ class _HomePageState extends State<HomePage> {
                           if (confirmed != true) return;
                         }
 
+                        if (!context.mounted) return;
+                        final authorized = await showSensitiveActionAuth(
+                          context: context,
+                          title: 'Confirm budget change',
+                          description:
+                              'Enter your PIN or use fingerprint to update '
+                              'your available balance or percentages.',
+                        );
+                        if (!context.mounted || authorized != true) return;
+
                         try {
                           // Apply percentage rates first so any AB increase
                           // distributes using the newly entered percentages.
@@ -372,6 +383,19 @@ class _HomePageState extends State<HomePage> {
 
     if (!mounted) return;
     if (confirmed != true) {
+      setState(() => _isReceivingSalary = false);
+      return;
+    }
+
+    final authorized = await showSensitiveActionAuth(
+      context: context,
+      title: 'Confirm receive salary',
+      description:
+          'Enter your PIN or use fingerprint to add your salary '
+          'to available balance.',
+    );
+    if (!mounted) return;
+    if (authorized != true) {
       setState(() => _isReceivingSalary = false);
       return;
     }
@@ -489,6 +513,18 @@ class _HomePageState extends State<HomePage> {
                                 personalPercentage: budget.personalPercentage,
                               );
                               if (confirmed != true) return;
+
+                              if (!context.mounted) return;
+                              final authorized = await showSensitiveActionAuth(
+                                context: context,
+                                title: 'Confirm add money',
+                                description:
+                                    'Enter your PIN or use fingerprint to add '
+                                    'money to your available balance.',
+                              );
+                              if (!context.mounted || authorized != true) {
+                                return;
+                              }
 
                               setDialogState(() => isSaving = true);
                               if (mounted) {
