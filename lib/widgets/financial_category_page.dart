@@ -304,15 +304,19 @@ class _FinancialCategoryPageState extends State<FinancialCategoryPage> {
           ) ...[
             _EntryRow(
               entry: groupedDays[groupIndex].value[entryIndex],
-              onEdit: () => _openEditor(
-                context,
-                groupedDays[groupIndex].value[entryIndex],
-              ),
-              onRefund: () => _refundOrDelete(
-                context,
-                groupedDays[groupIndex].value[entryIndex],
-                refund: true,
-              ),
+              onEdit: groupedDays[groupIndex].value[entryIndex].isRefund
+                  ? null
+                  : () => _openEditor(
+                      context,
+                      groupedDays[groupIndex].value[entryIndex],
+                    ),
+              onRefund: groupedDays[groupIndex].value[entryIndex].isRefund
+                  ? null
+                  : () => _refundOrDelete(
+                      context,
+                      groupedDays[groupIndex].value[entryIndex],
+                      refund: true,
+                    ),
               onDelete: () => _refundOrDelete(
                 context,
                 groupedDays[groupIndex].value[entryIndex],
@@ -447,8 +451,8 @@ class _EntryRow extends StatefulWidget {
   });
 
   final FinancialEntry entry;
-  final VoidCallback onEdit;
-  final Future<bool> Function() onRefund;
+  final VoidCallback? onEdit;
+  final Future<bool> Function()? onRefund;
   final Future<bool> Function() onDelete;
 
   @override
@@ -456,9 +460,14 @@ class _EntryRow extends StatefulWidget {
 }
 
 class _EntryRowState extends State<_EntryRow> {
+  static const _decreaseColor = Color(0xFFFF5252);
+  static const _refundColor = Color(0xFF5CB450);
   static const _actionsWidth = 168.0;
   double _dragExtent = 0;
   bool _busy = false;
+
+  double get _panelWidth =>
+      widget.onRefund == null ? _actionsWidth / 2 : _actionsWidth;
 
   void _close() {
     if (_dragExtent == 0) return;
@@ -480,6 +489,11 @@ class _EntryRowState extends State<_EntryRow> {
 
   @override
   Widget build(BuildContext context) {
+    final isRefund = widget.entry.isRefund;
+    final amountLabel =
+        '${isRefund ? '+' : '-'}₱${NumberFormat('#,##0.##').format(widget.entry.amount)}';
+    final panelWidth = _panelWidth;
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
       child: SizedBox(
@@ -494,13 +508,16 @@ class _EntryRowState extends State<_EntryRow> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _SlideAction(
-                    width: _actionsWidth / 2,
-                    color: const Color(0xFF2563EB),
-                    icon: Icons.replay_rounded,
-                    label: 'Refund',
-                    onTap: _busy ? null : () => _runAction(widget.onRefund),
-                  ),
+                  if (widget.onRefund != null)
+                    _SlideAction(
+                      width: _actionsWidth / 2,
+                      color: _refundColor,
+                      icon: Icons.replay_rounded,
+                      label: 'Refund',
+                      onTap: _busy
+                          ? null
+                          : () => _runAction(widget.onRefund!),
+                    ),
                   _SlideAction(
                     width: _actionsWidth / 2,
                     color: const Color(0xFFE11D48),
@@ -517,7 +534,7 @@ class _EntryRowState extends State<_EntryRow> {
                 if (_busy) return;
                 setState(() {
                   _dragExtent = (_dragExtent + details.delta.dx).clamp(
-                    -_actionsWidth,
+                    -panelWidth,
                     0.0,
                   );
                 });
@@ -526,8 +543,8 @@ class _EntryRowState extends State<_EntryRow> {
                 if (_busy) return;
                 final velocity = details.primaryVelocity ?? 0;
                 setState(() {
-                  if (velocity < -400 || _dragExtent < -_actionsWidth / 2) {
-                    _dragExtent = -_actionsWidth;
+                  if (velocity < -400 || _dragExtent < -panelWidth / 2) {
+                    _dragExtent = -panelWidth;
                   } else {
                     _dragExtent = 0;
                   }
@@ -549,7 +566,7 @@ class _EntryRowState extends State<_EntryRow> {
                         _close();
                         return;
                       }
-                      widget.onEdit();
+                      widget.onEdit?.call();
                     },
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -569,11 +586,11 @@ class _EntryRowState extends State<_EntryRow> {
                           ),
                           const SizedBox(width: 12),
                           Text(
-                            '-₱${NumberFormat('#,##0.##').format(widget.entry.amount)}',
-                            style: const TextStyle(
-                              color: Colors.white,
+                            amountLabel,
+                            style: TextStyle(
+                              color: isRefund ? _refundColor : _decreaseColor,
                               fontSize: 16,
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
                         ],

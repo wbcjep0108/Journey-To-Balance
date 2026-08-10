@@ -16,6 +16,7 @@ class FinancialEntry {
     required this.title,
     required this.amount,
     required this.createdAt,
+    this.isRefund = false,
   });
 
   final String id;
@@ -23,16 +24,21 @@ class FinancialEntry {
   final double amount;
   final DateTime createdAt;
 
+  /// True when this row is a refund credit (money returned to the category).
+  final bool isRefund;
+
   FinancialEntry copyWith({
     String? title,
     double? amount,
     DateTime? createdAt,
+    bool? isRefund,
   }) {
     return FinancialEntry(
       id: id,
       title: title ?? this.title,
       amount: amount ?? this.amount,
       createdAt: createdAt ?? this.createdAt,
+      isRefund: isRefund ?? this.isRefund,
     );
   }
 
@@ -41,6 +47,7 @@ class FinancialEntry {
       'title': title,
       'amount': amount,
       'createdAt': Timestamp.fromDate(createdAt),
+      'isRefund': isRefund,
     };
   }
 
@@ -57,6 +64,7 @@ class FinancialEntry {
       createdAt: createdAt is Timestamp
           ? createdAt.toDate()
           : DateTime.fromMillisecondsSinceEpoch(0),
+      isRefund: data['isRefund'] == true,
     );
   }
 }

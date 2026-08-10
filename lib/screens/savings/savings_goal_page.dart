@@ -754,45 +754,50 @@ class _ActionCard extends StatelessWidget {
     return Semantics(
       button: true,
       label: label,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(24),
-          child: Ink(
-            height: 88,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.07),
-                  blurRadius: 18,
-                  offset: const Offset(0, 8),
-                ),
-              ],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.07),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+              spreadRadius: 0,
             ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Image.asset(
-                  assetPath,
-                  width: 30,
-                  height: 30,
-                  color: const Color(0xFF121212),
-                  colorBlendMode: BlendMode.srcIn,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  label,
-                  style: const TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF3F444C),
+          ],
+        ),
+        child: Material(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(24),
+            child: SizedBox(
+              height: 88,
+              width: double.infinity,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Image.asset(
+                    assetPath,
+                    width: 30,
+                    height: 30,
+                    color: const Color(0xFF121212),
+                    colorBlendMode: BlendMode.srcIn,
                   ),
-                ),
-              ],
+                  const SizedBox(height: 8),
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF3F444C),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -966,9 +971,9 @@ class _RecentActivityList extends StatelessWidget {
                       '+₱${NumberFormat('#,##0.##').format(items[i].entry.amount)}',
                       style: const TextStyle(
                         fontFamily: 'Inter',
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF121212),
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF5CB450),
                       ),
                     ),
                   ],

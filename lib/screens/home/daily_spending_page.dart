@@ -268,11 +268,13 @@ class _DayEntryRow extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  '-₱${NumberFormat('#,##0.##').format(item.entry.amount)}',
-                  style: const TextStyle(
-                    color: Colors.white,
+                  '${item.entry.isRefund ? '+' : '-'}₱${NumberFormat('#,##0.##').format(item.entry.amount)}',
+                  style: TextStyle(
+                    color: item.entry.isRefund
+                        ? const Color(0xFF5CB450)
+                        : const Color(0xFFFF5252),
                     fontSize: 16,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ],

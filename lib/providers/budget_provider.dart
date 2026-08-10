@@ -110,10 +110,9 @@ class BudgetProvider extends ChangeNotifier {
   }
 
   double totalUsedFor(FinancialCategory category) {
-    final active = _entries[category]!.fold<double>(
-      0,
-      (total, entry) => total + entry.amount,
-    );
+    final active = _entries[category]!
+        .where((entry) => !entry.isRefund)
+        .fold<double>(0, (total, entry) => total + entry.amount);
     return active + _forfeited[category]!;
   }
 
@@ -227,7 +226,7 @@ class BudgetProvider extends ChangeNotifier {
     final results = <DayTransaction>[];
     for (final category in FinancialCategory.values) {
       for (final entry in _entries[category]!) {
-        if (entry.title == savingsGoalEntryTitle) {
+        if (entry.title == savingsGoalEntryTitle && !entry.isRefund) {
           results.add(DayTransaction(category: category, entry: entry));
         }
       }
@@ -256,6 +255,7 @@ class BudgetProvider extends ChangeNotifier {
     final totals = List<double>.filled(7, 0);
     for (final category in FinancialCategory.values) {
       for (final entry in _entries[category]!) {
+        if (entry.isRefund) continue;
         final local = entry.createdAt.toLocal();
         final day = DateTime(local.year, local.month, local.day);
         final offset = day.difference(monday).inDays;
@@ -870,10 +870,11 @@ class BudgetProvider extends ChangeNotifier {
     }());
   }
 
-  /// Removes [entry].
+  /// Removes [entry], or converts it to a refund credit when [refund] is true.
   ///
   /// When [refund] is true, money returns to Available Balance and the source
-  /// category (and Savings Goal decreases for goal contributions).
+  /// category (and Savings Goal decreases for goal contributions). The row
+  /// stays in history as a green refund credit.
   /// When [refund] is false, only the transaction is removed — balances stay
   /// as they are.
   Future<void> deleteEntry(
@@ -886,13 +887,17 @@ class BudgetProvider extends ChangeNotifier {
     final index = list.indexWhere((item) => item.id == entry.id);
     if (index < 0) return;
 
+    // Already-refunded rows can only be deleted from history.
+    final shouldRefund = refund && !entry.isRefund;
     final previousGoalCurrent = savingsGoalCurrent;
     final previous = _remainingSnapshot();
+    final previousEntry = entry;
     final isGoalContribution = entry.title == savingsGoalEntryTitle;
     final key = _entryKey(category, entry.id);
 
-    list.removeAt(index);
-    if (refund) {
+    if (shouldRefund) {
+      final refunded = entry.copyWith(isRefund: true);
+      list[index] = refunded;
       availableBalance = previous['availableBalance']! + entry.amount;
       _adjustRemaining(category, entry.amount);
       if (isGoalContribution) {
@@ -902,7 +907,51 @@ class BudgetProvider extends ChangeNotifier {
         );
         _lockSavingsGoal();
       }
+      _pendingUpsertKeys.add(key);
+      errorMessage = null;
+      notifyListeners();
+
+      unawaited(() async {
+        try {
+          await _service.saveEntryAndBudget(
+            uid,
+            category: category,
+            entry: refunded,
+            availableBalance: availableBalance,
+            monthlySalary: monthlySalary,
+            billsPercentage: billsPercentage,
+            savingsPercentage: savingsPercentage,
+            personalPercentage: personalPercentage,
+            billsRemaining: _billsRemaining,
+            savingsRemaining: _savingsRemaining,
+            personalRemaining: _personalRemaining,
+            forfeitedBills: _forfeited[FinancialCategory.bills]!,
+            forfeitedSavings: _forfeited[FinancialCategory.savings]!,
+            forfeitedPersonal: _forfeited[FinancialCategory.personal]!,
+            savingsGoalTarget: savingsGoalTarget,
+            savingsGoalCurrent: savingsGoalCurrent,
+            savingsGoalTargetDateMs: savingsGoalTargetDate
+                .millisecondsSinceEpoch
+                .toDouble(),
+            savingsGoalTitle: savingsGoalTitle,
+            schemaVersion: budgetSchemaVersion.toDouble(),
+          );
+        } catch (_) {
+          list[index] = previousEntry;
+          _restoreRemainings(previous);
+          savingsGoalCurrent = previousGoalCurrent;
+          _pendingUpsertKeys.remove(key);
+          if (isGoalContribution) {
+            _lockSavingsGoal();
+          }
+          errorMessage = 'The entry could not be refunded.';
+          notifyListeners();
+        }
+      }());
+      return;
     }
+
+    list.removeAt(index);
     _pendingDeleteKeys.add(key);
     errorMessage = null;
     notifyListeners();
@@ -934,15 +983,8 @@ class BudgetProvider extends ChangeNotifier {
         );
       } catch (_) {
         list.insert(index, entry);
-        _restoreRemainings(previous);
-        savingsGoalCurrent = previousGoalCurrent;
         _pendingDeleteKeys.remove(key);
-        if (refund && isGoalContribution) {
-          _lockSavingsGoal();
-        }
-        errorMessage = refund
-            ? 'The entry could not be refunded.'
-            : 'The entry could not be deleted.';
+        errorMessage = 'The entry could not be deleted.';
         notifyListeners();
       }
     }());
