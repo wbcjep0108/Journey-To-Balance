@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/financial_entry.dart';
 import '../../providers/budget_provider.dart';
+import '../../widgets/savings_goal_complete_dialog.dart';
 import '../../widgets/sensitive_action_auth.dart';
 
 class SavingsGoalPage extends StatefulWidget {
@@ -324,7 +325,18 @@ class _SavingsGoalPageState extends State<SavingsGoalPage> {
     BuildContext context,
     FinancialCategory category,
   ) async {
-    await showContributeToGoalModal(context: context, category: category);
+    final completed = await showContributeToGoalModal(
+      context: context,
+      category: category,
+    );
+    if (completed != true || !context.mounted) return;
+
+    final budget = context.read<BudgetProvider>();
+    await SavingsGoalCompleteDialog.show(
+      context: context,
+      goalTitle: budget.savingsGoalTitle,
+      targetAmount: budget.savingsGoalTarget,
+    );
   }
 
   Future<void> _showSavingsGoalInfo(BuildContext context) {
@@ -441,11 +453,12 @@ class _SavingsGoalInfoButton extends StatelessWidget {
   }
 }
 
-Future<void> showContributeToGoalModal({
+/// Returns `true` when the contribution just completed the savings goal.
+Future<bool?> showContributeToGoalModal({
   required BuildContext context,
   required FinancialCategory category,
 }) {
-  return showGeneralDialog<void>(
+  return showGeneralDialog<bool>(
     context: context,
     barrierDismissible: true,
     barrierLabel: 'Dismiss',
@@ -513,6 +526,8 @@ class _ContributeToGoalModalState extends State<_ContributeToGoalModal> {
 
     final category = widget.category;
     final messenger = ScaffoldMessenger.of(context);
+    final previousCurrent = budget.savingsGoalCurrent;
+    final goalTarget = budget.savingsGoalTarget;
     FocusManager.instance.primaryFocus?.unfocus();
     setState(() => _saving = true);
 
@@ -522,16 +537,21 @@ class _ContributeToGoalModalState extends State<_ContributeToGoalModal> {
         source: category,
         amount: amount,
       );
-      if (mounted) Navigator.pop(context);
-      messenger
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(
-              '₱${NumberFormat('#,##0.##').format(amount)} added to your savings goal.',
+      final justCompleted =
+          previousCurrent < goalTarget - 0.001 &&
+          budget.savingsGoalCurrent >= goalTarget - 0.001;
+      if (mounted) Navigator.pop(context, justCompleted);
+      if (!justCompleted) {
+        messenger
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(
+                '₱${NumberFormat('#,##0.##').format(amount)} added to your savings goal.',
+              ),
             ),
-          ),
-        );
+          );
+      }
     } catch (_) {
       if (mounted) setState(() => _saving = false);
       messenger.showSnackBar(
