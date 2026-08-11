@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../models/financial_entry.dart';
+import 'rate_limit_dialog.dart';
 
 typedef BudgetModalSave = Future<void> Function(String name, double amount);
 
@@ -167,7 +168,8 @@ class _BudgetModalState extends State<BudgetModal>
       final saveOperation = widget.onSave(_name, _amount!);
       if (mounted) Navigator.pop(context);
       await saveOperation;
-    } catch (_) {
+    } catch (error) {
+      if (isFinanceRateLimitError(error)) return;
       messenger
         ?..hideCurrentSnackBar()
         ..showSnackBar(

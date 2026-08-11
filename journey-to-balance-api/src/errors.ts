@@ -37,6 +37,23 @@ export function rateLimited(): ApiError {
   );
 }
 
+/** Thrown in the Worker isolate (not across DO RPC) so instanceof + headers work. */
+export class RateLimitExceededError extends ApiError {
+  constructor(
+    readonly info: {
+      bucket: string;
+      limit: number;
+      remaining: number;
+      resetAt: number;
+    },
+    message =
+      "You're doing that a little too quickly. Please try again in a moment.",
+  ) {
+    super(429, "rate-limit-exceeded", message);
+    this.name = "RateLimitExceededError";
+  }
+}
+
 export function internal(message = "Unexpected server error."): ApiError {
   return new ApiError(500, "internal", message);
 }
@@ -52,7 +69,23 @@ export function jsonError(
         headers.set(key, value);
       });
     }
-    if (error.status === 429 && !headers.has("Retry-After")) {
+    if (error instanceof RateLimitExceededError) {
+      new Headers(
+        rateLimitHeaders({
+          bucket: error.info.bucket,
+          limit: error.info.limit,
+          remaining: error.info.remaining,
+          resetAt: error.info.resetAt,
+        }),
+      ).forEach((value, key) => {
+        headers.set(key, value);
+      });
+      const retryAfterSec = Math.max(
+        1,
+        Math.ceil((error.info.resetAt - Date.now()) / 1000),
+      );
+      headers.set("Retry-After", String(retryAfterSec));
+    } else if (error.status === 429 && !headers.has("Retry-After")) {
       headers.set("Retry-After", "60");
     }
     return Response.json(

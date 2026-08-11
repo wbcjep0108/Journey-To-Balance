@@ -13,6 +13,7 @@ import 'screens/navigation/bottom_nav_screen.dart';
 import 'screens/splash/splash_screen.dart';
 import 'services/finance_api_service.dart';
 import 'services/firestore_finance_service.dart';
+import 'widgets/rate_limit_dialog.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -245,7 +246,7 @@ class _UserDataGateState extends State<_UserDataGate> {
   Widget build(BuildContext context) {
     // Keep BottomNav mounted once ready — never swap it for Splash on reload.
     if (_ready) {
-      return const BottomNavScreen();
+      return const RateLimitListener(child: BottomNavScreen());
     }
 
     if (_error != null) {

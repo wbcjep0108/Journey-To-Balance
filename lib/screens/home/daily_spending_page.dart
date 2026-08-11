@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../models/financial_entry.dart';
 import '../../providers/budget_provider.dart';
 import '../../widgets/budget_modal.dart';
+import '../../widgets/rate_limit_dialog.dart';
 import '../../widgets/sensitive_action_auth.dart';
 
 class DailySpendingPage extends StatelessWidget {
@@ -181,11 +182,13 @@ class DailySpendingPage extends StatelessWidget {
         item.entry,
       );
       return true;
-    } catch (_) {
+    } catch (error) {
+      if (isFinanceRateLimitError(error)) return false;
       if (!context.mounted) return false;
+      final budget = context.read<BudgetProvider>();
+      if (budget.pendingRateLimit != null) return false;
       final message =
-          context.read<BudgetProvider>().errorMessage ??
-          'The change could not be saved.';
+          budget.errorMessage ?? 'The change could not be saved.';
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(message)));

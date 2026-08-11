@@ -41,7 +41,26 @@ export type IsolatedRateLimitOutcome =
   };
 
 export class UserGate extends DurableObject {
+  /**
+   * Production finance rate-limit path: increments op bucket + general.
+   * Throws ApiError(429) when either limit is exceeded.
+   */
   async enforceRateLimits(bucket: RateBucketName): Promise<void> {
+    await this.applyFinanceRateLimits(bucket);
+  }
+
+  /**
+   * Same counters/keys/limits as {@link enforceRateLimits}, but returns a
+   * structured outcome so Worker HTTP can map 429 without DO RPC instanceof loss.
+   *
+   * Important: does NOT use try/catch + `instanceof ApiError` for the limit
+   * check. Over-limit is detected from stored counts before any increment, so
+   * a rejected request never mutates Firestore and never depends on error class
+   * identity inside the DO isolate.
+   */
+  async enforceRateLimitsOutcome(
+    bucket: RateBucketName,
+  ): Promise<IsolatedRateLimitOutcome> {
     if (!(bucket in RATE_LIMITS)) {
       throw badRequest(`Unknown rate-limit bucket: ${bucket}`);
     }
@@ -49,12 +68,26 @@ export class UserGate extends DurableObject {
     const now = Date.now();
     const opKey = `rate:${bucket}`;
     const generalKey = "rate:general";
+    const limit = RATE_LIMITS[bucket];
 
     const opCurrent = await this.ctx.storage.get<RateBucketState>(opKey);
     const generalCurrent =
       await this.ctx.storage.get<RateBucketState>(generalKey);
 
-    const nextOp = nextRateBucket(opCurrent, RATE_LIMITS[bucket], now);
+    if (this.isBucketLimited(opCurrent, limit, now)) {
+      return this.limitedOutcome(bucket, limit, opCurrent, now);
+    }
+    if (this.isBucketLimited(generalCurrent, RATE_LIMITS.general, now)) {
+      return this.limitedOutcome(
+        "general",
+        RATE_LIMITS.general,
+        generalCurrent,
+        now,
+      );
+    }
+
+    // Safe to increment — mirrors nextRateBucket without throw/instanceof.
+    const nextOp = nextRateBucket(opCurrent, limit, now);
     const nextGeneral = nextRateBucket(
       generalCurrent,
       RATE_LIMITS.general,
@@ -65,6 +98,67 @@ export class UserGate extends DurableObject {
       [opKey]: nextOp,
       [generalKey]: nextGeneral,
     });
+
+    return {
+      ok: true,
+      info: {
+        bucket,
+        limit,
+        count: nextOp.count,
+        remaining: Math.max(0, limit - nextOp.count),
+        windowStart: nextOp.windowStart,
+        resetAt: nextOp.windowStart + WINDOW_MS,
+      },
+    };
+  }
+
+  /** Shared production logic for op bucket + general (60/min). */
+  private async applyFinanceRateLimits(
+    bucket: RateBucketName,
+  ): Promise<RateLimitResult> {
+    const outcome = await this.enforceRateLimitsOutcome(bucket);
+    if (!outcome.ok) {
+      // Keep legacy throw path for any remaining callers of enforceRateLimits.
+      throw new ApiError(429, outcome.code, outcome.message);
+    }
+    return outcome.info;
+  }
+
+  private isBucketLimited(
+    current: RateBucketState | undefined,
+    limit: number,
+    now: number,
+  ): boolean {
+    if (!current || now - current.windowStart >= WINDOW_MS) {
+      return false;
+    }
+    return current.count >= limit;
+  }
+
+  private limitedOutcome(
+    bucket: RateBucketName,
+    limit: number,
+    current: RateBucketState | undefined,
+    now: number,
+  ): IsolatedRateLimitOutcome {
+    const windowStart =
+      current && now - current.windowStart < WINDOW_MS ?
+        current.windowStart :
+        now;
+    return {
+      ok: false,
+      info: {
+        bucket,
+        limit,
+        count: current?.count ?? limit,
+        remaining: 0,
+        windowStart,
+        resetAt: windowStart + WINDOW_MS,
+      },
+      code: "rate-limit-exceeded",
+      message:
+        "You're doing that a little too quickly. Please try again in a moment.",
+    };
   }
 
   /**

@@ -11,7 +11,13 @@ import {
   remainingFor,
   SAVINGS_GOAL_ENTRY_TITLE,
 } from "./budgetMath";
-import {badRequest, conflict, internal, notFound} from "./errors";
+import {
+  badRequest,
+  conflict,
+  internal,
+  notFound,
+  RateLimitExceededError,
+} from "./errors";
 import {FirestoreClient} from "./firestore";
 import {RATE_LIMITS, RateBucketName} from "./rateLimit";
 import type {UserGate} from "./UserGate";
@@ -85,7 +91,21 @@ async function withProtection<T>(
     }
   }
 
-  await gate.enforceRateLimits(bucket);
+  // Structured DO outcome (same as /api/test/rate-limit-add-money).
+  // Never throw ApiError across DO RPC — instanceof is lost → HTTP 500.
+  const outcome = await gate.enforceRateLimitsOutcome(bucket);
+  if (!outcome.ok) {
+    throw new RateLimitExceededError(
+      {
+        bucket: outcome.info.bucket,
+        limit: outcome.info.limit,
+        remaining: outcome.info.remaining,
+        resetAt: outcome.info.resetAt,
+      },
+      outcome.message,
+    );
+  }
+
   const result = await run();
 
   if (requestId) {

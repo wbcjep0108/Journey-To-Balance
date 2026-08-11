@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../providers/budget_provider.dart';
 import '../../widgets/allocation_confirm_dialog.dart';
+import '../../widgets/rate_limit_dialog.dart';
 import '../../widgets/sensitive_action_auth.dart';
 
 Widget homeDialogField({
@@ -156,7 +157,8 @@ class _SalarySetupDialogState extends State<SalarySetupDialog> {
                             .updateMonthlySalary(monthlySalary);
                         if (context.mounted) Navigator.pop(context);
                         widget.onSaved();
-                      } catch (_) {
+                      } catch (error) {
+                        if (isFinanceRateLimitError(error)) return;
                         if (widget.hostContext.mounted) {
                           final budget =
                               widget.hostContext.read<BudgetProvider>();
@@ -382,7 +384,8 @@ class _BalanceEditDialogState extends State<BalanceEditDialog> {
                         }
                         if (context.mounted) Navigator.pop(context);
                         widget.onSaved();
-                      } catch (_) {
+                      } catch (error) {
+                        if (isFinanceRateLimitError(error)) return;
                         if (widget.hostContext.mounted) {
                           ScaffoldMessenger.of(widget.hostContext).showSnackBar(
                             SnackBar(
@@ -556,8 +559,9 @@ class _AddMoneyDialogState extends State<AddMoneyDialog> {
                                   ),
                                 ),
                               );
-                          } catch (_) {
+                          } catch (error) {
                             if (mounted) setState(() => _isSaving = false);
+                            if (isFinanceRateLimitError(error)) return;
                             if (!widget.hostContext.mounted) return;
                             ScaffoldMessenger.of(widget.hostContext)
                               ..hideCurrentSnackBar()

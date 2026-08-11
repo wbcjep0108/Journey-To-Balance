@@ -6,6 +6,7 @@ import '../models/financial_entry.dart';
 import '../providers/budget_provider.dart';
 import 'app_refresh_indicator.dart';
 import 'budget_modal.dart';
+import 'rate_limit_dialog.dart';
 import 'sensitive_action_auth.dart';
 
 class FinancialCategoryPage extends StatefulWidget {
@@ -399,16 +400,17 @@ class _FinancialCategoryPageState extends State<FinancialCategoryPage> {
           );
       }
       return true;
-    } catch (_) {
+    } catch (error) {
+      if (isFinanceRateLimitError(error)) return false;
       if (context.mounted) _showError(context);
       return false;
     }
   }
 
   void _showError(BuildContext context) {
-    final message =
-        context.read<BudgetProvider>().errorMessage ??
-        'The change could not be saved.';
+    final budget = context.read<BudgetProvider>();
+    if (budget.pendingRateLimit != null) return;
+    final message = budget.errorMessage ?? 'The change could not be saved.';
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));

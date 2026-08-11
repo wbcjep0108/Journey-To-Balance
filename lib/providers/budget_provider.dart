@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../models/financial_entry.dart';
+import '../models/rate_limit_info.dart';
 import '../services/finance_api_service.dart';
 import '../services/firestore_finance_service.dart';
 
@@ -40,6 +41,11 @@ class BudgetProvider extends ChangeNotifier {
   bool isLoading = false;
   bool isRefreshing = false;
   String? errorMessage;
+
+  /// Set when a Worker finance mutation returns HTTP 429 / rate-limit-exceeded.
+  /// Consumed by [RateLimitListener] — do not convert into [errorMessage].
+  RateLimitInfo? pendingRateLimit;
+
   Future<void>? _refreshOperation;
 
   final Map<FinancialCategory, List<FinancialEntry>> _entries = {
@@ -53,6 +59,10 @@ class BudgetProvider extends ChangeNotifier {
   /// Local writes in flight — remote snapshots must not clobber these.
   final Set<String> _pendingUpsertKeys = {};
   final Set<String> _pendingDeleteKeys = {};
+
+  /// In-flight budget field mutations (add money, salary, AB, percentages).
+  /// Prevents realtime snapshots from clobbering rollback mid-request.
+  int _budgetMutationDepth = 0;
   double? _lockedSavingsGoalCurrent;
   double? _lockedSavingsGoalTarget;
   DateTime? _lockedSavingsGoalTargetDate;
@@ -339,8 +349,10 @@ class BudgetProvider extends ChangeNotifier {
             await _api.migrateBudgetSchema(
               requestId: _api.newRequestId(),
             );
-          } catch (_) {
+          } catch (error) {
             // Keep local migrated view; next Worker mutation also migrates.
+            // Still surface rate-limit UX when the Worker rejects the call.
+            _publishRateLimit(error, actionLabel: 'Budget Migration');
           }
         }());
       }
@@ -513,11 +525,11 @@ class BudgetProvider extends ChangeNotifier {
       this.savingsPercentage = previousPct.savings;
       this.personalPercentage = previousPct.personal;
       _restoreRemainings(previous);
-      errorMessage = _userFacingError(
+      _reportMutationFailure(
         error,
         fallback: 'Budget changes could not be saved.',
+        rateLimitAction: 'Budget',
       );
-      notifyListeners();
       rethrow;
     }
   }
@@ -538,11 +550,11 @@ class BudgetProvider extends ChangeNotifier {
       await _api.receiveSalary(requestId: _api.newRequestId());
     } catch (error) {
       _restoreRemainings(previous);
-      errorMessage = _userFacingError(
+      _reportMutationFailure(
         error,
         fallback: 'Salary could not be received. Please try again.',
+        rateLimitAction: 'Receive Salary',
       );
-      notifyListeners();
       rethrow;
     }
   }
@@ -553,25 +565,27 @@ class BudgetProvider extends ChangeNotifier {
       throw ArgumentError('Amount must be greater than zero.');
     }
 
-    final previous = _remainingSnapshot();
-    availableBalance += amount;
-    _distributeAddedFunds(amount);
+    // Do not optimistically credit funds. A rejected/rate-limited Worker call
+    // must leave balances unchanged (no flash-add, no listener races).
     errorMessage = null;
-    notifyListeners();
-
+    _budgetMutationDepth++;
     try {
       await _api.addMoney(
-          amount: amount,
-          requestId: _api.newRequestId(),
-        );
+        amount: amount,
+        requestId: _api.newRequestId(),
+      );
+      availableBalance += amount;
+      _distributeAddedFunds(amount);
+      notifyListeners();
     } catch (error) {
-      _restoreRemainings(previous);
-      errorMessage = _userFacingError(
+      _reportMutationFailure(
         error,
         fallback: 'Money could not be added. Please try again.',
+        rateLimitAction: 'Add Money',
       );
-      notifyListeners();
       rethrow;
+    } finally {
+      _budgetMutationDepth--;
     }
   }
 
@@ -596,11 +610,11 @@ class BudgetProvider extends ChangeNotifier {
         );
     } catch (error) {
       _restoreRemainings(previous);
-      errorMessage = _userFacingError(
+      _reportMutationFailure(
         error,
         fallback: 'Available balance could not be updated.',
+        rateLimitAction: 'Available Balance',
       );
-      notifyListeners();
       rethrow;
     }
   }
@@ -639,11 +653,11 @@ class BudgetProvider extends ChangeNotifier {
       this.billsPercentage = previousPct.bills;
       this.savingsPercentage = previousPct.savings;
       this.personalPercentage = previousPct.personal;
-      errorMessage = _userFacingError(
+      _reportMutationFailure(
         error,
         fallback: 'Percentages could not be updated.',
+        rateLimitAction: 'Budget Percentages',
       );
-      notifyListeners();
       rethrow;
     }
   }
@@ -666,11 +680,11 @@ class BudgetProvider extends ChangeNotifier {
         );
     } catch (error) {
       this.monthlySalary = previousSalary;
-      errorMessage = _userFacingError(
+      _reportMutationFailure(
         error,
         fallback: 'Monthly salary could not be updated.',
+        rateLimitAction: 'Monthly Salary',
       );
-      notifyListeners();
       rethrow;
     }
   }
@@ -718,11 +732,11 @@ class BudgetProvider extends ChangeNotifier {
         _entries[category]!.removeWhere((item) => item.id == entry.id);
         _pendingUpsertKeys.remove(key);
         _restoreRemainings(previous);
-        errorMessage = _userFacingError(
+        _reportMutationFailure(
           error,
           fallback: 'The entry could not be saved.',
+          rateLimitAction: _categoryRateLimitLabel(category),
         );
-        notifyListeners();
       }
     }());
   }
@@ -764,11 +778,11 @@ class BudgetProvider extends ChangeNotifier {
     } catch (error) {
       list[index] = previousEntry;
       _restoreRemainings(previous);
-      errorMessage = _userFacingError(
+      _reportMutationFailure(
         error,
         fallback: 'The entry could not be updated.',
+        rateLimitAction: _categoryRateLimitLabel(category),
       );
-      notifyListeners();
       rethrow;
     }
   }
@@ -815,11 +829,11 @@ class BudgetProvider extends ChangeNotifier {
         savingsGoalTargetDate = previousDate;
         savingsGoalTitle = previousTitle;
         _lockSavingsGoal();
-        errorMessage = _userFacingError(
+        _reportMutationFailure(
           error,
           fallback: 'Savings goal could not be updated.',
+          rateLimitAction: 'Savings Goal',
         );
-        notifyListeners();
       }
     }());
   }
@@ -876,11 +890,11 @@ class BudgetProvider extends ChangeNotifier {
         _restoreRemainings(previous);
         savingsGoalCurrent = previousCurrent;
         _lockSavingsGoal();
-        errorMessage = _userFacingError(
+        _reportMutationFailure(
           error,
           fallback: 'Could not add to your savings goal.',
+          rateLimitAction: 'Savings Goal',
         );
-        notifyListeners();
       }
     }());
   }
@@ -943,11 +957,13 @@ class BudgetProvider extends ChangeNotifier {
           if (isGoalContribution) {
             _lockSavingsGoal();
           }
-          errorMessage = _userFacingError(
+          _reportMutationFailure(
             error,
             fallback: 'The entry could not be refunded.',
+            rateLimitAction: isGoalContribution
+                ? 'Savings Goal'
+                : _categoryRateLimitLabel(category),
           );
-          notifyListeners();
         }
       }());
       return;
@@ -970,11 +986,11 @@ class BudgetProvider extends ChangeNotifier {
       } catch (error) {
         list.insert(index, entry);
         _pendingDeleteKeys.remove(key);
-        errorMessage = _userFacingError(
+        _reportMutationFailure(
           error,
           fallback: 'The entry could not be deleted.',
+          rateLimitAction: _categoryRateLimitLabel(category),
         );
-        notifyListeners();
       }
     }());
   }
@@ -986,6 +1002,7 @@ class BudgetProvider extends ChangeNotifier {
     isRefreshing = false;
     _refreshOperation = null;
     errorMessage = null;
+    pendingRateLimit = null;
     _pendingUpsertKeys.clear();
     _pendingDeleteKeys.clear();
     _lockedSavingsGoalCurrent = null;
@@ -1096,6 +1113,49 @@ class BudgetProvider extends ChangeNotifier {
     return fallback;
   }
 
+  void clearPendingRateLimit() {
+    if (pendingRateLimit == null) return;
+    pendingRateLimit = null;
+    notifyListeners();
+  }
+
+  /// Publishes a rate-limit event for the UI. Returns true when handled.
+  bool _publishRateLimit(Object error, {String? actionLabel}) {
+    if (!FinanceApiException.isRateLimitError(error)) return false;
+    final apiError = error as FinanceApiException;
+    pendingRateLimit = RateLimitInfo(
+      code: apiError.code,
+      statusCode: apiError.statusCode ?? 429,
+      retryAfterSeconds: apiError.retryAfterSeconds,
+      bucket: apiError.bucket,
+      actionLabel: actionLabel ?? RateLimitInfo.labelForBucket(apiError.bucket),
+    );
+    errorMessage = null;
+    notifyListeners();
+    return true;
+  }
+
+  void _reportMutationFailure(
+    Object error, {
+    required String fallback,
+    String? rateLimitAction,
+  }) {
+    if (_publishRateLimit(error, actionLabel: rateLimitAction)) return;
+    errorMessage = _userFacingError(error, fallback: fallback);
+    notifyListeners();
+  }
+
+  String _categoryRateLimitLabel(FinancialCategory category) {
+    switch (category) {
+      case FinancialCategory.bills:
+        return 'Bills';
+      case FinancialCategory.savings:
+        return 'Savings';
+      case FinancialCategory.personal:
+        return 'Personal';
+    }
+  }
+
 
   void _applyBudget({
     required double availableBalance,
@@ -1162,7 +1222,9 @@ class BudgetProvider extends ChangeNotifier {
                 .clamp(1, currentBudgetSchemaVersion);
 
         final hasPendingLocalBudget =
-            _pendingUpsertKeys.isNotEmpty || _pendingDeleteKeys.isNotEmpty;
+            _pendingUpsertKeys.isNotEmpty ||
+            _pendingDeleteKeys.isNotEmpty ||
+            _budgetMutationDepth > 0;
         if (!hasPendingLocalBudget) {
           _applyBudget(
             availableBalance: budget['availableBalance']!,

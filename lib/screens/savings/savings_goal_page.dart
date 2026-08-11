@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/financial_entry.dart';
 import '../../providers/budget_provider.dart';
+import '../../widgets/rate_limit_dialog.dart';
 import '../../widgets/savings_goal_complete_dialog.dart';
 import '../../widgets/sensitive_action_auth.dart';
 
@@ -176,7 +177,8 @@ class _SavingsGoalPageState extends State<SavingsGoalPage> {
                       if (dialogContext.mounted) {
                         Navigator.pop(dialogContext, true);
                       }
-                    } catch (_) {
+                    } catch (error) {
+                      if (isFinanceRateLimitError(error)) return;
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
@@ -250,7 +252,8 @@ class _SavingsGoalPageState extends State<SavingsGoalPage> {
                       if (dialogContext.mounted) {
                         Navigator.pop(dialogContext, true);
                       }
-                    } catch (_) {
+                    } catch (error) {
+                      if (isFinanceRateLimitError(error)) return;
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
@@ -311,7 +314,8 @@ class _SavingsGoalPageState extends State<SavingsGoalPage> {
         target: budget.savingsGoalTarget,
         targetDate: picked,
       );
-    } catch (_) {
+    } catch (error) {
+      if (isFinanceRateLimitError(error)) return;
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Could not update target date.')),
@@ -550,8 +554,9 @@ class _ContributeToGoalModalState extends State<_ContributeToGoalModal> {
             ),
           );
       }
-    } catch (_) {
+    } catch (error) {
       if (mounted) setState(() => _saving = false);
+      if (isFinanceRateLimitError(error)) return;
       messenger.showSnackBar(
         const SnackBar(content: Text('Could not add to savings goal.')),
       );
@@ -1011,7 +1016,8 @@ class _RecentActivityList extends StatelessWidget {
           );
       }
       return true;
-    } catch (_) {
+    } catch (error) {
+      if (isFinanceRateLimitError(error)) return false;
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Could not undo this contribution.')),

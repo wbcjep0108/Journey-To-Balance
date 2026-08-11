@@ -80,7 +80,18 @@ class FinanceApiService {
         return payload;
       }
 
-      throw FinanceApiException.fromHttp(response.statusCode, payload);
+      debugPrint(
+        'FinanceApiService $path → HTTP ${response.statusCode} '
+        'code=${payload['error'] is Map ? (payload['error'] as Map)['code'] : null} '
+        'retry-after=${response.headers['retry-after']} '
+        'bucket=${response.headers['x-ratelimit-bucket']}',
+      );
+
+      throw FinanceApiException.fromHttp(
+        response.statusCode,
+        payload,
+        headers: response.headers,
+      );
     } on FinanceApiException {
       rethrow;
     } catch (error, stack) {
@@ -229,15 +240,39 @@ class FinanceApiService {
 }
 
 class FinanceApiException implements Exception {
-  const FinanceApiException({required this.code, required this.message});
+  const FinanceApiException({
+    required this.code,
+    required this.message,
+    this.statusCode,
+    this.retryAfterSeconds,
+    this.bucket,
+  });
 
   final String code;
   final String message;
 
+  /// HTTP status when this exception came from a Worker response.
+  final int? statusCode;
+
+  /// Parsed `Retry-After` header (seconds), when present.
+  final int? retryAfterSeconds;
+
+  /// Parsed `X-RateLimit-Bucket` header (Worker action name), when present.
+  final String? bucket;
+
+  bool get isRateLimited =>
+      statusCode == 429 ||
+      code == 'rate-limit-exceeded' ||
+      code == 'resource-exhausted';
+
+  static bool isRateLimitError(Object error) =>
+      error is FinanceApiException && error.isRateLimited;
+
   factory FinanceApiException.fromHttp(
     int status,
-    Map<String, dynamic> payload,
-  ) {
+    Map<String, dynamic> payload, {
+    Map<String, String>? headers,
+  }) {
     final error = payload['error'];
     String code = 'internal';
     String? message;
@@ -246,25 +281,35 @@ class FinanceApiException implements Exception {
       message = error['message']?.toString();
     }
 
+    final retryAfter = _parseRetryAfter(headers);
+    final bucket = _header(headers, 'x-ratelimit-bucket');
+
     if (status == 429 ||
         code == 'resource-exhausted' ||
         code == 'rate-limit-exceeded') {
-      return const FinanceApiException(
-        code: 'resource-exhausted',
+      return FinanceApiException(
+        code: code == 'rate-limit-exceeded'
+            ? 'rate-limit-exceeded'
+            : 'resource-exhausted',
         message:
             'You\'re doing that a little too quickly. Please try again in a moment.',
+        statusCode: status,
+        retryAfterSeconds: retryAfter,
+        bucket: bucket,
       );
     }
     if (status == 401 || code == 'unauthenticated') {
-      return const FinanceApiException(
+      return FinanceApiException(
         code: 'unauthenticated',
         message: 'Please sign in again to continue.',
+        statusCode: status,
       );
     }
     if (status == 403 || code == 'permission-denied') {
-      return const FinanceApiException(
+      return FinanceApiException(
         code: 'permission-denied',
         message: 'You do not have permission to perform this action.',
+        statusCode: status,
       );
     }
     if (status == 400 || code == 'invalid-argument') {
@@ -273,6 +318,7 @@ class FinanceApiException implements Exception {
         message: (message != null && message.isNotEmpty)
             ? message
             : 'That request was invalid. Please check your input and try again.',
+        statusCode: status,
       );
     }
     if (status >= 500 || code == 'internal') {
@@ -281,15 +327,36 @@ class FinanceApiException implements Exception {
         message: (message != null && message.isNotEmpty)
             ? message
             : 'The budget server had a problem. Please try again.',
+        statusCode: status,
       );
     }
     if (message != null && message.isNotEmpty) {
-      return FinanceApiException(code: code, message: message);
+      return FinanceApiException(
+        code: code,
+        message: message,
+        statusCode: status,
+      );
     }
     return FinanceApiException(
       code: code,
       message: 'Something went wrong. Please try again.',
+      statusCode: status,
     );
+  }
+
+  static String? _header(Map<String, String>? headers, String name) {
+    if (headers == null) return null;
+    final value = headers[name] ?? headers[name.toLowerCase()];
+    if (value == null || value.isEmpty) return null;
+    return value;
+  }
+
+  static int? _parseRetryAfter(Map<String, String>? headers) {
+    final raw = _header(headers, 'retry-after');
+    if (raw == null) return null;
+    final seconds = int.tryParse(raw.trim());
+    if (seconds == null || seconds < 0) return null;
+    return seconds;
   }
 
   @override

@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../providers/budget_provider.dart';
 import '../../widgets/allocation_confirm_dialog.dart';
 import '../../widgets/app_refresh_indicator.dart';
+import '../../widgets/rate_limit_dialog.dart';
 import '../../widgets/sensitive_action_auth.dart';
 import '../../widgets/weekly_spending_card.dart';
 import '../savings/savings_goal_page.dart';
@@ -117,8 +118,9 @@ class _HomePageState extends State<HomePage> {
             content: Text('Monthly salary added to your available balance.'),
           ),
         );
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
+      if (isFinanceRateLimitError(error)) return;
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(

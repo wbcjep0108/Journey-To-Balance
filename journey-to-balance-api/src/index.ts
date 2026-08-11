@@ -8,11 +8,58 @@ import {
   rateLimitHeaders,
 } from "./errors";
 import {Env, handleFinance} from "./finance";
-import {UserGate} from "./UserGate";
+import {IsolatedRateLimitOutcome, UserGate} from "./UserGate";
 
 export {UserGate};
 
 const FINANCE_PREFIX = "/api/finance/";
+
+function rateLimitProbeResponse(
+  outcome: IsolatedRateLimitOutcome,
+  successMessage: string,
+): Response {
+  if (!outcome.ok) {
+    const retryAfterSec = Math.max(
+      1,
+      Math.ceil((outcome.info.resetAt - Date.now()) / 1000),
+    );
+    const headers = new Headers(
+      rateLimitHeaders({
+        bucket: outcome.info.bucket,
+        limit: outcome.info.limit,
+        remaining: 0,
+        resetAt: outcome.info.resetAt,
+      }),
+    );
+    new Headers(corsHeaders()).forEach((value, key) => {
+      headers.set(key, value);
+    });
+    headers.set("Retry-After", String(retryAfterSec));
+    return Response.json(
+      {
+        error: {
+          code: outcome.code,
+          message: outcome.message,
+        },
+      },
+      {status: 429, headers},
+    );
+  }
+
+  const info = outcome.info;
+  return jsonOk(
+    {
+      success: true,
+      message: successMessage,
+      bucket: info.bucket,
+      limit: info.limit,
+      remaining: info.remaining,
+      count: info.count,
+    },
+    200,
+    rateLimitHeaders(info),
+  );
+}
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -60,47 +107,22 @@ export default {
         const user = await verifyFirebaseIdToken(request, projectId);
         const gate = env.USER_GATE.get(env.USER_GATE.idFromName(user.uid));
         const outcome = await gate.enforceIsolatedTestRateLimit();
+        return rateLimitProbeResponse(outcome, "Rate limit test passed");
+      }
 
-        if (!outcome.ok) {
-          const retryAfterSec = Math.max(
-            1,
-            Math.ceil((outcome.info.resetAt - Date.now()) / 1000),
-          );
-          const headers = new Headers(
-            rateLimitHeaders({
-              bucket: outcome.info.bucket,
-              limit: outcome.info.limit,
-              remaining: 0,
-              resetAt: outcome.info.resetAt,
-            }),
-          );
-          new Headers(corsHeaders()).forEach((value, key) => {
-            headers.set(key, value);
-          });
-          headers.set("Retry-After", String(retryAfterSec));
-          return Response.json(
-            {
-              error: {
-                code: outcome.code,
-                message: outcome.message,
-              },
-            },
-            {status: 429, headers},
-          );
-        }
-
-        const info = outcome.info;
-        return jsonOk(
-          {
-            success: true,
-            message: "Rate limit test passed",
-            bucket: info.bucket,
-            limit: info.limit,
-            remaining: info.remaining,
-            count: info.count,
-          },
-          200,
-          rateLimitHeaders(info),
+      // Temporary: probe production addMoney bucket (same DO / keys / window).
+      // Does not touch Firestore. Shares counters with real Add Money.
+      if (
+        request.method === "GET" &&
+        (url.pathname === "/api/test/rate-limit-add-money" ||
+          url.pathname === "/api/test/rate-limit-add-money/")
+      ) {
+        const user = await verifyFirebaseIdToken(request, projectId);
+        const gate = env.USER_GATE.get(env.USER_GATE.idFromName(user.uid));
+        const outcome = await gate.enforceRateLimitsOutcome("addMoney");
+        return rateLimitProbeResponse(
+          outcome,
+          "addMoney rate limit probe (non-mutating)",
         );
       }
 
