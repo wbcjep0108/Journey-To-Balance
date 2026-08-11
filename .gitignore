@@ -12,13 +12,44 @@
 .swiftpm/
 migrate_working_dir/
 
-# Local secrets / env
+# Local secrets / env (never commit)
 .env
 .env.*
+!.env.example
+!.env.*.example
+.dev.vars
+**/.dev.vars
 
-# Cursor / debug session artifacts
+# Firebase / Google service account private keys
+*firebase-adminsdk*.json
+*service-account*.json
+*serviceaccount*.json
+**/serviceAccountKey.json
+**/credentials.json
+*.pem
+*.p12
+
+# Android signing (keep key.properties / keystores private)
+**/key.properties
+**/*.jks
+**/*.keystore
+
+# Cursor / agent / debug session artifacts
 .cursor/
+.agents/
+skills-lock.json
 debug-*.log
+**/agent-transcripts/
+
+# Probe / local tool output
+tool/*_run.log
+tool/*.log
+
+# Firebase CLI local artifacts
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+.firebase/
 
 # IntelliJ related
 *.iml
@@ -40,6 +71,10 @@ debug-*.log
 .pub/
 /build/
 /coverage/
+
+# Node (Worker + legacy functions)
+**/node_modules/
+**/.wrangler/
 
 # Symbolication related
 app.*.symbols

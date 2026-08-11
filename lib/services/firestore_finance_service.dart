@@ -140,6 +140,7 @@ class FirestoreFinanceService {
     });
   }
 
+  /// Legacy client write — unused by BudgetProvider (mutations go via Worker).
   Future<void> saveBudget(
     String uid, {
     required double availableBalance,
@@ -216,6 +217,7 @@ class FirestoreFinanceService {
     return _entries(uid, category).doc().id;
   }
 
+  /// Legacy client write — unused by BudgetProvider (mutations go via Worker).
   Future<void> saveEntry(
     String uid,
     FinancialCategory category,
@@ -224,6 +226,7 @@ class FirestoreFinanceService {
     return _entries(uid, category).doc(entry.id).set(entry.toFirestore());
   }
 
+  /// Legacy client write — unused by BudgetProvider (mutations go via Worker).
   Future<void> deleteEntry(
     String uid,
     FinancialCategory category,
@@ -232,7 +235,7 @@ class FirestoreFinanceService {
     return _entries(uid, category).doc(entryId).delete();
   }
 
-  /// Atomically save a category entry and budget fields together.
+  /// Legacy client write — unused by BudgetProvider (mutations go via Worker).
   Future<void> saveEntryAndBudget(
     String uid, {
     required FinancialCategory category,
@@ -279,7 +282,7 @@ class FirestoreFinanceService {
     return batch.commit();
   }
 
-  /// Atomically delete a category entry and update budget fields together.
+  /// Legacy client write — unused by BudgetProvider (mutations go via Worker).
   Future<void> deleteEntryAndBudget(
     String uid, {
     required FinancialCategory category,

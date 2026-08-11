@@ -1,1 +1,46 @@
-{"firestore":{"rules":"firestore.rules"},"flutter":{"platforms":{"android":{"default":{"projectId":"journey-to-balance","appId":"1:925162935539:android:58410c53c7e47196da1386","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"journey-to-balance","configurations":{"android":"1:925162935539:android:58410c53c7e47196da1386","ios":"1:925162935539:ios:a3d143a395d7ab5eda1386","macos":"1:925162935539:ios:a3d143a395d7ab5eda1386","web":"1:925162935539:web:fa7233ecb93cf2b7da1386","windows":"1:925162935539:web:92ae3e73ab3a4e91da1386"}}}}}}
+{
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "journey-to-balance",
+          "appId": "1:925162935539:android:58410c53c7e47196da1386",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "journey-to-balance",
+          "configurations": {
+            "android": "1:925162935539:android:58410c53c7e47196da1386",
+            "ios": "1:925162935539:ios:a3d143a395d7ab5eda1386",
+            "macos": "1:925162935539:ios:a3d143a395d7ab5eda1386",
+            "web": "1:925162935539:web:fa7233ecb93cf2b7da1386",
+            "windows": "1:925162935539:web:92ae3e73ab3a4e91da1386"
+          }
+        }
+      }
+    }
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "disallowLegacyRuntimeConfig": true,
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ],
+      "predeploy": [
+        "npm --prefix \"$RESOURCE_DIR\" run lint",
+        "npm --prefix \"$RESOURCE_DIR\" run build"
+      ]
+    }
+  ]
+}

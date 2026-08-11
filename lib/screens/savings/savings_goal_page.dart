@@ -195,9 +195,8 @@ class _SavingsGoalPageState extends State<SavingsGoalPage> {
           ),
         );
       },
-    );
+    ).whenComplete(controller.dispose);
 
-    controller.dispose();
     if (saved != true) return;
   }
 
@@ -270,9 +269,8 @@ class _SavingsGoalPageState extends State<SavingsGoalPage> {
           ),
         );
       },
-    );
+    ).whenComplete(controller.dispose);
 
-    controller.dispose();
     if (saved != true) return;
   }
 

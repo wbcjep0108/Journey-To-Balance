@@ -9,7 +9,6 @@ service cloud.firestore {
     match /users/{userId} {
       // Own user doc (budget map includes savings goal fields).
       // Realtime listeners: users/{uid}.snapshots()
-      // Financial writes go through Cloudflare Worker (service account).
       allow read: if isOwner(userId);
       allow write: if false;
 

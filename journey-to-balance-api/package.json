@@ -1,0 +1,21 @@
+{
+  "name": "journey-to-balance-api",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test src/rateLimit.test.ts",
+    "cf-typegen": "wrangler types"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250422.0",
+    "tsx": "^4.23.12",
+    "typescript": "^5.8.3",
+    "wrangler": "4.14.4"
+  },
+  "dependencies": {
+    "jose": "^6.0.10"
+  }
+}

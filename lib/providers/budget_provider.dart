@@ -3,12 +3,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../models/financial_entry.dart';
+import '../services/finance_api_service.dart';
 import '../services/firestore_finance_service.dart';
 
 class BudgetProvider extends ChangeNotifier {
-  BudgetProvider(this._service);
+  BudgetProvider(this._service, {FinanceApiService? financeApi})
+    : _api = financeApi ?? FinanceApiService();
 
   final FirestoreFinanceService _service;
+  final FinanceApiService _api;
 
   /// Single source of truth for total cash on hand.
   double availableBalance = 0;
@@ -266,7 +269,30 @@ class BudgetProvider extends ChangeNotifier {
     return results;
   }
 
-  Future<void> loadForUser(String uid) async {
+  Future<void>? _activeLoad;
+  String? _activeLoadUid;
+
+  /// Loads budget + entries for [uid]. Concurrent calls for the same uid
+  /// share one in-flight Future (avoids duplicate loads on rebuild).
+  Future<void> loadForUser(String uid) {
+    final existing = _activeLoad;
+    if (existing != null && _activeLoadUid == uid) {
+      return existing;
+    }
+
+    late final Future<void> operation;
+    operation = _loadForUserBody(uid).whenComplete(() {
+      if (identical(_activeLoad, operation)) {
+        _activeLoad = null;
+        _activeLoadUid = null;
+      }
+    });
+    _activeLoad = operation;
+    _activeLoadUid = uid;
+    return operation;
+  }
+
+  Future<void> _loadForUserBody(String uid) async {
     _cancelRealtimeSync();
     _uid = uid;
     _setDefaults();
@@ -308,7 +334,15 @@ class BudgetProvider extends ChangeNotifier {
       final migrated = _migrateBudgetSchemaIfNeeded();
       _startRealtimeSync(uid);
       if (migrated) {
-        unawaited(_saveCurrentBudget(uid));
+        unawaited(() async {
+          try {
+            await _api.migrateBudgetSchema(
+              requestId: _api.newRequestId(),
+            );
+          } catch (_) {
+            // Keep local migrated view; next Worker mutation also migrates.
+          }
+        }());
       }
     } catch (_) {
       if (_uid == uid) {
@@ -438,7 +472,7 @@ class BudgetProvider extends ChangeNotifier {
     double? savingsPercentage,
     double? personalPercentage,
   }) async {
-    final uid = _requireUid();
+    _requireUid();
     final nextBills = billsPercentage ?? this.billsPercentage;
     final nextSavings = savingsPercentage ?? this.savingsPercentage;
     final nextPersonal = personalPercentage ?? this.personalPercentage;
@@ -463,21 +497,33 @@ class BudgetProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _saveCurrentBudget(uid);
-    } catch (_) {
+      await _api.updateMonthlySalary(
+        monthlySalary: monthlySalary,
+        requestId: _api.newRequestId(),
+      );
+      await _api.updatePercentages(
+        billsPercentage: nextBills,
+        savingsPercentage: nextSavings,
+        personalPercentage: nextPersonal,
+        requestId: _api.newRequestId(),
+      );
+    } catch (error) {
       this.monthlySalary = previousSalary;
       this.billsPercentage = previousPct.bills;
       this.savingsPercentage = previousPct.savings;
       this.personalPercentage = previousPct.personal;
       _restoreRemainings(previous);
-      errorMessage = 'Budget changes could not be saved.';
+      errorMessage = _userFacingError(
+        error,
+        fallback: 'Budget changes could not be saved.',
+      );
       notifyListeners();
       rethrow;
     }
   }
 
   Future<void> receiveSalary() async {
-    final uid = _requireUid();
+    _requireUid();
     if (monthlySalary <= 0) {
       throw StateError('Set a monthly salary before receiving it.');
     }
@@ -489,17 +535,20 @@ class BudgetProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _saveCurrentBudget(uid);
-    } catch (_) {
+      await _api.receiveSalary(requestId: _api.newRequestId());
+    } catch (error) {
       _restoreRemainings(previous);
-      errorMessage = 'Salary could not be received. Please try again.';
+      errorMessage = _userFacingError(
+        error,
+        fallback: 'Salary could not be received. Please try again.',
+      );
       notifyListeners();
       rethrow;
     }
   }
 
   Future<void> addMoney(double amount) async {
-    final uid = _requireUid();
+    _requireUid();
     if (amount <= 0) {
       throw ArgumentError('Amount must be greater than zero.');
     }
@@ -511,17 +560,23 @@ class BudgetProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _saveCurrentBudget(uid);
-    } catch (_) {
+      await _api.addMoney(
+          amount: amount,
+          requestId: _api.newRequestId(),
+        );
+    } catch (error) {
       _restoreRemainings(previous);
-      errorMessage = 'Money could not be added. Please try again.';
+      errorMessage = _userFacingError(
+        error,
+        fallback: 'Money could not be added. Please try again.',
+      );
       notifyListeners();
       rethrow;
     }
   }
 
   Future<void> updateAvailableBalance(double newBalance) async {
-    final uid = _requireUid();
+    _requireUid();
     if (newBalance < 0) {
       throw ArgumentError('Available balance cannot be negative.');
     }
@@ -535,10 +590,16 @@ class BudgetProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _saveCurrentBudget(uid);
-    } catch (_) {
+      await _api.updateAvailableBalance(
+          availableBalance: newBalance,
+          requestId: _api.newRequestId(),
+        );
+    } catch (error) {
       _restoreRemainings(previous);
-      errorMessage = 'Available balance could not be updated.';
+      errorMessage = _userFacingError(
+        error,
+        fallback: 'Available balance could not be updated.',
+      );
       notifyListeners();
       rethrow;
     }
@@ -549,7 +610,7 @@ class BudgetProvider extends ChangeNotifier {
     required double savingsPercentage,
     required double personalPercentage,
   }) async {
-    final uid = _requireUid();
+    _requireUid();
     final total = billsPercentage + savingsPercentage + personalPercentage;
     if ((total - 100).abs() > 0.001) {
       throw ArgumentError('Budget percentages must total 100.');
@@ -568,19 +629,27 @@ class BudgetProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _saveCurrentBudget(uid);
-    } catch (_) {
+      await _api.updatePercentages(
+          billsPercentage: billsPercentage,
+          savingsPercentage: savingsPercentage,
+          personalPercentage: personalPercentage,
+          requestId: _api.newRequestId(),
+        );
+    } catch (error) {
       this.billsPercentage = previousPct.bills;
       this.savingsPercentage = previousPct.savings;
       this.personalPercentage = previousPct.personal;
-      errorMessage = 'Percentages could not be updated.';
+      errorMessage = _userFacingError(
+        error,
+        fallback: 'Percentages could not be updated.',
+      );
       notifyListeners();
       rethrow;
     }
   }
 
   Future<void> updateMonthlySalary(double monthlySalary) async {
-    final uid = _requireUid();
+    _requireUid();
     if (monthlySalary < 0) {
       throw ArgumentError('Monthly salary cannot be negative.');
     }
@@ -591,10 +660,16 @@ class BudgetProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _saveCurrentBudget(uid);
-    } catch (_) {
+      await _api.updateMonthlySalary(
+          monthlySalary: monthlySalary,
+          requestId: _api.newRequestId(),
+        );
+    } catch (error) {
       this.monthlySalary = previousSalary;
-      errorMessage = 'Monthly salary could not be updated.';
+      errorMessage = _userFacingError(
+        error,
+        fallback: 'Monthly salary could not be updated.',
+      );
       notifyListeners();
       rethrow;
     }
@@ -617,6 +692,7 @@ class BudgetProvider extends ChangeNotifier {
     );
     final key = _entryKey(category, entry.id);
     final previous = _remainingSnapshot();
+    final requestId = _api.newRequestId();
 
     _entries[category]!.insert(0, entry);
     availableBalance = (previous['availableBalance']! - amount).clamp(
@@ -630,33 +706,22 @@ class BudgetProvider extends ChangeNotifier {
 
     unawaited(() async {
       try {
-        await _service.saveEntryAndBudget(
-          uid,
-          category: category,
-          entry: entry,
-          availableBalance: availableBalance,
-          monthlySalary: monthlySalary,
-          billsPercentage: billsPercentage,
-          savingsPercentage: savingsPercentage,
-          personalPercentage: personalPercentage,
-          billsRemaining: _billsRemaining,
-          savingsRemaining: _savingsRemaining,
-          personalRemaining: _personalRemaining,
-          forfeitedBills: _forfeited[FinancialCategory.bills]!,
-          forfeitedSavings: _forfeited[FinancialCategory.savings]!,
-          forfeitedPersonal: _forfeited[FinancialCategory.personal]!,
-          savingsGoalTarget: savingsGoalTarget,
-          savingsGoalCurrent: savingsGoalCurrent,
-          savingsGoalTargetDateMs: savingsGoalTargetDate.millisecondsSinceEpoch
-              .toDouble(),
-          savingsGoalTitle: savingsGoalTitle,
-          schemaVersion: budgetSchemaVersion.toDouble(),
-        );
-      } catch (_) {
+        await _api.addTransaction(
+            category: category.collection,
+            title: entry.title,
+            amount: amount,
+            entryId: entry.id,
+            createdAtMs: entry.createdAt.millisecondsSinceEpoch,
+            requestId: requestId,
+          );
+      } catch (error) {
         _entries[category]!.removeWhere((item) => item.id == entry.id);
         _pendingUpsertKeys.remove(key);
         _restoreRemainings(previous);
-        errorMessage = 'The entry could not be saved.';
+        errorMessage = _userFacingError(
+          error,
+          fallback: 'The entry could not be saved.',
+        );
         notifyListeners();
       }
     }());
@@ -666,7 +731,7 @@ class BudgetProvider extends ChangeNotifier {
     FinancialCategory category,
     FinancialEntry updated,
   ) async {
-    final uid = _requireUid();
+    _requireUid();
     final list = _entries[category]!;
     final index = list.indexWhere((item) => item.id == updated.id);
     if (index < 0) return;
@@ -689,32 +754,20 @@ class BudgetProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _service.saveEntryAndBudget(
-        uid,
-        category: category,
-        entry: updated,
-        availableBalance: availableBalance,
-        monthlySalary: monthlySalary,
-        billsPercentage: billsPercentage,
-        savingsPercentage: savingsPercentage,
-        personalPercentage: personalPercentage,
-        billsRemaining: _billsRemaining,
-        savingsRemaining: _savingsRemaining,
-        personalRemaining: _personalRemaining,
-        forfeitedBills: _forfeited[FinancialCategory.bills]!,
-        forfeitedSavings: _forfeited[FinancialCategory.savings]!,
-        forfeitedPersonal: _forfeited[FinancialCategory.personal]!,
-        savingsGoalTarget: savingsGoalTarget,
-        savingsGoalCurrent: savingsGoalCurrent,
-        savingsGoalTargetDateMs: savingsGoalTargetDate.millisecondsSinceEpoch
-            .toDouble(),
-        savingsGoalTitle: savingsGoalTitle,
-        schemaVersion: budgetSchemaVersion.toDouble(),
-      );
-    } catch (_) {
+      await _api.updateTransaction(
+          category: category.collection,
+          entryId: updated.id,
+          title: updated.title,
+          amount: updated.amount,
+          requestId: _api.newRequestId(),
+        );
+    } catch (error) {
       list[index] = previousEntry;
       _restoreRemainings(previous);
-      errorMessage = 'The entry could not be updated.';
+      errorMessage = _userFacingError(
+        error,
+        fallback: 'The entry could not be updated.',
+      );
       notifyListeners();
       rethrow;
     }
@@ -725,7 +778,7 @@ class BudgetProvider extends ChangeNotifier {
     required DateTime targetDate,
     String? title,
   }) async {
-    final uid = _requireUid();
+    _requireUid();
     if (target <= 0) {
       throw ArgumentError('Goal amount must be greater than zero.');
     }
@@ -751,13 +804,21 @@ class BudgetProvider extends ChangeNotifier {
     // Persist in background so the edit UI is not blocked on network.
     unawaited(() async {
       try {
-        await _saveCurrentBudget(uid);
-      } catch (_) {
+        await _api.updateSavingsGoalSettings(
+            target: target,
+            targetDateMs: savingsGoalTargetDate.millisecondsSinceEpoch,
+            title: nextTitle,
+            requestId: _api.newRequestId(),
+          );
+      } catch (error) {
         savingsGoalTarget = previousTarget;
         savingsGoalTargetDate = previousDate;
         savingsGoalTitle = previousTitle;
         _lockSavingsGoal();
-        errorMessage = 'Savings goal could not be updated.';
+        errorMessage = _userFacingError(
+          error,
+          fallback: 'Savings goal could not be updated.',
+        );
         notifyListeners();
       }
     }());
@@ -784,6 +845,7 @@ class BudgetProvider extends ChangeNotifier {
       createdAt: DateTime.now(),
     );
     final key = _entryKey(source, entry.id);
+    final requestId = _api.newRequestId();
 
     _entries[source]!.insert(0, entry);
     availableBalance = (previous['availableBalance']! - amount).clamp(
@@ -801,35 +863,23 @@ class BudgetProvider extends ChangeNotifier {
     // Pending upsert/goal locks stay until remote snapshots confirm.
     unawaited(() async {
       try {
-        await _service.saveEntryAndBudget(
-          uid,
-          category: source,
-          entry: entry,
-          availableBalance: availableBalance,
-          monthlySalary: monthlySalary,
-          billsPercentage: billsPercentage,
-          savingsPercentage: savingsPercentage,
-          personalPercentage: personalPercentage,
-          billsRemaining: _billsRemaining,
-          savingsRemaining: _savingsRemaining,
-          personalRemaining: _personalRemaining,
-          forfeitedBills: _forfeited[FinancialCategory.bills]!,
-          forfeitedSavings: _forfeited[FinancialCategory.savings]!,
-          forfeitedPersonal: _forfeited[FinancialCategory.personal]!,
-          savingsGoalTarget: savingsGoalTarget,
-          savingsGoalCurrent: savingsGoalCurrent,
-          savingsGoalTargetDateMs: savingsGoalTargetDate.millisecondsSinceEpoch
-              .toDouble(),
-          savingsGoalTitle: savingsGoalTitle,
-          schemaVersion: budgetSchemaVersion.toDouble(),
-        );
-      } catch (_) {
+        await _api.contributeToSavingsGoal(
+            source: source.collection,
+            amount: amount,
+            entryId: entry.id,
+            createdAtMs: entry.createdAt.millisecondsSinceEpoch,
+            requestId: requestId,
+          );
+      } catch (error) {
         _entries[source]!.removeWhere((item) => item.id == entry.id);
         _pendingUpsertKeys.remove(key);
         _restoreRemainings(previous);
         savingsGoalCurrent = previousCurrent;
         _lockSavingsGoal();
-        errorMessage = 'Could not add to your savings goal.';
+        errorMessage = _userFacingError(
+          error,
+          fallback: 'Could not add to your savings goal.',
+        );
         notifyListeners();
       }
     }());
@@ -847,7 +897,7 @@ class BudgetProvider extends ChangeNotifier {
     FinancialEntry entry, {
     bool refund = true,
   }) async {
-    final uid = _requireUid();
+    _requireUid();
     final list = _entries[category]!;
     final index = list.indexWhere((item) => item.id == entry.id);
     if (index < 0) return;
@@ -859,6 +909,7 @@ class BudgetProvider extends ChangeNotifier {
     final previousEntry = entry;
     final isGoalContribution = entry.title == savingsGoalEntryTitle;
     final key = _entryKey(category, entry.id);
+    final requestId = _api.newRequestId();
 
     if (shouldRefund) {
       final refunded = entry.copyWith(isRefund: true);
@@ -878,30 +929,13 @@ class BudgetProvider extends ChangeNotifier {
 
       unawaited(() async {
         try {
-          await _service.saveEntryAndBudget(
-            uid,
-            category: category,
-            entry: refunded,
-            availableBalance: availableBalance,
-            monthlySalary: monthlySalary,
-            billsPercentage: billsPercentage,
-            savingsPercentage: savingsPercentage,
-            personalPercentage: personalPercentage,
-            billsRemaining: _billsRemaining,
-            savingsRemaining: _savingsRemaining,
-            personalRemaining: _personalRemaining,
-            forfeitedBills: _forfeited[FinancialCategory.bills]!,
-            forfeitedSavings: _forfeited[FinancialCategory.savings]!,
-            forfeitedPersonal: _forfeited[FinancialCategory.personal]!,
-            savingsGoalTarget: savingsGoalTarget,
-            savingsGoalCurrent: savingsGoalCurrent,
-            savingsGoalTargetDateMs: savingsGoalTargetDate
-                .millisecondsSinceEpoch
-                .toDouble(),
-            savingsGoalTitle: savingsGoalTitle,
-            schemaVersion: budgetSchemaVersion.toDouble(),
-          );
-        } catch (_) {
+          await _api.deleteTransaction(
+              category: category.collection,
+              entryId: entry.id,
+              refund: true,
+              requestId: requestId,
+            );
+        } catch (error) {
           list[index] = previousEntry;
           _restoreRemainings(previous);
           savingsGoalCurrent = previousGoalCurrent;
@@ -909,7 +943,10 @@ class BudgetProvider extends ChangeNotifier {
           if (isGoalContribution) {
             _lockSavingsGoal();
           }
-          errorMessage = 'The entry could not be refunded.';
+          errorMessage = _userFacingError(
+            error,
+            fallback: 'The entry could not be refunded.',
+          );
           notifyListeners();
         }
       }());
@@ -924,32 +961,19 @@ class BudgetProvider extends ChangeNotifier {
     // Persist in background so swipe actions are not blocked on network.
     unawaited(() async {
       try {
-        await _service.deleteEntryAndBudget(
-          uid,
-          category: category,
-          entryId: entry.id,
-          availableBalance: availableBalance,
-          monthlySalary: monthlySalary,
-          billsPercentage: billsPercentage,
-          savingsPercentage: savingsPercentage,
-          personalPercentage: personalPercentage,
-          billsRemaining: _billsRemaining,
-          savingsRemaining: _savingsRemaining,
-          personalRemaining: _personalRemaining,
-          forfeitedBills: _forfeited[FinancialCategory.bills]!,
-          forfeitedSavings: _forfeited[FinancialCategory.savings]!,
-          forfeitedPersonal: _forfeited[FinancialCategory.personal]!,
-          savingsGoalTarget: savingsGoalTarget,
-          savingsGoalCurrent: savingsGoalCurrent,
-          savingsGoalTargetDateMs: savingsGoalTargetDate.millisecondsSinceEpoch
-              .toDouble(),
-          savingsGoalTitle: savingsGoalTitle,
-          schemaVersion: budgetSchemaVersion.toDouble(),
-        );
-      } catch (_) {
+        await _api.deleteTransaction(
+            category: category.collection,
+            entryId: entry.id,
+            refund: false,
+            requestId: requestId,
+          );
+      } catch (error) {
         list.insert(index, entry);
         _pendingDeleteKeys.remove(key);
-        errorMessage = 'The entry could not be deleted.';
+        errorMessage = _userFacingError(
+          error,
+          fallback: 'The entry could not be deleted.',
+        );
         notifyListeners();
       }
     }());
@@ -1065,28 +1089,13 @@ class BudgetProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> _saveCurrentBudget(String uid) {
-    return _service.saveBudget(
-      uid,
-      availableBalance: availableBalance,
-      monthlySalary: monthlySalary,
-      billsPercentage: billsPercentage,
-      savingsPercentage: savingsPercentage,
-      personalPercentage: personalPercentage,
-      billsRemaining: _billsRemaining,
-      savingsRemaining: _savingsRemaining,
-      personalRemaining: _personalRemaining,
-      forfeitedBills: _forfeited[FinancialCategory.bills]!,
-      forfeitedSavings: _forfeited[FinancialCategory.savings]!,
-      forfeitedPersonal: _forfeited[FinancialCategory.personal]!,
-      savingsGoalTarget: savingsGoalTarget,
-      savingsGoalCurrent: savingsGoalCurrent,
-      savingsGoalTargetDateMs: savingsGoalTargetDate.millisecondsSinceEpoch
-          .toDouble(),
-      savingsGoalTitle: savingsGoalTitle,
-      schemaVersion: budgetSchemaVersion.toDouble(),
-    );
+  String _userFacingError(Object error, {required String fallback}) {
+    if (error is FinanceApiException) {
+      return error.message;
+    }
+    return fallback;
   }
+
 
   void _applyBudget({
     required double availableBalance,

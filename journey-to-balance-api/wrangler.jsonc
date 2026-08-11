@@ -1,0 +1,26 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "journey-to-balance-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-04-07",
+  "workers_dev": true,
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "USER_GATE",
+        "class_name": "UserGate"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1-user-gate",
+      "new_sqlite_classes": ["UserGate"]
+    }
+  ],
+  // Set via: wrangler secret put FIREBASE_PROJECT_ID
+  //           wrangler secret put FIREBASE_SERVICE_ACCOUNT_JSON
+  "vars": {
+    "FIREBASE_PROJECT_ID": "journey-to-balance"
+  }
+}

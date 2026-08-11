@@ -9,6 +9,7 @@ import '../../widgets/app_refresh_indicator.dart';
 import '../../widgets/sensitive_action_auth.dart';
 import '../../widgets/weekly_spending_card.dart';
 import '../savings/savings_goal_page.dart';
+import 'home_money_dialogs.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -18,27 +19,9 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  late TextEditingController salaryController;
-  late TextEditingController balanceController;
-  late TextEditingController addMoneyController;
-  late TextEditingController billsController;
-  late TextEditingController savingsController;
-  late TextEditingController personalController;
   bool _isReceivingSalary = false;
   bool _isAddingMoney = false;
   BudgetProvider? _budget;
-
-  @override
-  void initState() {
-    super.initState();
-
-    salaryController = TextEditingController();
-    balanceController = TextEditingController();
-    addMoneyController = TextEditingController();
-    billsController = TextEditingController();
-    savingsController = TextEditingController();
-    personalController = TextEditingController();
-  }
 
   @override
   void didChangeDependencies() {
@@ -59,300 +42,32 @@ class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
     _budget?.removeListener(_onBudgetChanged);
-    salaryController.dispose();
-    balanceController.dispose();
-    addMoneyController.dispose();
-    billsController.dispose();
-    savingsController.dispose();
-    personalController.dispose();
     super.dispose();
   }
 
   void _showEditDialog() {
-    final budget = context.read<BudgetProvider>();
-    salaryController.text = budget.monthlySalary.toStringAsFixed(0);
-
-    showDialog(
+    showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => Dialog(
-        insetAnimationDuration: Duration.zero,
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(context).size.height * 0.68,
-          ),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'Budget Setup',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF121212),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                _buildField(
-                  label: 'Monthly Salary/Income',
-                  controller: salaryController,
-                  prefixText: '₱ ',
-                ),
-                const SizedBox(height: 28),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text(
-                        'Cancel',
-                        style: TextStyle(
-                          color: Color(0xFF6B7280),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    TextButton(
-                      onPressed: () async {
-                        final monthlySalary =
-                            double.tryParse(salaryController.text) ?? -1;
-
-                        if (monthlySalary < 0) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Enter a valid monthly salary.'),
-                            ),
-                          );
-                          return;
-                        }
-
-                        try {
-                          await context
-                              .read<BudgetProvider>()
-                              .updateMonthlySalary(monthlySalary);
-                          if (context.mounted) Navigator.pop(context);
-                          if (mounted) setState(() {});
-                        } catch (_) {
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Budget changes could not be saved.',
-                                ),
-                              ),
-                            );
-                          }
-                        }
-                      },
-                      child: const Text(
-                        'Save',
-                        style: TextStyle(
-                          color: Color(0xFF121212),
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
+      builder: (_) => SalarySetupDialog(
+        hostContext: context,
+        onSaved: () {
+          if (mounted) setState(() {});
+        },
       ),
     );
   }
 
   void _showBalanceDialog() {
-    final budget = context.read<BudgetProvider>();
-    balanceController.text = budget.availableBalance.toStringAsFixed(0);
-    billsController.text = budget.billsPercentage.toStringAsFixed(0);
-    savingsController.text = budget.savingsPercentage.toStringAsFixed(0);
-    personalController.text = budget.personalPercentage.toStringAsFixed(0);
-
     showDialog<void>(
       context: context,
       barrierDismissible: false,
       barrierColor: Colors.black.withValues(alpha: 0.55),
-      builder: (dialogContext) => Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.22),
-                blurRadius: 40,
-                spreadRadius: 2,
-                offset: const Offset(0, 18),
-              ),
-            ],
-          ),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(22, 24, 22, 18),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'Edit Available Balance',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF121212),
-                    letterSpacing: -0.2,
-                  ),
-                ),
-                const SizedBox(height: 22),
-                _buildField(
-                  label: 'Available Balance',
-                  controller: balanceController,
-                  prefixText: '₱ ',
-                ),
-                const SizedBox(height: 14),
-                _buildField(
-                  label: 'Bills %',
-                  controller: billsController,
-                  suffixText: '%',
-                ),
-                const SizedBox(height: 14),
-                _buildField(
-                  label: 'Savings %',
-                  controller: savingsController,
-                  suffixText: '%',
-                ),
-                const SizedBox(height: 14),
-                _buildField(
-                  label: 'Personal',
-                  controller: personalController,
-                  suffixText: '%',
-                ),
-                const SizedBox(height: 24),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(dialogContext),
-                      style: TextButton.styleFrom(
-                        foregroundColor: const Color(0xFF6B7280),
-                        overlayColor: const Color(0xFF6B7280).withValues(
-                          alpha: 0.08,
-                        ),
-                      ),
-                      child: const Text(
-                        'Cancel',
-                        style: TextStyle(fontWeight: FontWeight.w500),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    TextButton(
-                      onPressed: () async {
-                        final balance =
-                            double.tryParse(balanceController.text) ?? -1;
-                        final billsPercentage =
-                            double.tryParse(billsController.text) ?? 0;
-                        final savingsPercentage =
-                            double.tryParse(savingsController.text) ?? 0;
-                        final personalPercentage =
-                            double.tryParse(personalController.text) ?? 0;
-                        final totalPercentage =
-                            billsPercentage +
-                            savingsPercentage +
-                            personalPercentage;
-
-                        if (balance < 0) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Enter a valid available balance.'),
-                            ),
-                          );
-                          return;
-                        }
-                        if ((totalPercentage - 100).abs() > 0.001) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Percentages must total 100%.'),
-                            ),
-                          );
-                          return;
-                        }
-
-                        final previousBalance = budget.availableBalance;
-                        final delta = balance - previousBalance;
-
-                        if (delta != 0) {
-                          final confirmed = await AllocationConfirmDialog
-                              .showEditBalanceRecalculateConfirm(
-                            context: context,
-                            newAvailableBalance: balance,
-                            billsPercentage: billsPercentage,
-                            savingsPercentage: savingsPercentage,
-                            personalPercentage: personalPercentage,
-                          );
-                          if (confirmed != true) return;
-                        }
-
-                        if (!context.mounted) return;
-                        final authorized = await showSensitiveActionAuth(
-                          context: context,
-                          title: 'Confirm budget change',
-                          description:
-                              'Enter your PIN or use fingerprint to update '
-                              'your available balance or percentages.',
-                        );
-                        if (!context.mounted || authorized != true) return;
-
-                        try {
-                          // Apply percentage rates first so AB reallocation
-                          // uses the newly entered percentages.
-                          await budget.updatePercentages(
-                            billsPercentage: billsPercentage,
-                            savingsPercentage: savingsPercentage,
-                            personalPercentage: personalPercentage,
-                          );
-                          if (delta != 0) {
-                            await budget.updateAvailableBalance(balance);
-                          }
-                          if (dialogContext.mounted) {
-                            Navigator.pop(dialogContext);
-                          }
-                          if (mounted) setState(() {});
-                        } catch (_) {
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Available balance could not be updated.',
-                                ),
-                              ),
-                            );
-                          }
-                        }
-                      },
-                      style: TextButton.styleFrom(
-                        foregroundColor: const Color(0xFF121212),
-                        overlayColor: const Color(0xFF121212).withValues(
-                          alpha: 0.08,
-                        ),
-                      ),
-                      child: const Text(
-                        'Save',
-                        style: TextStyle(fontWeight: FontWeight.w800),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
+      builder: (_) => BalanceEditDialog(
+        hostContext: context,
+        onSaved: () {
+          if (mounted) setState(() {});
+        },
       ),
     );
   }
@@ -417,220 +132,15 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _showAddMoneyDialog() {
-    final budget = context.read<BudgetProvider>();
-    addMoneyController.clear();
-    var isSaving = false;
-
     showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setDialogState) => Dialog(
-          backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(32),
-          ),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'Add Money',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF121212),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Add funds to your available balance.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFF6B7280),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                _buildField(
-                  label: 'Amount',
-                  controller: addMoneyController,
-                  prefixText: '₱ ',
-                ),
-                const SizedBox(height: 28),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: isSaving
-                          ? null
-                          : () => Navigator.pop(dialogContext),
-                      child: const Text(
-                        'Cancel',
-                        style: TextStyle(
-                          color: Color(0xFF6B7280),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    TextButton(
-                      onPressed: isSaving
-                          ? null
-                          : () async {
-                              final amount =
-                                  double.tryParse(addMoneyController.text) ??
-                                  0;
-                              if (amount <= 0) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      'Enter an amount greater than zero.',
-                                    ),
-                                  ),
-                                );
-                                return;
-                              }
-
-                              final confirmed = await AllocationConfirmDialog
-                                  .showNewMoneyConfirm(
-                                context: context,
-                                kind: AllocationConfirmKind.addMoney,
-                                amount: amount,
-                                billsPercentage: budget.billsPercentage,
-                                savingsPercentage: budget.savingsPercentage,
-                                personalPercentage: budget.personalPercentage,
-                              );
-                              if (confirmed != true) return;
-
-                              if (!context.mounted) return;
-                              final authorized = await showSensitiveActionAuth(
-                                context: context,
-                                title: 'Confirm add money',
-                                description:
-                                    'Enter your PIN or use fingerprint to add '
-                                    'money to your available balance.',
-                              );
-                              if (!context.mounted || authorized != true) {
-                                return;
-                              }
-
-                              setDialogState(() => isSaving = true);
-                              if (mounted) {
-                                setState(() => _isAddingMoney = true);
-                              }
-                              try {
-                                await budget.addMoney(amount);
-                                if (dialogContext.mounted) {
-                                  Navigator.pop(dialogContext);
-                                }
-                                if (!mounted) return;
-                                ScaffoldMessenger.of(context)
-                                  ..hideCurrentSnackBar()
-                                  ..showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        '${AllocationConfirmDialog.formatPeso(amount)} '
-                                        'added to your available balance.',
-                                      ),
-                                    ),
-                                  );
-                              } catch (_) {
-                                if (dialogContext.mounted) {
-                                  setDialogState(() => isSaving = false);
-                                }
-                                if (!mounted) return;
-                                ScaffoldMessenger.of(context)
-                                  ..hideCurrentSnackBar()
-                                  ..showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'Unable to add money. Please try again.',
-                                      ),
-                                    ),
-                                  );
-                              } finally {
-                                if (mounted) {
-                                  setState(() => _isAddingMoney = false);
-                                }
-                              }
-                            },
-                      child: const Text(
-                        'Add',
-                        style: TextStyle(
-                          color: Color(0xFF121212),
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
+      builder: (_) => AddMoneyDialog(
+        hostContext: context,
+        onBusyChanged: (busy) {
+          if (mounted) setState(() => _isAddingMoney = busy);
+        },
       ),
-    );
-  }
-
-  Widget _buildField({
-    required String label,
-    required TextEditingController controller,
-    String? prefixText,
-    String? suffixText,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
-            color: Color(0xFF121212),
-          ),
-        ),
-        const SizedBox(height: 8),
-        RepaintBoundary(
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(999),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.08),
-                  blurRadius: 18,
-                  spreadRadius: 0,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            child: TextField(
-              controller: controller,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF121212),
-              ),
-              decoration: InputDecoration(
-                prefixText: prefixText,
-                suffixText: suffixText,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 22,
-                  vertical: 16,
-                ),
-                border: InputBorder.none,
-              ),
-            ),
-          ),
-        ),
-      ],
     );
   }
 

@@ -1,0 +1,8 @@
+# Secrets — never commit real values
+
+# Required:
+#   wrangler secret put FIREBASE_PROJECT_ID
+#   wrangler secret put FIREBASE_SERVICE_ACCOUNT_JSON
+#
+# FIREBASE_SERVICE_ACCOUNT_JSON must be the full service account JSON
+# (client_email + private_key) with Cloud Datastore / Firestore access.
