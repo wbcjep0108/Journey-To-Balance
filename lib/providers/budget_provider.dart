@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../debug_agent_log.dart';
 import '../models/financial_entry.dart';
 import '../models/rate_limit_info.dart';
 import '../services/finance_api_service.dart';
@@ -540,22 +541,62 @@ class BudgetProvider extends ChangeNotifier {
       throw StateError('Set a monthly salary before receiving it.');
     }
 
-    final previous = _remainingSnapshot();
-    availableBalance += monthlySalary;
-    _distributeAddedFunds(monthlySalary);
+    final salary = monthlySalary;
+    final abBefore = availableBalance;
     errorMessage = null;
-    notifyListeners();
-
+    _budgetMutationDepth++;
+    // #region agent log
+    agentDebugLog(
+      hypothesisId: 'RS1',
+      location: 'budget_provider.dart:receiveSalary:start',
+      message: 'receiveSalary start',
+      data: {'salary': salary, 'abBefore': abBefore},
+      runId: 'post-fix',
+    );
+    // #endregion
     try {
       await _api.receiveSalary(requestId: _api.newRequestId());
+      availableBalance += salary;
+      _distributeAddedFunds(salary);
+      notifyListeners();
+      // #region agent log
+      agentDebugLog(
+        hypothesisId: 'RS1',
+        location: 'budget_provider.dart:receiveSalary:credited',
+        message: 'receiveSalary credited after Worker 2xx',
+        data: {
+          'salary': salary,
+          'abBefore': abBefore,
+          'abAfter': availableBalance,
+        },
+        runId: 'post-fix',
+      );
+      // #endregion
     } catch (error) {
-      _restoreRemainings(previous);
+      // #region agent log
+      agentDebugLog(
+        hypothesisId: 'RS1',
+        location: 'budget_provider.dart:receiveSalary:catch',
+        message: 'receiveSalary rejected — no local credit',
+        data: {
+          'salary': salary,
+          'abBefore': abBefore,
+          'abNow': availableBalance,
+          'isRateLimited': FinanceApiException.isRateLimitError(error),
+          'code': error is FinanceApiException ? error.code : null,
+          'status': error is FinanceApiException ? error.statusCode : null,
+        },
+        runId: 'post-fix',
+      );
+      // #endregion
       _reportMutationFailure(
         error,
         fallback: 'Salary could not be received. Please try again.',
         rateLimitAction: 'Receive Salary',
       );
       rethrow;
+    } finally {
+      _budgetMutationDepth--;
     }
   }
 
@@ -567,8 +608,17 @@ class BudgetProvider extends ChangeNotifier {
 
     // Do not optimistically credit funds. A rejected/rate-limited Worker call
     // must leave balances unchanged (no flash-add, no listener races).
+    final abBefore = availableBalance;
     errorMessage = null;
     _budgetMutationDepth++;
+    // #region agent log
+    agentDebugLog(
+      hypothesisId: 'B,E',
+      location: 'budget_provider.dart:addMoney:start',
+      message: 'addMoney start',
+      data: {'amount': amount, 'abBefore': abBefore},
+    );
+    // #endregion
     try {
       await _api.addMoney(
         amount: amount,
@@ -577,7 +627,36 @@ class BudgetProvider extends ChangeNotifier {
       availableBalance += amount;
       _distributeAddedFunds(amount);
       notifyListeners();
+      // #region agent log
+      agentDebugLog(
+        hypothesisId: 'B,E',
+        location: 'budget_provider.dart:addMoney:credited',
+        message: 'addMoney credited after Worker 2xx',
+        data: {
+          'amount': amount,
+          'abBefore': abBefore,
+          'abAfter': availableBalance,
+        },
+      );
+      // #endregion
     } catch (error) {
+      // #region agent log
+      agentDebugLog(
+        hypothesisId: 'B,E',
+        location: 'budget_provider.dart:addMoney:catch',
+        message: 'addMoney rejected — no local credit',
+        data: {
+          'amount': amount,
+          'abBefore': abBefore,
+          'abNow': availableBalance,
+          'errorType': error.runtimeType.toString(),
+          'isRateLimited': FinanceApiException.isRateLimitError(error),
+          'code': error is FinanceApiException ? error.code : null,
+          'status': error is FinanceApiException ? error.statusCode : null,
+          'pendingRateLimitSet': pendingRateLimit != null,
+        },
+      );
+      // #endregion
       _reportMutationFailure(
         error,
         fallback: 'Money could not be added. Please try again.',
@@ -1226,8 +1305,24 @@ class BudgetProvider extends ChangeNotifier {
             _pendingDeleteKeys.isNotEmpty ||
             _budgetMutationDepth > 0;
         if (!hasPendingLocalBudget) {
+          final remoteAb = budget['availableBalance']!;
+          // #region agent log
+          if ((remoteAb - availableBalance).abs() > 0.001) {
+            agentDebugLog(
+              hypothesisId: 'C',
+              location: 'budget_provider.dart:watchBudget',
+              message: 'realtime AB apply',
+              data: {
+                'localAb': availableBalance,
+                'remoteAb': remoteAb,
+                'delta': remoteAb - availableBalance,
+                'mutationDepth': _budgetMutationDepth,
+              },
+            );
+          }
+          // #endregion
           _applyBudget(
-            availableBalance: budget['availableBalance']!,
+            availableBalance: remoteAb,
             billsPercentage: budget['billsPercentage']!,
             savingsPercentage: budget['savingsPercentage']!,
             personalPercentage: budget['personalPercentage']!,

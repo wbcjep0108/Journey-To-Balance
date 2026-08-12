@@ -5,6 +5,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../debug_agent_log.dart';
+
 /// Client for the Journey To Balance Cloudflare Worker finance API.
 ///
 /// Sends the Firebase ID token in `Authorization: Bearer …`.
@@ -26,6 +28,12 @@ class FinanceApiService {
   final FirebaseAuth _auth;
   final String _baseUrl;
   final _random = Random.secure();
+
+  /// Per-process counters for finance HTTP calls (debug rate-limit runs).
+  static int addMoneyHttpSeq = 0;
+  static int? addMoneyFirstAtMs;
+  static int receiveSalaryHttpSeq = 0;
+  static int? receiveSalaryFirstAtMs;
 
   /// Unique idempotency key for a single user action.
   String newRequestId() {
@@ -75,6 +83,50 @@ class FinanceApiService {
           payload = Map<String, dynamic>.from(decoded);
         }
       }
+
+      final isAddMoney = path.contains('add-money');
+      final isReceiveSalary = path.contains('receive-salary');
+      final nowMs = DateTime.now().millisecondsSinceEpoch;
+      final seq = isAddMoney
+          ? ++addMoneyHttpSeq
+          : isReceiveSalary
+          ? ++receiveSalaryHttpSeq
+          : 0;
+      if (isAddMoney) {
+        addMoneyFirstAtMs ??= nowMs;
+      }
+      if (isReceiveSalary) {
+        receiveSalaryFirstAtMs ??= nowMs;
+      }
+      // #region agent log
+      if (isAddMoney || isReceiveSalary) {
+        agentDebugLog(
+          runId: 'post-fix',
+          hypothesisId: isAddMoney ? 'A,D' : 'RS1',
+          location: 'finance_api_service.dart:_post',
+          message: isAddMoney
+              ? 'add-money Worker response'
+              : 'receive-salary Worker response',
+          data: {
+            'seq': seq,
+            'status': response.statusCode,
+            'elapsedMsSinceFirst': nowMs -
+                (isAddMoney
+                    ? (addMoneyFirstAtMs ?? nowMs)
+                    : (receiveSalaryFirstAtMs ?? nowMs)),
+            'remaining': response.headers['x-ratelimit-remaining'],
+            'limit': response.headers['x-ratelimit-limit'],
+            'bucket': response.headers['x-ratelimit-bucket'],
+            'retryAfter': response.headers['retry-after'],
+            'errorCode': payload['error'] is Map
+                ? (payload['error'] as Map)['code']?.toString()
+                : null,
+            'baseUrlHost': uri.host,
+            'path': path,
+          },
+        );
+      }
+      // #endregion
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         return payload;

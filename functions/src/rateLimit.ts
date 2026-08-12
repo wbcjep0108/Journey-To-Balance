@@ -5,9 +5,9 @@ export const WINDOW_MS = 60_000;
 export const RATE_LIMITS = {
   general: 60,
   addTransaction: 30,
-  updateAvailableBalance: 20,
-  receiveSalary: 10,
-  addMoney: 20,
+  updateAvailableBalance: 5,
+  receiveSalary: 5,
+  addMoney: 5,
   contributeToSavingsGoal: 20,
   deleteTransaction: 20,
   updatePercentages: 10,
