@@ -11,6 +11,7 @@ import '../../widgets/sensitive_action_auth.dart';
 import '../../widgets/weekly_spending_card.dart';
 import '../savings/savings_goal_page.dart';
 import 'home_money_dialogs.dart';
+import 'monthly_spending_dashboard_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -496,17 +497,24 @@ class _QuickActionsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Row(
+    return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
-        _SavingsProgressAction(),
-        _FilledIconAction(
+        const _SavingsProgressAction(),
+        const _FilledIconAction(
           assetPath: 'assets/images/icons/loan.png',
           label: 'Loan',
         ),
         _FilledIconAction(
           assetPath: 'assets/images/icons/calendar.png',
           label: 'Calendar',
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const MonthlySpendingDashboardPage(),
+              ),
+            );
+          },
         ),
       ],
     );
@@ -602,36 +610,45 @@ class _FilledIconAction extends StatelessWidget {
   const _FilledIconAction({
     required this.assetPath,
     required this.label,
+    this.onTap,
   });
 
   final String assetPath;
   final String label;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     return Semantics(
       button: true,
       label: label,
-      child: Container(
-        width: 64,
-        height: 64,
-        decoration: BoxDecoration(
-          color: const Color(0xFF121212),
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.12),
-              blurRadius: 12,
-              offset: const Offset(0, 5),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: const Color(0xFF121212),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.12),
+                  blurRadius: 12,
+                  offset: const Offset(0, 5),
+                ),
+              ],
             ),
-          ],
-        ),
-        alignment: Alignment.center,
-        padding: const EdgeInsets.all(15),
-        child: Image.asset(
-          assetPath,
-          fit: BoxFit.contain,
-          alignment: Alignment.center,
+            alignment: Alignment.center,
+            padding: const EdgeInsets.all(15),
+            child: Image.asset(
+              assetPath,
+              fit: BoxFit.contain,
+              alignment: Alignment.center,
+            ),
+          ),
         ),
       ),
     );
