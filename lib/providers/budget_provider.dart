@@ -772,16 +772,21 @@ class BudgetProvider extends ChangeNotifier {
     FinancialCategory category, {
     required String title,
     required double amount,
+    String? iconAsset,
   }) async {
     final uid = _requireUid();
     if (amount <= 0 || amount > remainingFor(category) + 0.001) {
       throw ArgumentError('Amount exceeds the available category balance.');
     }
+    final trimmedIcon = iconAsset?.trim();
     final entry = FinancialEntry(
       id: _service.createEntryId(uid, category),
       title: title.trim(),
       amount: amount,
       createdAt: DateTime.now(),
+      iconAsset: (trimmedIcon != null && trimmedIcon.isNotEmpty)
+          ? trimmedIcon
+          : null,
     );
     final key = _entryKey(category, entry.id);
     final previous = _remainingSnapshot();
@@ -806,6 +811,7 @@ class BudgetProvider extends ChangeNotifier {
             entryId: entry.id,
             createdAtMs: entry.createdAt.millisecondsSinceEpoch,
             requestId: requestId,
+            iconAsset: entry.iconAsset,
           );
       } catch (error) {
         _entries[category]!.removeWhere((item) => item.id == entry.id);
@@ -853,6 +859,7 @@ class BudgetProvider extends ChangeNotifier {
           title: updated.title,
           amount: updated.amount,
           requestId: _api.newRequestId(),
+          iconAsset: updated.iconAsset,
         );
     } catch (error) {
       list[index] = previousEntry;

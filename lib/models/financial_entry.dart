@@ -17,6 +17,7 @@ class FinancialEntry {
     required this.amount,
     required this.createdAt,
     this.isRefund = false,
+    this.iconAsset,
   });
 
   final String id;
@@ -27,11 +28,16 @@ class FinancialEntry {
   /// True when this row is a refund credit (money returned to the category).
   final bool isRefund;
 
+  /// Optional Flutter asset path for the quick-select category icon.
+  final String? iconAsset;
+
   FinancialEntry copyWith({
     String? title,
     double? amount,
     DateTime? createdAt,
     bool? isRefund,
+    String? iconAsset,
+    bool clearIconAsset = false,
   }) {
     return FinancialEntry(
       id: id,
@@ -39,15 +45,17 @@ class FinancialEntry {
       amount: amount ?? this.amount,
       createdAt: createdAt ?? this.createdAt,
       isRefund: isRefund ?? this.isRefund,
+      iconAsset: clearIconAsset ? null : (iconAsset ?? this.iconAsset),
     );
   }
 
-  Map<String, Object> toFirestore() {
+  Map<String, Object?> toFirestore() {
     return {
       'title': title,
       'amount': amount,
       'createdAt': Timestamp.fromDate(createdAt),
       'isRefund': isRefund,
+      if (iconAsset != null && iconAsset!.isNotEmpty) 'iconAsset': iconAsset,
     };
   }
 
@@ -56,6 +64,7 @@ class FinancialEntry {
   ) {
     final data = document.data() ?? const <String, dynamic>{};
     final createdAt = data['createdAt'];
+    final rawIcon = data['iconAsset'];
 
     return FinancialEntry(
       id: document.id,
@@ -65,6 +74,9 @@ class FinancialEntry {
           ? createdAt.toDate()
           : DateTime.fromMillisecondsSinceEpoch(0),
       isRefund: data['isRefund'] == true,
+      iconAsset: rawIcon is String && rawIcon.trim().isNotEmpty
+          ? rawIcon.trim()
+          : null,
     );
   }
 }

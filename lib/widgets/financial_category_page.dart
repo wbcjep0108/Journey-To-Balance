@@ -6,6 +6,7 @@ import '../models/financial_entry.dart';
 import '../providers/budget_provider.dart';
 import 'app_refresh_indicator.dart';
 import 'budget_modal.dart';
+import 'entry_title_with_icon.dart';
 import 'rate_limit_dialog.dart';
 import 'sensitive_action_auth.dart';
 
@@ -346,17 +347,23 @@ class _FinancialCategoryPageState extends State<FinancialCategoryPage> {
       title: 'Use ${widget.title}',
       availableBalance: availableBalance,
       initialEntry: entry,
-      onSave: (name, amount) async {
+      onSave: (name, amount, iconAsset) async {
         if (entry == null) {
           await provider.addEntry(
             widget.category,
             title: name,
             amount: amount,
+            iconAsset: iconAsset,
           );
         } else {
           await provider.updateEntry(
             widget.category,
-            entry.copyWith(title: name, amount: amount),
+            entry.copyWith(
+              title: name,
+              amount: amount,
+              iconAsset: iconAsset,
+              clearIconAsset: iconAsset == null || iconAsset.isEmpty,
+            ),
           );
         }
       },
@@ -575,14 +582,13 @@ class _EntryRowState extends State<_EntryRow> {
                       child: Row(
                         children: [
                           Expanded(
-                            child: Text(
-                              widget.entry.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
+                            child: EntryTitleWithIcon(
+                              title: widget.entry.title,
+                              iconAsset: widget.entry.iconAsset,
+                              titleStyle: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 16,
-                                fontWeight: FontWeight.w500,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                           ),

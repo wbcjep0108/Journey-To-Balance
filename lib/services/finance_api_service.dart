@@ -211,6 +211,7 @@ class FinanceApiService {
     required String entryId,
     required int createdAtMs,
     required String requestId,
+    String? iconAsset,
   }) {
     return _post('/api/finance/add-transaction', {
       'category': category,
@@ -219,6 +220,7 @@ class FinanceApiService {
       'entryId': entryId,
       'createdAtMs': createdAtMs,
       'requestId': requestId,
+      if (iconAsset != null && iconAsset.isNotEmpty) 'iconAsset': iconAsset,
     });
   }
 
@@ -228,6 +230,7 @@ class FinanceApiService {
     required String title,
     required double amount,
     required String requestId,
+    String? iconAsset,
   }) {
     return _post('/api/finance/update-transaction', {
       'category': category,
@@ -235,6 +238,7 @@ class FinanceApiService {
       'title': title,
       'amount': amount,
       'requestId': requestId,
+      if (iconAsset != null && iconAsset.isNotEmpty) 'iconAsset': iconAsset,
     });
   }
 

@@ -158,10 +158,15 @@ class DailySpendingPage extends StatelessWidget {
       title: 'Use ${categoryLabel(item.category)}',
       availableBalance: availableBalance,
       initialEntry: item.entry,
-      onSave: (name, amount) async {
+      onSave: (name, amount, iconAsset) async {
         await provider.updateEntry(
           item.category,
-          item.entry.copyWith(title: name, amount: amount),
+          item.entry.copyWith(
+            title: name,
+            amount: amount,
+            iconAsset: iconAsset,
+            clearIconAsset: iconAsset == null || iconAsset.isEmpty,
+          ),
         );
       },
     );
@@ -246,16 +251,44 @@ class _DayEntryRow extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: 10),
             child: Row(
               children: [
+                if (item.entry.iconAsset != null &&
+                    item.entry.iconAsset!.isNotEmpty) ...[
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    alignment: Alignment.center,
+                    child: Padding(
+                      padding: const EdgeInsets.all(5.5),
+                      child: Image.asset(
+                        item.entry.iconAsset!,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, _, _) => const Icon(
+                          Icons.category_outlined,
+                          size: 16,
+                          color: Color(0xFF737983),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                ],
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         item.entry.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 16,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                       const SizedBox(height: 4),

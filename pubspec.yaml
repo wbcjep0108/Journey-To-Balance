@@ -65,6 +65,9 @@ flutter:
   assets:
     - assets/images/
     - assets/images/icons/
+    - assets/images/icons_bills/
+    - assets/images/icons_personal/
+    - assets/images/icons_savings/
 
   fonts:
   - family: Inter

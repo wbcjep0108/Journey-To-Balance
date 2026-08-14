@@ -6,9 +6,11 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../models/financial_entry.dart';
+import '../models/spend_category_option.dart';
 import 'rate_limit_dialog.dart';
 
-typedef BudgetModalSave = Future<void> Function(String name, double amount);
+typedef BudgetModalSave =
+    Future<void> Function(String name, double amount, String? iconAsset);
 
 class BudgetModal extends StatefulWidget {
   const BudgetModal({
@@ -18,6 +20,7 @@ class BudgetModal extends StatefulWidget {
     required this.availableBalance,
     required this.onSave,
     this.initialEntry,
+    this.quickSelectOptions,
   });
 
   final FinancialCategory category;
@@ -26,6 +29,9 @@ class BudgetModal extends StatefulWidget {
   final BudgetModalSave onSave;
   final FinancialEntry? initialEntry;
 
+  /// Optional override. Defaults to [SpendCategoryPresets.forCategory].
+  final List<SpendCategoryOption>? quickSelectOptions;
+
   static Future<void> show({
     required BuildContext context,
     required FinancialCategory category,
@@ -33,6 +39,7 @@ class BudgetModal extends StatefulWidget {
     required double availableBalance,
     required BudgetModalSave onSave,
     FinancialEntry? initialEntry,
+    List<SpendCategoryOption>? quickSelectOptions,
     VoidCallback? onClose,
   }) async {
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
@@ -52,6 +59,7 @@ class BudgetModal extends StatefulWidget {
             title: title,
             availableBalance: availableBalance,
             initialEntry: initialEntry,
+            quickSelectOptions: quickSelectOptions,
             onSave: onSave,
           ),
         ),
@@ -91,6 +99,8 @@ class _BudgetModalState extends State<BudgetModal>
   late final FocusNode _nameFocus;
   late final FocusNode _amountFocus;
   late final AnimationController _shakeController;
+  late final List<SpendCategoryOption> _quickSelectOptions;
+  SpendCategoryOption? _selectedOption;
 
   bool _nameTouched = false;
   bool _amountTouched = false;
@@ -121,12 +131,39 @@ class _BudgetModalState extends State<BudgetModal>
   @override
   void initState() {
     super.initState();
+    _quickSelectOptions =
+        widget.quickSelectOptions ??
+        SpendCategoryPresets.forCategory(widget.category);
     _nameController = TextEditingController(
       text: widget.initialEntry?.title ?? '',
     );
     _amountController = TextEditingController(
       text: widget.initialEntry?.amount.toStringAsFixed(2) ?? '',
     );
+    final initialTitle = widget.initialEntry?.title.trim().toLowerCase() ?? '';
+    final initialIcon = widget.initialEntry?.iconAsset?.trim();
+    if (initialIcon != null && initialIcon.isNotEmpty) {
+      SpendCategoryOption? match;
+      for (final option in _quickSelectOptions) {
+        if (option.assetPath == initialIcon) {
+          match = option;
+          break;
+        }
+      }
+      _selectedOption =
+          match ??
+          SpendCategoryOption(
+            label: widget.initialEntry?.title ?? '',
+            assetPath: initialIcon,
+          );
+    } else if (initialTitle.isNotEmpty) {
+      for (final option in _quickSelectOptions) {
+        if (option.label.toLowerCase() == initialTitle) {
+          _selectedOption = option;
+          break;
+        }
+      }
+    }
     _nameFocus = FocusNode(debugLabel: 'Budget item name');
     _amountFocus = FocusNode(debugLabel: 'Budget item amount');
     _shakeController = AnimationController(
@@ -153,6 +190,23 @@ class _BudgetModalState extends State<BudgetModal>
     if (mounted) setState(() => _submissionError = null);
   }
 
+  void _selectQuickOption(SpendCategoryOption option) {
+    setState(() => _selectedOption = option);
+    // Prefill name from the chip; user can still edit freely (e.g. "Meralco").
+    if (_nameController.text.trim().isEmpty ||
+        _quickSelectOptions.any(
+          (o) =>
+              o.label.toLowerCase() == _nameController.text.trim().toLowerCase(),
+        )) {
+      _nameController
+        ..text = option.label
+        ..selection = TextSelection.collapsed(offset: option.label.length);
+    }
+    _nameTouched = true;
+    _refresh();
+    _amountFocus.requestFocus();
+  }
+
   Future<void> _submit() async {
     _nameTouched = true;
     _amountTouched = true;
@@ -165,7 +219,11 @@ class _BudgetModalState extends State<BudgetModal>
     setState(() => _isSaving = true);
     final messenger = ScaffoldMessenger.maybeOf(context);
     try {
-      final saveOperation = widget.onSave(_name, _amount!);
+      final saveOperation = widget.onSave(
+        _name,
+        _amount!,
+        _selectedOption?.assetPath,
+      );
       if (mounted) Navigator.pop(context);
       await saveOperation;
     } catch (error) {
@@ -277,7 +335,16 @@ class _BudgetModalState extends State<BudgetModal>
                       textInputAction: TextInputAction.next,
                       onSubmitted: (_) => _amountFocus.requestFocus(),
                       errorText: _nameTouched ? _nameError : null,
+                      leadingIconAsset: _selectedOption?.assetPath,
                     ),
+                    if (_quickSelectOptions.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      _QuickSelectChips(
+                        options: _quickSelectOptions,
+                        selectedOption: _selectedOption,
+                        onSelected: _selectQuickOption,
+                      ),
+                    ],
                     const SizedBox(height: 20),
                     _PremiumField(
                       label: 'Amount',
@@ -358,6 +425,104 @@ class _BudgetModalState extends State<BudgetModal>
   }
 }
 
+class _QuickSelectChips extends StatelessWidget {
+  const _QuickSelectChips({
+    required this.options,
+    required this.selectedOption,
+    required this.onSelected,
+  });
+
+  final List<SpendCategoryOption> options;
+  final SpendCategoryOption? selectedOption;
+  final ValueChanged<SpendCategoryOption> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: [
+        for (final option in options)
+          _CategoryChip(
+            option: option,
+            selected: identical(selectedOption, option) ||
+                selectedOption?.assetPath == option.assetPath,
+            onTap: () => onSelected(option),
+          ),
+      ],
+    );
+  }
+}
+
+class _CategoryChip extends StatelessWidget {
+  const _CategoryChip({
+    required this.option,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final SpendCategoryOption option;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(30),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          padding: const EdgeInsets.fromLTRB(10, 8, 14, 8),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(30),
+            border: Border.all(
+              color: selected
+                  ? const Color(0xFF25282D)
+                  : Colors.transparent,
+              width: 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: selected ? 0.12 : 0.07),
+                blurRadius: selected ? 14 : 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Image.asset(
+                option.assetPath,
+                width: 22,
+                height: 22,
+                fit: BoxFit.contain,
+                errorBuilder: (_, _, _) => const Icon(
+                  Icons.category_outlined,
+                  size: 20,
+                  color: Color(0xFF737983),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                option.label,
+                style: TextStyle(
+                  color: const Color(0xFF25282D),
+                  fontSize: 13,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _PremiumField extends StatelessWidget {
   const _PremiumField({
     required this.label,
@@ -369,6 +534,7 @@ class _PremiumField extends StatelessWidget {
     this.keyboardType,
     this.textInputAction,
     this.prefixText,
+    this.leadingIconAsset,
     this.inputFormatters,
     this.onSubmitted,
   });
@@ -382,6 +548,7 @@ class _PremiumField extends StatelessWidget {
   final TextInputType? keyboardType;
   final TextInputAction? textInputAction;
   final String? prefixText;
+  final String? leadingIconAsset;
   final List<TextInputFormatter>? inputFormatters;
   final ValueChanged<String>? onSubmitted;
 
@@ -406,7 +573,7 @@ class _PremiumField extends StatelessWidget {
             duration: const Duration(milliseconds: 180),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(28),
+              borderRadius: BorderRadius.circular(30),
               border: Border.all(
                 color: errorText != null
                     ? const Color(0xFFB3261E)
@@ -433,13 +600,41 @@ class _PremiumField extends StatelessWidget {
               inputFormatters: inputFormatters,
               onSubmitted: onSubmitted,
               textCapitalization: TextCapitalization.sentences,
+              style: const TextStyle(
+                color: Color(0xFF17191D),
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
               decoration: InputDecoration(
                 hintText: hint,
+                hintStyle: const TextStyle(
+                  color: Color(0xFF9AA0A8),
+                  fontWeight: FontWeight.w500,
+                ),
+                prefixIcon: leadingIconAsset == null
+                    ? null
+                    : Padding(
+                        padding: const EdgeInsets.only(left: 10, right: 6),
+                        child: _CircularCategoryIcon(
+                          assetPath: leadingIconAsset!,
+                          size: 34,
+                        ),
+                      ),
+                prefixIconConstraints: leadingIconAsset == null
+                    ? null
+                    : const BoxConstraints(minWidth: 50, minHeight: 34),
                 prefixText: prefixText,
+                prefixStyle: const TextStyle(
+                  color: Color(0xFF17191D),
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
                 border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 17,
+                contentPadding: EdgeInsets.fromLTRB(
+                  leadingIconAsset == null ? 20 : 4,
+                  17,
+                  20,
+                  17,
                 ),
               ),
             ),
@@ -461,6 +656,50 @@ class _PremiumField extends StatelessWidget {
                   ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _CircularCategoryIcon extends StatelessWidget {
+  const _CircularCategoryIcon({
+    required this.assetPath,
+    this.size = 34,
+  });
+
+  final String assetPath;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      alignment: Alignment.center,
+      child: Padding(
+        padding: EdgeInsets.all(size * 0.18),
+        child: Image.asset(
+          assetPath,
+          fit: BoxFit.contain,
+          errorBuilder: (_, _, _) => Icon(
+            Icons.category_outlined,
+            size: size * 0.45,
+            color: const Color(0xFF737983),
+          ),
+        ),
       ),
     );
   }

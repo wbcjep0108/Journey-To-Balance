@@ -65,6 +65,23 @@ function normalizeRequestId(requestId: unknown): string | undefined {
   return trimmed;
 }
 
+/** Optional category icon asset path from the Flutter client. */
+function normalizeIconAsset(value: unknown): string | undefined {
+  if (value == null) return undefined;
+  if (typeof value !== "string") {
+    throw badRequest("Invalid iconAsset.");
+  }
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  if (trimmed.length > 200) {
+    throw badRequest("Invalid iconAsset.");
+  }
+  if (!trimmed.startsWith("assets/images/icons_")) {
+    return undefined;
+  }
+  return trimmed;
+}
+
 function loadBudget(userDoc: Record<string, unknown> | null): BudgetState {
   const budget = parseBudget(userDoc?.budget);
   migrateBudgetSchemaIfNeeded(budget);
@@ -246,6 +263,7 @@ export async function handleFinance(
     if (!entryId || entryId.length > 128) throw badRequest("Invalid entryId.");
     const createdAtMs =
       typeof body.createdAtMs === "number" ? body.createdAtMs : Date.now();
+    const iconAsset = normalizeIconAsset(body.iconAsset);
 
     return withProtection(env, uid, "addTransaction", requestId, async () => {
       const userDoc = await client.getUserDoc(uid);
@@ -267,6 +285,7 @@ export async function handleFinance(
           amount,
           createdAt: new Date(createdAtMs),
           isRefund: false,
+          ...(iconAsset ? {iconAsset} : {}),
         },
       }).then((result) => ({...result, entryId}));
     });
@@ -280,6 +299,7 @@ export async function handleFinance(
     const title = typeof body.title === "string" ? body.title.trim() : "";
     if (!title) throw badRequest("Title is required.");
     const amount = requirePositiveAmount(body.amount);
+    const iconAsset = normalizeIconAsset(body.iconAsset);
 
     return withProtection(env, uid, "updateTransaction", requestId, async () => {
       const userDoc = await client.getUserDoc(uid);
@@ -302,6 +322,11 @@ export async function handleFinance(
         typeof previous.createdAt === "string" ?
           new Date(previous.createdAt) :
           new Date();
+      const previousIcon =
+        typeof previous.iconAsset === "string" ?
+          normalizeIconAsset(previous.iconAsset) :
+          undefined;
+      const nextIcon = iconAsset ?? previousIcon;
       return saveBudget(client, uid, budget, {
         category,
         entryId,
@@ -310,6 +335,7 @@ export async function handleFinance(
           amount,
           createdAt: previousCreatedAt,
           isRefund: false,
+          ...(nextIcon ? {iconAsset: nextIcon} : {}),
         },
       }).then((result) => ({...result, entryId}));
     });
@@ -355,6 +381,10 @@ export async function handleFinance(
             amount,
             createdAt,
             isRefund: true,
+            ...(typeof entry.iconAsset === "string" &&
+            entry.iconAsset.trim().startsWith("assets/images/icons_") ?
+              {iconAsset: entry.iconAsset.trim()} :
+              {}),
           },
         }).then((result) => ({
           ...result,
