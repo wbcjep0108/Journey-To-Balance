@@ -180,22 +180,6 @@ String categoryDashboardLabel(FinancialCategory category) {
   };
 }
 
-Color categoryAccentColor(FinancialCategory category) {
-  return switch (category) {
-    FinancialCategory.bills => const Color(0xFF3B82F6),
-    FinancialCategory.savings => const Color(0xFF22C55E),
-    FinancialCategory.personal => const Color(0xFFF97316),
-  };
-}
-
-Color categoryBadgeColor(FinancialCategory category) {
-  return switch (category) {
-    FinancialCategory.bills => const Color(0xFFDBEAFE),
-    FinancialCategory.savings => const Color(0xFFDCFCE7),
-    FinancialCategory.personal => const Color(0xFFFFEDD5),
-  };
-}
-
 String categoryIconAsset(FinancialCategory category) {
   return switch (category) {
     FinancialCategory.bills => 'assets/images/icons/bills.png',

@@ -194,7 +194,19 @@ class _CalendarHeatmapPanel extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          _MonthCalendarGrid(stats: stats, onDayTap: onDayTap),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onHorizontalDragEnd: (details) {
+              final velocity = details.primaryVelocity ?? 0;
+              // Swipe left → next month; swipe right → previous month.
+              if (velocity <= -200) {
+                onNextMonth();
+              } else if (velocity >= 200) {
+                onPrevMonth();
+              }
+            },
+            child: _MonthCalendarGrid(stats: stats, onDayTap: onDayTap),
+          ),
           const SizedBox(height: 20),
           const _SpendingLevelKey(),
         ],
