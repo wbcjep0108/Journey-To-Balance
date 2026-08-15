@@ -16,6 +16,25 @@ class LoanProvider extends ChangeNotifier {
   List<LoanEntry> get loans => List.unmodifiable(_loans);
   bool get isLoaded => _loaded;
 
+  /// Loans still being paid (not all installments marked paid).
+  List<LoanEntry> get activeLoans =>
+      List.unmodifiable(_loans.where((loan) => !loan.isFullyPaid));
+
+  /// Fully paid loans (final installment completed), newest completion first.
+  List<LoanEntry> get paidLoans {
+    final paid = _loans.where((loan) => loan.isFullyPaid).toList()
+      ..sort((a, b) {
+        final aDone = a.installmentDates.isEmpty
+            ? a.finalPaymentDate
+            : a.installmentDates.last;
+        final bDone = b.installmentDates.isEmpty
+            ? b.finalPaymentDate
+            : b.installmentDates.last;
+        return bDone.compareTo(aDone);
+      });
+    return List.unmodifiable(paid);
+  }
+
   double get totalLoan {
     var sum = 0.0;
     for (final loan in _loans) {

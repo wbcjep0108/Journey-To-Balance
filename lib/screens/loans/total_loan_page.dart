@@ -12,6 +12,7 @@ import '../../providers/budget_provider.dart';
 import '../../providers/loan_provider.dart';
 import '../../services/finance_api_service.dart';
 import '../../widgets/sensitive_action_auth.dart';
+import 'paid_loan_transactions_page.dart';
 
 class TotalLoanPage extends StatefulWidget {
   const TotalLoanPage({super.key});
@@ -197,12 +198,45 @@ class _TotalLoanPageState extends State<TotalLoanPage> {
               padding: EdgeInsets.fromLTRB(8, topInset + 4, 8, 36),
               child: Column(
                 children: [
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: IconButton(
-                      onPressed: () => Navigator.of(context).maybePop(),
-                      icon: const Icon(Icons.arrow_back, color: Colors.white),
-                    ),
+                  Row(
+                    children: [
+                      IconButton(
+                        onPressed: () => Navigator.of(context).maybePop(),
+                        icon: const Icon(Icons.arrow_back, color: Colors.white),
+                      ),
+                      const Spacer(),
+                      PopupMenuButton<String>(
+                        tooltip: 'Menu',
+                        offset: const Offset(0, 40),
+                        color: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        icon: const Icon(Icons.menu, color: Colors.white),
+                        onSelected: (value) {
+                          if (value == 'paid') {
+                            Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) =>
+                                    const PaidLoanTransactionsPage(),
+                              ),
+                            );
+                          }
+                        },
+                        itemBuilder: (context) => [
+                          const PopupMenuItem<String>(
+                            value: 'paid',
+                            child: Text(
+                              'Loan transactions',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF121212),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 8),
                   Text(
@@ -241,12 +275,12 @@ class _TotalLoanPageState extends State<TotalLoanPage> {
                       top: Radius.circular(32),
                     ),
                   ),
-                  child: loans.loans.isEmpty
+                  child: loans.activeLoans.isEmpty
                       ? const Center(
                           child: Padding(
                             padding: EdgeInsets.fromLTRB(24, 56, 24, 24),
                             child: Text(
-                              'No loans yet.\nTap + to add one.',
+                              'No active loans.\nTap + to add one.',
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 color: Color(0xFF6B7280),
@@ -258,11 +292,11 @@ class _TotalLoanPageState extends State<TotalLoanPage> {
                         )
                       : ListView.separated(
                           padding: const EdgeInsets.fromLTRB(20, 56, 20, 28),
-                          itemCount: loans.loans.length,
+                          itemCount: loans.activeLoans.length,
                           separatorBuilder: (_, _) =>
                               const SizedBox(height: 14),
                           itemBuilder: (context, index) {
-                            final loan = loans.loans[index];
+                            final loan = loans.activeLoans[index];
                             return _LoanCard(
                               loan: loan,
                               onOpen: () => _showLoanScheduleDialog(loan.id),
