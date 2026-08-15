@@ -9,6 +9,7 @@ import '../../widgets/app_refresh_indicator.dart';
 import '../../widgets/rate_limit_dialog.dart';
 import '../../widgets/sensitive_action_auth.dart';
 import '../../widgets/weekly_spending_card.dart';
+import '../loans/total_loan_page.dart';
 import '../savings/savings_goal_page.dart';
 import 'home_money_dialogs.dart';
 import 'monthly_spending_dashboard_page.dart';
@@ -501,9 +502,16 @@ class _QuickActionsRow extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
         const _SavingsProgressAction(),
-        const _FilledIconAction(
+        _FilledIconAction(
           assetPath: 'assets/images/icons/loan.png',
           label: 'Loan',
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const TotalLoanPage(),
+              ),
+            );
+          },
         ),
         _FilledIconAction(
           assetPath: 'assets/images/icons/calendar.png',
