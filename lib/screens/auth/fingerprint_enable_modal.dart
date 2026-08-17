@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../widgets/barrier_blur.dart';
 import '../../widgets/security_ui.dart';
 
 /// Returns `true` if Enable was pressed, `false` if Skip, `null` if dismissed.
@@ -11,7 +12,7 @@ Future<bool?> showFingerprintEnableModal(BuildContext context) {
     barrierColor: Colors.black.withValues(alpha: 0.45),
     transitionDuration: const Duration(milliseconds: 260),
     pageBuilder: (context, animation, secondaryAnimation) {
-      return const FingerprintEnableModal();
+      return withBarrierBlur(const FingerprintEnableModal());
     },
     transitionBuilder: (context, animation, secondaryAnimation, child) {
       final curved = CurvedAnimation(

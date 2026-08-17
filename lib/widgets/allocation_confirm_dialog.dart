@@ -1,7 +1,7 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+
+import 'barrier_blur.dart';
 
 enum AllocationConfirmKind { receiveSalary, addMoney }
 
@@ -200,9 +200,8 @@ class AllocationConfirmDialog {
       transitionDuration: reduceMotion
           ? Duration.zero
           : const Duration(milliseconds: 240),
-      pageBuilder: (context, _, _) => BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 2.5, sigmaY: 2.5),
-        child: SafeArea(
+      pageBuilder: (context, _, _) => withBarrierBlur(
+        SafeArea(
           child: builder(context),
         ),
       ),

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/financial_entry.dart';
 import '../../providers/budget_provider.dart';
+import '../../widgets/barrier_blur.dart';
 import '../../widgets/rate_limit_dialog.dart';
 import '../../widgets/savings_goal_complete_dialog.dart';
 import '../../widgets/sensitive_action_auth.dart';
@@ -134,7 +135,8 @@ class _SavingsGoalPageState extends State<SavingsGoalPage> {
       context: context,
       barrierDismissible: true,
       builder: (dialogContext) {
-        return Dialog(
+        return withBarrierBlur(
+          Dialog(
           backgroundColor: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(24),
@@ -195,6 +197,7 @@ class _SavingsGoalPageState extends State<SavingsGoalPage> {
               ],
             ),
           ),
+        ),
         );
       },
     ).whenComplete(controller.dispose);
@@ -209,7 +212,8 @@ class _SavingsGoalPageState extends State<SavingsGoalPage> {
       context: context,
       barrierDismissible: true,
       builder: (dialogContext) {
-        return Dialog(
+        return withBarrierBlur(
+          Dialog(
           backgroundColor: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(24),
@@ -270,6 +274,7 @@ class _SavingsGoalPageState extends State<SavingsGoalPage> {
               ],
             ),
           ),
+        ),
         );
       },
     ).whenComplete(controller.dispose);
@@ -285,25 +290,27 @@ class _SavingsGoalPageState extends State<SavingsGoalPage> {
       lastDate: DateTime(DateTime.now().year + 30),
       helpText: 'Select target date',
       builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: Color(0xFF121212),
-              onPrimary: Colors.white,
-              surface: Colors.white,
-              onSurface: Color(0xFF121212),
+        return withBarrierBlur(
+          Theme(
+            data: Theme.of(context).copyWith(
+              colorScheme: const ColorScheme.light(
+                primary: Color(0xFF121212),
+                onPrimary: Colors.white,
+                surface: Colors.white,
+                onSurface: Color(0xFF121212),
+              ),
+              dialogTheme: const DialogThemeData(
+                backgroundColor: Colors.white,
+              ),
+              datePickerTheme: const DatePickerThemeData(
+                backgroundColor: Colors.white,
+                surfaceTintColor: Colors.transparent,
+                headerBackgroundColor: Colors.white,
+                headerForegroundColor: Color(0xFF121212),
+              ),
             ),
-            dialogTheme: const DialogThemeData(
-              backgroundColor: Colors.white,
-            ),
-            datePickerTheme: const DatePickerThemeData(
-              backgroundColor: Colors.white,
-              surfaceTintColor: Colors.transparent,
-              headerBackgroundColor: Colors.white,
-              headerForegroundColor: Color(0xFF121212),
-            ),
+            child: child!,
           ),
-          child: child!,
         );
       },
     );
@@ -346,7 +353,8 @@ class _SavingsGoalPageState extends State<SavingsGoalPage> {
       context: context,
       barrierDismissible: true,
       builder: (dialogContext) {
-        return Dialog(
+        return withBarrierBlur(
+          Dialog(
           backgroundColor: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(24),
@@ -409,6 +417,7 @@ class _SavingsGoalPageState extends State<SavingsGoalPage> {
               ],
             ),
           ),
+        ),
         );
       },
     );
@@ -467,7 +476,7 @@ Future<bool?> showContributeToGoalModal({
     barrierColor: Colors.black.withValues(alpha: 0.45),
     transitionDuration: const Duration(milliseconds: 120),
     pageBuilder: (context, animation, secondaryAnimation) {
-      return _ContributeToGoalModal(category: category);
+      return withBarrierBlur(_ContributeToGoalModal(category: category));
     },
     transitionBuilder: (context, animation, secondaryAnimation, child) {
       final curved = CurvedAnimation(

@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../models/financial_entry.dart';
 import '../../providers/budget_provider.dart';
 import '../../widgets/budget_modal.dart';
+import '../../widgets/category_icon_badge.dart';
 import '../../widgets/rate_limit_dialog.dart';
 import '../../widgets/sensitive_action_auth.dart';
 
@@ -253,27 +254,10 @@ class _DayEntryRow extends StatelessWidget {
               children: [
                 if (item.entry.iconAsset != null &&
                     item.entry.iconAsset!.isNotEmpty) ...[
-                  Container(
-                    width: 34,
-                    height: 34,
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    alignment: Alignment.center,
-                    child: Padding(
-                      padding: const EdgeInsets.all(5.5),
-                      child: Image.asset(
-                        item.entry.iconAsset!,
-                        fit: BoxFit.contain,
-                        errorBuilder: (_, _, _) => const Icon(
-                          Icons.category_outlined,
-                          size: 16,
-                          color: Color(0xFF737983),
-                        ),
-                      ),
-                    ),
+                  CategoryIconBadge(
+                    iconAsset: item.entry.iconAsset!,
+                    size: 34,
+                    showBorder: false,
                   ),
                   const SizedBox(width: 12),
                 ],

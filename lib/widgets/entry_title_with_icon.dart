@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'category_icon_badge.dart';
+
 /// Circular category icon + title, matching the dark transaction list style.
 class EntryTitleWithIcon extends StatelessWidget {
   const EntryTitleWithIcon({
@@ -30,7 +32,11 @@ class EntryTitleWithIcon extends StatelessWidget {
     return Row(
       children: [
         if (iconAsset != null && iconAsset!.isNotEmpty) ...[
-          _CircleIcon(assetPath: iconAsset!, size: iconSize),
+          CategoryIconBadge(
+            iconAsset: iconAsset!,
+            size: iconSize,
+            showBorder: false,
+          ),
           SizedBox(width: spacing),
         ],
         Expanded(
@@ -42,39 +48,6 @@ class EntryTitleWithIcon extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _CircleIcon extends StatelessWidget {
-  const _CircleIcon({required this.assetPath, required this.size});
-
-  final String assetPath;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        shape: BoxShape.circle,
-      ),
-      clipBehavior: Clip.antiAlias,
-      alignment: Alignment.center,
-      child: Padding(
-        padding: EdgeInsets.all(size * 0.16),
-        child: Image.asset(
-          assetPath,
-          fit: BoxFit.contain,
-          errorBuilder: (_, _, _) => Icon(
-            Icons.category_outlined,
-            size: size * 0.45,
-            color: const Color(0xFF737983),
-          ),
-        ),
-      ),
     );
   }
 }

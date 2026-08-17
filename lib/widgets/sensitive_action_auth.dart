@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/app_lock_provider.dart';
+import 'barrier_blur.dart';
 import 'pin_digit_boxes.dart';
 import 'security_ui.dart';
 
@@ -15,9 +16,12 @@ Future<bool> showSensitiveActionAuth({
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (context) => _SensitiveActionAuthSheet(
-      title: title,
-      description: description,
+    builder: (context) => withBarrierBlur(
+      _SensitiveActionAuthSheet(
+        title: title,
+        description: description,
+      ),
+      alignment: Alignment.bottomCenter,
     ),
   );
   return result == true;

@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../providers/budget_provider.dart';
 import '../../widgets/allocation_confirm_dialog.dart';
 import '../../widgets/app_refresh_indicator.dart';
+import '../../widgets/barrier_blur.dart';
 import '../../widgets/rate_limit_dialog.dart';
 import '../../widgets/sensitive_action_auth.dart';
 import '../../widgets/weekly_spending_card.dart';
@@ -52,11 +53,13 @@ class _HomePageState extends State<HomePage> {
     showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => SalarySetupDialog(
-        hostContext: context,
-        onSaved: () {
-          if (mounted) setState(() {});
-        },
+      builder: (_) => withBarrierBlur(
+        SalarySetupDialog(
+          hostContext: context,
+          onSaved: () {
+            if (mounted) setState(() {});
+          },
+        ),
       ),
     );
   }
@@ -66,11 +69,13 @@ class _HomePageState extends State<HomePage> {
       context: context,
       barrierDismissible: false,
       barrierColor: Colors.black.withValues(alpha: 0.55),
-      builder: (_) => BalanceEditDialog(
-        hostContext: context,
-        onSaved: () {
-          if (mounted) setState(() {});
-        },
+      builder: (_) => withBarrierBlur(
+        BalanceEditDialog(
+          hostContext: context,
+          onSaved: () {
+            if (mounted) setState(() {});
+          },
+        ),
       ),
     );
   }
@@ -139,11 +144,13 @@ class _HomePageState extends State<HomePage> {
     showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => AddMoneyDialog(
-        hostContext: context,
-        onBusyChanged: (busy) {
-          if (mounted) setState(() => _isAddingMoney = busy);
-        },
+      builder: (_) => withBarrierBlur(
+        AddMoneyDialog(
+          hostContext: context,
+          onBusyChanged: (busy) {
+            if (mounted) setState(() => _isAddingMoney = busy);
+          },
+        ),
       ),
     );
   }

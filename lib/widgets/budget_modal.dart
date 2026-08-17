@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,6 +6,8 @@ import 'package:intl/intl.dart';
 
 import '../models/financial_entry.dart';
 import '../models/spend_category_option.dart';
+import 'barrier_blur.dart';
+import 'category_icon_badge.dart';
 import 'rate_limit_dialog.dart';
 
 typedef BudgetModalSave =
@@ -51,17 +52,14 @@ class BudgetModal extends StatefulWidget {
       transitionDuration: reduceMotion
           ? Duration.zero
           : const Duration(milliseconds: 260),
-      pageBuilder: (_, _, _) => BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 3, sigmaY: 3),
-        child: Center(
-          child: BudgetModal(
-            category: category,
-            title: title,
-            availableBalance: availableBalance,
-            initialEntry: initialEntry,
-            quickSelectOptions: quickSelectOptions,
-            onSave: onSave,
-          ),
+      pageBuilder: (_, _, _) => withBarrierBlur(
+        BudgetModal(
+          category: category,
+          title: title,
+          availableBalance: availableBalance,
+          initialEntry: initialEntry,
+          quickSelectOptions: quickSelectOptions,
+          onSave: onSave,
         ),
       ),
       transitionBuilder: (_, animation, _, child) {
@@ -104,11 +102,14 @@ class _BudgetModalState extends State<BudgetModal>
 
   bool _nameTouched = false;
   bool _amountTouched = false;
+  bool _iconTouched = false;
   bool _isSaving = false;
   String? _submissionError;
 
   String get _name => _nameController.text.trim();
   double? get _amount => double.tryParse(_amountController.text);
+
+  bool get _iconRequired => _quickSelectOptions.isNotEmpty;
 
   String? get _nameError {
     if (_name.isEmpty) return 'Name is required.';
@@ -126,7 +127,15 @@ class _BudgetModalState extends State<BudgetModal>
     return null;
   }
 
-  bool get _isValid => _nameError == null && _amountError == null;
+  String? get _iconError {
+    if (_iconRequired && _selectedOption == null) {
+      return 'Icon is required. Select one.';
+    }
+    return null;
+  }
+
+  bool get _isValid =>
+      _nameError == null && _amountError == null && _iconError == null;
 
   @override
   void initState() {
@@ -177,12 +186,10 @@ class _BudgetModalState extends State<BudgetModal>
   }
 
   void _onNameChanged() {
-    _nameTouched = true;
     _refresh();
   }
 
   void _onAmountChanged() {
-    _amountTouched = true;
     _refresh();
   }
 
@@ -191,7 +198,9 @@ class _BudgetModalState extends State<BudgetModal>
   }
 
   void _selectQuickOption(SpendCategoryOption option) {
-    setState(() => _selectedOption = option);
+    setState(() {
+      _selectedOption = option;
+    });
     // Prefill name from the chip; user can still edit freely (e.g. "Meralco").
     if (_nameController.text.trim().isEmpty ||
         _quickSelectOptions.any(
@@ -202,7 +211,6 @@ class _BudgetModalState extends State<BudgetModal>
         ..text = option.label
         ..selection = TextSelection.collapsed(offset: option.label.length);
     }
-    _nameTouched = true;
     _refresh();
     _amountFocus.requestFocus();
   }
@@ -210,6 +218,7 @@ class _BudgetModalState extends State<BudgetModal>
   Future<void> _submit() async {
     _nameTouched = true;
     _amountTouched = true;
+    _iconTouched = true;
     if (!_isValid) {
       setState(() {});
       _shakeController.forward(from: 0);
@@ -339,9 +348,11 @@ class _BudgetModalState extends State<BudgetModal>
                     ),
                     if (_quickSelectOptions.isNotEmpty) ...[
                       const SizedBox(height: 16),
-                      _QuickSelectChips(
+                      _IconSelectSection(
                         options: _quickSelectOptions,
                         selectedOption: _selectedOption,
+                        showError: _iconTouched && _iconError != null,
+                        errorText: _iconError,
                         onSelected: _selectQuickOption,
                       ),
                     ],
@@ -393,7 +404,7 @@ class _BudgetModalState extends State<BudgetModal>
                         ),
                         const SizedBox(width: 8),
                         TextButton(
-                          onPressed: _isValid && !_isSaving ? _submit : null,
+                          onPressed: _isSaving ? null : _submit,
                           style: TextButton.styleFrom(
                             foregroundColor: Colors.black,
                             disabledForegroundColor: const Color(0xFFB5B8BE),
@@ -421,6 +432,96 @@ class _BudgetModalState extends State<BudgetModal>
           ),
         ),
       ),
+    );
+  }
+}
+
+class _IconSelectSection extends StatelessWidget {
+  const _IconSelectSection({
+    required this.options,
+    required this.selectedOption,
+    required this.showError,
+    required this.errorText,
+    required this.onSelected,
+  });
+
+  final List<SpendCategoryOption> options;
+  final SpendCategoryOption? selectedOption;
+  final bool showError;
+  final String? errorText;
+  final ValueChanged<SpendCategoryOption> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Icon',
+          style: TextStyle(
+            color: Color(0xFF25282D),
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: showError
+                  ? const Color(0xFFB3261E)
+                  : Colors.transparent,
+              width: showError ? 1.4 : 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: _QuickSelectChips(
+            options: options,
+            selectedOption: selectedOption,
+            onSelected: onSelected,
+          ),
+        ),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 180),
+          child: showError
+              ? Padding(
+                  key: ValueKey(errorText ?? 'icon-error'),
+                  padding: const EdgeInsets.only(top: 7, left: 12),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.info_outline,
+                        size: 14,
+                        color: Color(0xFFB3261E),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          errorText ?? 'Icon is required. Select one.',
+                          style: const TextStyle(
+                            color: Color(0xFFB3261E),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : const SizedBox.shrink(key: ValueKey('icon-ok')),
+        ),
+      ],
     );
   }
 }
@@ -495,17 +596,24 @@ class _CategoryChip extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Image.asset(
-                option.assetPath,
-                width: 22,
-                height: 22,
-                fit: BoxFit.contain,
-                errorBuilder: (_, _, _) => const Icon(
-                  Icons.category_outlined,
-                  size: 20,
-                  color: Color(0xFF737983),
+              if (option.usesMaterialIcon)
+                Icon(
+                  option.materialIcon,
+                  size: 22,
+                  color: const Color(0xFF25282D),
+                )
+              else
+                Image.asset(
+                  option.assetPath,
+                  width: 22,
+                  height: 22,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, _, _) => const Icon(
+                    Icons.category_outlined,
+                    size: 20,
+                    color: Color(0xFF737983),
+                  ),
                 ),
-              ),
               const SizedBox(width: 8),
               Text(
                 option.label,
@@ -615,8 +723,8 @@ class _PremiumField extends StatelessWidget {
                     ? null
                     : Padding(
                         padding: const EdgeInsets.only(left: 10, right: 6),
-                        child: _CircularCategoryIcon(
-                          assetPath: leadingIconAsset!,
+                        child: CategoryIconBadge(
+                          iconAsset: leadingIconAsset!,
                           size: 34,
                         ),
                       ),
@@ -656,50 +764,6 @@ class _PremiumField extends StatelessWidget {
                   ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _CircularCategoryIcon extends StatelessWidget {
-  const _CircularCategoryIcon({
-    required this.assetPath,
-    this.size = 34,
-  });
-
-  final String assetPath;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        shape: BoxShape.circle,
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 4,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
-      clipBehavior: Clip.antiAlias,
-      alignment: Alignment.center,
-      child: Padding(
-        padding: EdgeInsets.all(size * 0.18),
-        child: Image.asset(
-          assetPath,
-          fit: BoxFit.contain,
-          errorBuilder: (_, _, _) => Icon(
-            Icons.category_outlined,
-            size: size * 0.45,
-            color: const Color(0xFF737983),
-          ),
-        ),
       ),
     );
   }

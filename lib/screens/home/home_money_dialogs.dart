@@ -151,6 +151,19 @@ class _SalarySetupDialogState extends State<SalarySetupDialog> {
                         );
                         return;
                       }
+
+                      if (!widget.hostContext.mounted) return;
+                      final authorized = await showSensitiveActionAuth(
+                        context: widget.hostContext,
+                        title: 'Confirm income change',
+                        description:
+                            'Enter your PIN or use fingerprint to update '
+                            'your monthly salary or income.',
+                      );
+                      if (!widget.hostContext.mounted || authorized != true) {
+                        return;
+                      }
+
                       try {
                         await widget.hostContext
                             .read<BudgetProvider>()

@@ -14,6 +14,7 @@ import 'screens/navigation/bottom_nav_screen.dart';
 import 'screens/splash/splash_screen.dart';
 import 'services/finance_api_service.dart';
 import 'services/firestore_finance_service.dart';
+import 'widgets/app_privacy_blur.dart';
 import 'widgets/rate_limit_dialog.dart';
 
 void main() async {
@@ -55,6 +56,9 @@ class MyApp extends StatelessWidget {
           brightness: Brightness.light,
         ),
       ),
+      builder: (context, child) {
+        return AppPrivacyBlur(child: child ?? const SizedBox.shrink());
+      },
       home: const AuthGate(),
     );
   }

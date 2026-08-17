@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../providers/app_lock_provider.dart';
 import '../../services/security_service.dart';
+import '../../widgets/barrier_blur.dart';
 import '../../widgets/security_ui.dart';
 import '../auth/fingerprint_enable_modal.dart';
 
@@ -14,7 +15,10 @@ class SecuritySettingsPage extends StatelessWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => const _ChangePinSheet(),
+      builder: (context) => withBarrierBlur(
+        const _ChangePinSheet(),
+        alignment: Alignment.bottomCenter,
+      ),
     );
 
     if (result == null || !context.mounted) return;
@@ -52,48 +56,54 @@ class SecuritySettingsPage extends StatelessWidget {
     final lock = context.read<AppLockProvider>();
     final selected = await showModalBottomSheet<AutoLockOption>(
       context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(8, 12, 8, 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  child: Text(
-                    'Auto Lock Timer',
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                ...AutoLockOption.values.map((option) {
-                  final isSelected = option == lock.autoLockOption;
-                  return ListTile(
-                    title: Text(
-                      option.label,
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontWeight:
-                            isSelected ? FontWeight.w700 : FontWeight.w500,
+        return withBarrierBlur(
+          Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 12, 8, 16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: Text(
+                        'Auto Lock Timer',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
-                    trailing: isSelected
-                        ? const Icon(Icons.check_rounded, color: Colors.black)
-                        : null,
-                    onTap: () => Navigator.pop(context, option),
-                  );
-                }),
-              ],
+                    ...AutoLockOption.values.map((option) {
+                      final isSelected = option == lock.autoLockOption;
+                      return ListTile(
+                        title: Text(
+                          option.label,
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontWeight:
+                                isSelected ? FontWeight.w700 : FontWeight.w500,
+                          ),
+                        ),
+                        trailing: isSelected
+                            ? const Icon(Icons.check_rounded, color: Colors.black)
+                            : null,
+                        onTap: () => Navigator.pop(context, option),
+                      );
+                    }),
+                  ],
+                ),
+              ),
             ),
           ),
+          alignment: Alignment.bottomCenter,
         );
       },
     );

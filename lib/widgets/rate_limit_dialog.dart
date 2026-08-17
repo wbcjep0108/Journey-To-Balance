@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../models/rate_limit_info.dart';
 import '../providers/budget_provider.dart';
 import '../services/finance_api_service.dart';
+import 'barrier_blur.dart';
 
 /// Returns true when [error] is a Worker finance rate-limit response.
 ///
@@ -20,52 +21,54 @@ Future<void> showRateLimitDialog(
     context: context,
     barrierDismissible: false,
     builder: (dialogContext) {
-      return Dialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                info.dialogTitle,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF121212),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                info.dialogMessage,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: Color(0xFF6B7280),
-                ),
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(),
-                  style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFF121212),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
+      return withBarrierBlur(
+        Dialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  info.dialogTitle,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF121212),
                   ),
-                  child: const Text(
-                    'OK',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  info.dialogMessage,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF6B7280),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF121212),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: const Text(
+                      'OK',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       );

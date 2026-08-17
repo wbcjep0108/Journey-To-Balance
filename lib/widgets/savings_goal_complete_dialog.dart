@@ -1,8 +1,9 @@
 import 'dart:math' as math;
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+
+import 'barrier_blur.dart';
 
 /// Congrats popup with a short confetti burst when a savings goal is reached.
 class SavingsGoalCompleteDialog {
@@ -30,9 +31,8 @@ class SavingsGoalCompleteDialog {
           ? Duration.zero
           : const Duration(milliseconds: 260),
       pageBuilder: (dialogContext, _, _) {
-        return BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 2.5, sigmaY: 2.5),
-          child: SafeArea(
+        return withBarrierBlur(
+          SafeArea(
             child: _CongratsScaffold(
               goalTitle: title,
               amountLabel: amountLabel,

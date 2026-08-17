@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../providers/app_lock_provider.dart';
 import '../../providers/budget_provider.dart';
 import '../../services/auth_service.dart';
+import '../../widgets/barrier_blur.dart';
 import 'security_settings_page.dart';
 
 class AccountPage extends StatefulWidget {
@@ -55,23 +56,25 @@ class _AccountPageState extends State<AccountPage> {
 
     showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
-        title: const Text('Help & Support'),
-        content: const Text(
-          'For help with Journey to Balance, contact the application support (bcueva1217@gmail.com) '
-          'team for the latest support information.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'Close',
-              style: TextStyle(color: Color(0xFF6B7280)),
-            ),
+      builder: (context) => withBarrierBlur(
+        AlertDialog(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.transparent,
+          title: const Text('Help & Support'),
+          content: const Text(
+            'For help with Journey to Balance, contact the application support (bcueva1217@gmail.com) '
+            'team for the latest support information.',
           ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'Close',
+                style: TextStyle(color: Color(0xFF6B7280)),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -85,49 +88,51 @@ class _AccountPageState extends State<AccountPage> {
 
     showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text(
-          'About us',
-          style: TextStyle(
-            color: Color(0xFF25282D),
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        content: const SingleChildScrollView(
-          child: Text(
-            'Journey to Balance is a personal finance application designed '
-            'to help users take control of their financial well-being. It '
-            'provides simple tools to track income, manage bills, monitor '
-            'savings, and organize personal financial information in one '
-            'secure place. With cloud synchronization through Firebase, '
-            'users can securely access their financial data anytime, '
-            'anywhere, making it easier to build healthy financial habits '
-            'and achieve long-term financial stability.\n\n'
-            'This application was developed by Wilhem Bruce Cuevas, a '
-            'Bachelor of Science in Information Technology (BSIT) student '
-            'specializing in Mobile and Web Application at National '
-            'University Manila, as part of his commitment to creating '
-            'practical and user-centered digital solutions.',
+      builder: (context) => withBarrierBlur(
+        AlertDialog(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.transparent,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: const Text(
+            'About us',
             style: TextStyle(
-              color: Color(0xFF3F444C),
-              fontSize: 14,
-              height: 1.55,
+              color: Color(0xFF25282D),
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
             ),
           ),
+          content: const SingleChildScrollView(
+            child: Text(
+              'Journey to Balance is a personal finance application designed '
+              'to help users take control of their financial well-being. It '
+              'provides simple tools to track income, manage bills, monitor '
+              'savings, and organize personal financial information in one '
+              'secure place. With cloud synchronization through Firebase, '
+              'users can securely access their financial data anytime, '
+              'anywhere, making it easier to build healthy financial habits '
+              'and achieve long-term financial stability.\n\n'
+              'This application was developed by Wilhem Bruce Cuevas, a '
+              'Bachelor of Science in Information Technology (BSIT) student '
+              'specializing in Mobile and Web Application at National '
+              'University Manila, as part of his commitment to creating '
+              'practical and user-centered digital solutions.',
+              style: TextStyle(
+                color: Color(0xFF3F444C),
+                fontSize: 14,
+                height: 1.55,
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF3F444C),
+              ),
+              child: const Text('Close'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFF3F444C),
-            ),
-            child: const Text('Close'),
-          ),
-        ],
       ),
     );
   }

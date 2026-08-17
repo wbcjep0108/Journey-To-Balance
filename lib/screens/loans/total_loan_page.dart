@@ -11,6 +11,7 @@ import '../../models/loan_entry.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/loan_provider.dart';
 import '../../services/finance_api_service.dart';
+import '../../widgets/barrier_blur.dart';
 import '../../widgets/sensitive_action_auth.dart';
 import 'paid_loan_transactions_page.dart';
 
@@ -37,7 +38,7 @@ class _TotalLoanPageState extends State<TotalLoanPage> {
     final result = await showDialog<_AddLoanDialogResult>(
       context: context,
       barrierColor: Colors.black.withValues(alpha: 0.25),
-      builder: (_) => const _AddLoanDialog(),
+      builder: (_) => withBarrierBlur(const _AddLoanDialog()),
     );
 
     if (result == null || !mounted) return;
@@ -64,90 +65,92 @@ class _TotalLoanPageState extends State<TotalLoanPage> {
       context: context,
       barrierColor: Colors.black.withValues(alpha: 0.42),
       builder: (dialogContext) {
-        return Center(
-          child: Material(
-            color: Colors.transparent,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 360),
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 24),
-                padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(28),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.16),
-                      blurRadius: 28,
-                      offset: const Offset(0, 14),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Delete loan?',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF121212),
-                        letterSpacing: -0.3,
+        return withBarrierBlur(
+          Center(
+            child: Material(
+              color: Colors.transparent,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 360),
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 24),
+                  padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(28),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.16),
+                        blurRadius: 28,
+                        offset: const Offset(0, 14),
                       ),
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      'Remove "${loan.name}" and its payment schedule? This cannot be undone.',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        height: 1.45,
-                        color: Color(0xFF6B7280),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Delete loan?',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF121212),
+                          letterSpacing: -0.3,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 22),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextButton(
-                            onPressed: () =>
-                                Navigator.of(dialogContext).pop(false),
-                            style: TextButton.styleFrom(
-                              foregroundColor: const Color(0xFF6B7280),
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(999),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Remove "${loan.name}" and its payment schedule? This cannot be undone.',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          height: 1.45,
+                          color: Color(0xFF6B7280),
+                        ),
+                      ),
+                      const SizedBox(height: 22),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextButton(
+                              onPressed: () =>
+                                  Navigator.of(dialogContext).pop(false),
+                              style: TextButton.styleFrom(
+                                foregroundColor: const Color(0xFF6B7280),
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                              ),
+                              child: const Text(
+                                'Cancel',
+                                style: TextStyle(fontWeight: FontWeight.w600),
                               ),
                             ),
-                            child: const Text(
-                              'Cancel',
-                              style: TextStyle(fontWeight: FontWeight.w600),
-                            ),
                           ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () =>
-                                Navigator.of(dialogContext).pop(true),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF121212),
-                              foregroundColor: Colors.white,
-                              elevation: 0,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(999),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () =>
+                                  Navigator.of(dialogContext).pop(true),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF121212),
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                              ),
+                              child: const Text(
+                                'Delete',
+                                style: TextStyle(fontWeight: FontWeight.w700),
                               ),
                             ),
-                            child: const Text(
-                              'Delete',
-                              style: TextStyle(fontWeight: FontWeight.w700),
-                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ],
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -173,7 +176,7 @@ class _TotalLoanPageState extends State<TotalLoanPage> {
     await showDialog<void>(
       context: context,
       barrierColor: Colors.black.withValues(alpha: 0.25),
-      builder: (_) => _LoanScheduleDialog(loanId: loanId),
+      builder: (_) => withBarrierBlur(_LoanScheduleDialog(loanId: loanId)),
     );
   }
 
@@ -205,36 +208,17 @@ class _TotalLoanPageState extends State<TotalLoanPage> {
                         icon: const Icon(Icons.arrow_back, color: Colors.white),
                       ),
                       const Spacer(),
-                      PopupMenuButton<String>(
-                        tooltip: 'Menu',
-                        offset: const Offset(0, 40),
-                        color: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        icon: const Icon(Icons.menu, color: Colors.white),
-                        onSelected: (value) {
-                          if (value == 'paid') {
-                            Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) =>
-                                    const PaidLoanTransactionsPage(),
-                              ),
-                            );
-                          }
-                        },
-                        itemBuilder: (context) => [
-                          const PopupMenuItem<String>(
-                            value: 'paid',
-                            child: Text(
-                              'Loan transactions',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF121212),
-                              ),
+                      IconButton(
+                        tooltip: 'Loan transactions',
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) =>
+                                  const PaidLoanTransactionsPage(),
                             ),
-                          ),
-                        ],
+                          );
+                        },
+                        icon: const Icon(Icons.history, color: Colors.white),
                       ),
                     ],
                   ),
@@ -419,50 +403,52 @@ class _AddLoanDialogState extends State<_AddLoanDialog> {
       firstDate: firstDate ?? DateTime(2020),
       lastDate: DateTime(2100),
       builder: (context, child) {
-        return Theme(
-          data: ThemeData(
-            useMaterial3: true,
-            colorScheme: const ColorScheme.light(
-              primary: Color(0xFF121212),
-              onPrimary: Colors.white,
-              surface: Colors.white,
-              onSurface: Colors.black,
-              secondary: Color(0xFF121212),
-              onSecondary: Colors.white,
+        return withBarrierBlur(
+          Theme(
+            data: ThemeData(
+              useMaterial3: true,
+              colorScheme: const ColorScheme.light(
+                primary: Color(0xFF121212),
+                onPrimary: Colors.white,
+                surface: Colors.white,
+                onSurface: Colors.black,
+                secondary: Color(0xFF121212),
+                onSecondary: Colors.white,
+              ),
+              datePickerTheme: DatePickerThemeData(
+                backgroundColor: Colors.white,
+                headerBackgroundColor: const Color(0xFF121212),
+                headerForegroundColor: Colors.white,
+                dayForegroundColor: WidgetStateProperty.resolveWith((states) {
+                  if (states.contains(WidgetState.selected)) {
+                    return Colors.white;
+                  }
+                  if (states.contains(WidgetState.disabled)) {
+                    return Colors.black38;
+                  }
+                  return Colors.black;
+                }),
+                dayBackgroundColor: WidgetStateProperty.resolveWith((states) {
+                  if (states.contains(WidgetState.selected)) {
+                    return const Color(0xFF121212);
+                  }
+                  return Colors.transparent;
+                }),
+                todayForegroundColor: const WidgetStatePropertyAll(Colors.black),
+                todayBackgroundColor: const WidgetStatePropertyAll(
+                  Colors.transparent,
+                ),
+                todayBorder: const BorderSide(color: Color(0xFF121212)),
+                confirmButtonStyle: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF121212),
+                ),
+                cancelButtonStyle: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF6B7280),
+                ),
+              ),
             ),
-            datePickerTheme: DatePickerThemeData(
-              backgroundColor: Colors.white,
-              headerBackgroundColor: const Color(0xFF121212),
-              headerForegroundColor: Colors.white,
-              dayForegroundColor: WidgetStateProperty.resolveWith((states) {
-                if (states.contains(WidgetState.selected)) {
-                  return Colors.white;
-                }
-                if (states.contains(WidgetState.disabled)) {
-                  return Colors.black38;
-                }
-                return Colors.black;
-              }),
-              dayBackgroundColor: WidgetStateProperty.resolveWith((states) {
-                if (states.contains(WidgetState.selected)) {
-                  return const Color(0xFF121212);
-                }
-                return Colors.transparent;
-              }),
-              todayForegroundColor: const WidgetStatePropertyAll(Colors.black),
-              todayBackgroundColor: const WidgetStatePropertyAll(
-                Colors.transparent,
-              ),
-              todayBorder: const BorderSide(color: Color(0xFF121212)),
-              confirmButtonStyle: TextButton.styleFrom(
-                foregroundColor: const Color(0xFF121212),
-              ),
-              cancelButtonStyle: TextButton.styleFrom(
-                foregroundColor: const Color(0xFF6B7280),
-              ),
-            ),
+            child: child!,
           ),
-          child: child!,
         );
       },
     );

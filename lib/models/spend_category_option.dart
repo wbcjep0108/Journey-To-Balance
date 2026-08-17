@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
 import '../models/financial_entry.dart';
 
 /// Quick-select option shown in the spend modal (icon + label).
@@ -5,10 +7,32 @@ class SpendCategoryOption {
   const SpendCategoryOption({
     required this.label,
     required this.assetPath,
+    this.materialIcon,
   });
 
   final String label;
+
+  /// PNG asset path, or a material sentinel such as [materialOthers].
   final String assetPath;
+
+  /// When set, UI renders this Material icon instead of a PNG.
+  final IconData? materialIcon;
+
+  static const materialOthers = 'material:more_horiz';
+
+  bool get usesMaterialIcon => materialIcon != null;
+
+  static bool isMaterialAsset(String? path) =>
+      path != null && path.startsWith('material:');
+
+  static IconData materialIconForAsset(String path) {
+    switch (path) {
+      case materialOthers:
+        return Icons.more_horiz;
+      default:
+        return Icons.more_horiz;
+    }
+  }
 }
 
 /// Preset chips per financial category, bound to on-disk icon folders.
@@ -55,6 +79,11 @@ class SpendCategoryPresets {
             label: 'Water',
             assetPath: '$billsAssetDir/water.png',
           ),
+          SpendCategoryOption(
+            label: 'Others',
+            assetPath: SpendCategoryOption.materialOthers,
+            materialIcon: Icons.more_horiz,
+          ),
         ];
       case FinancialCategory.personal:
         return const [
@@ -81,6 +110,11 @@ class SpendCategoryPresets {
           SpendCategoryOption(
             label: 'Shopping',
             assetPath: '$personalAssetDir/shopping.png',
+          ),
+          SpendCategoryOption(
+            label: 'Others',
+            assetPath: SpendCategoryOption.materialOthers,
+            materialIcon: Icons.more_horiz,
           ),
         ];
       case FinancialCategory.savings:

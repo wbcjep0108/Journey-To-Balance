@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/monthly_spending_stats.dart';
 import '../../providers/budget_provider.dart';
+import '../../widgets/barrier_blur.dart';
 import 'daily_spending_page.dart';
 
 class MonthlySpendingDashboardPage extends StatefulWidget {
@@ -47,6 +48,7 @@ class _MonthlySpendingDashboardPageState
       lastDate: DateTime(now.year + 1, 12, 31),
       helpText: 'Select month',
       initialDatePickerMode: DatePickerMode.year,
+      builder: (context, child) => withBarrierBlur(child!),
     );
     if (picked == null || !mounted) return;
     setState(() {
@@ -487,52 +489,58 @@ class _SummaryAndBreakdownPanel extends StatelessWidget {
 
       final picked = await showModalBottomSheet<DateTime>(
         context: context,
-        backgroundColor: Colors.white,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
+        backgroundColor: Colors.transparent,
         builder: (sheetContext) {
-          return SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 36,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade300,
-                        borderRadius: BorderRadius.circular(999),
+          return withBarrierBlur(
+            Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 36,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade300,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Lowest spending days',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.black,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  ...days.map(
-                    (day) => ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(
-                        DateFormat('EEEE, MMM d').format(day),
-                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Lowest spending days',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.black,
+                        ),
                       ),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () => Navigator.of(sheetContext).pop(day),
-                    ),
+                      const SizedBox(height: 8),
+                      ...days.map(
+                        (day) => ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(
+                            DateFormat('EEEE, MMM d').format(day),
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () => Navigator.of(sheetContext).pop(day),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
+            alignment: Alignment.bottomCenter,
           );
         },
       );
