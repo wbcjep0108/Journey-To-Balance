@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/monthly_spending_stats.dart';
 import '../../providers/budget_provider.dart';
+import '../../providers/currency_provider.dart';
 import '../../widgets/barrier_blur.dart';
 import 'daily_spending_page.dart';
 
@@ -321,6 +322,7 @@ class _DayCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final symbol = context.watch<CurrencyProvider>().symbol;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -328,7 +330,7 @@ class _DayCell extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         child: Tooltip(
           message: amount > 0
-              ? '₱${NumberFormat('#,##0.##').format(amount)}'
+              ? '$symbol${NumberFormat('#,##0.##').format(amount)}'
               : 'No spending',
           child: Container(
             decoration: BoxDecoration(
@@ -450,11 +452,11 @@ class _SummaryAndBreakdownPanel extends StatelessWidget {
 
   final MonthlySpendingStats stats;
 
-  String get _currency =>
-      '₱${NumberFormat('#,##0').format(stats.total.round())}';
+  String _currency(String symbol) =>
+      '$symbol${NumberFormat('#,##0').format(stats.total.round())}';
 
-  String get _avg =>
-      '₱${NumberFormat('#,##0').format(stats.avgDaily.round())}';
+  String _avg(String symbol) =>
+      '$symbol${NumberFormat('#,##0').format(stats.avgDaily.round())}';
 
   String get _highest {
     final day = stats.highestDay;
@@ -471,6 +473,7 @@ class _SummaryAndBreakdownPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final symbol = context.watch<CurrencyProvider>().symbol;
     void openDay(DateTime day) {
       Navigator.of(context).push(
         MaterialPageRoute<void>(
@@ -577,13 +580,13 @@ class _SummaryAndBreakdownPanel extends StatelessWidget {
           _SummaryRow(
             icon: Icons.account_balance_wallet_outlined,
             label: 'Total Spending',
-            value: _currency,
+            value: _currency(symbol),
           ),
           const SizedBox(height: 10),
           _SummaryRow(
             icon: Icons.payments_outlined,
             label: 'Avg. Daily Spend',
-            value: _avg,
+            value: _avg(symbol),
           ),
           const SizedBox(height: 10),
           _SummaryRow(
@@ -771,7 +774,7 @@ class _CategoryBreakdownRow extends StatelessWidget {
               ),
             ),
             Text(
-              '₱${NumberFormat('#,##0').format(item.amount.round())}',
+              '${context.watch<CurrencyProvider>().symbol}${NumberFormat('#,##0').format(item.amount.round())}',
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
+import '../providers/currency_provider.dart';
 import 'barrier_blur.dart';
 
 enum AllocationConfirmKind { receiveSalary, addMoney }
@@ -8,13 +9,8 @@ enum AllocationConfirmKind { receiveSalary, addMoney }
 class AllocationConfirmDialog {
   AllocationConfirmDialog._();
 
-  static final _peso = NumberFormat.currency(
-    locale: 'en_PH',
-    symbol: '₱',
-    decimalDigits: 2,
-  );
-
-  static String formatPeso(double amount) => _peso.format(amount);
+  static String formatMoney(BuildContext context, double amount) =>
+      context.read<CurrencyProvider>().format(amount);
 
   static Future<bool> showNewMoneyConfirm({
     required BuildContext context,
@@ -29,7 +25,7 @@ class AllocationConfirmDialog {
     final billsAdd = amount * (billsPercentage / 100);
     final personalAdd = amount * (personalPercentage / 100);
     final savingsAdd = amount * (savingsPercentage / 100);
-    final amountLabel = formatPeso(amount);
+    final amountLabel = formatMoney(context, amount);
 
     final String lead;
     final String footer;
@@ -72,17 +68,17 @@ class AllocationConfirmDialog {
             _AllocationRow(
               label: 'Bills',
               percentage: billsPercentage,
-              amountLabel: '+${formatPeso(billsAdd)}',
+              amountLabel: '+${formatMoney(context, billsAdd)}',
             ),
             _AllocationRow(
               label: 'Personal',
               percentage: personalPercentage,
-              amountLabel: '+${formatPeso(personalAdd)}',
+              amountLabel: '+${formatMoney(context, personalAdd)}',
             ),
             _AllocationRow(
               label: 'Savings',
               percentage: savingsPercentage,
-              amountLabel: '+${formatPeso(savingsAdd)}',
+              amountLabel: '+${formatMoney(context, savingsAdd)}',
             ),
             const SizedBox(height: 16),
             Text(
@@ -119,7 +115,7 @@ class AllocationConfirmDialog {
   }) async {
     if (newAvailableBalance < 0) return false;
 
-    final balanceLabel = formatPeso(newAvailableBalance);
+    final balanceLabel = formatMoney(context, newAvailableBalance);
     final billsAmount = newAvailableBalance * (billsPercentage / 100);
     final personalAmount = newAvailableBalance * (personalPercentage / 100);
     final savingsAmount = newAvailableBalance * (savingsPercentage / 100);
@@ -151,17 +147,17 @@ class AllocationConfirmDialog {
             _AllocationRow(
               label: 'Bills',
               percentage: billsPercentage,
-              amountLabel: formatPeso(billsAmount),
+              amountLabel: formatMoney(context, billsAmount),
             ),
             _AllocationRow(
               label: 'Personal',
               percentage: personalPercentage,
-              amountLabel: formatPeso(personalAmount),
+              amountLabel: formatMoney(context, personalAmount),
             ),
             _AllocationRow(
               label: 'Savings',
               percentage: savingsPercentage,
-              amountLabel: formatPeso(savingsAmount),
+              amountLabel: formatMoney(context, savingsAmount),
             ),
             const SizedBox(height: 16),
             const Text(

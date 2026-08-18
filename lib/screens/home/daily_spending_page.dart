@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/financial_entry.dart';
 import '../../providers/budget_provider.dart';
+import '../../providers/currency_provider.dart';
 import '../../widgets/category_icon_badge.dart';
 import '../../widgets/rate_limit_dialog.dart';
 import '../../widgets/sensitive_action_auth.dart';
@@ -24,6 +25,7 @@ class DailySpendingPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final budget = context.watch<BudgetProvider>();
+    final currency = context.watch<CurrencyProvider>();
     final target = DateTime(day.year, day.month, day.day);
     final transactions = budget.entriesForDay(target);
     final total = transactions.fold<double>(
@@ -72,7 +74,7 @@ class DailySpendingPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    '₱${NumberFormat('#,##0.##').format(total)}',
+                    currency.formatAmount(total),
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 34,
@@ -254,7 +256,7 @@ class _DayEntryRow extends StatelessWidget {
               ),
             ),
             Text(
-              '${item.entry.isRefund ? '+' : '-'}₱${NumberFormat('#,##0.##').format(item.entry.amount)}',
+              '${item.entry.isRefund ? '+' : '-'}${context.watch<CurrencyProvider>().symbol}${NumberFormat('#,##0.##').format(item.entry.amount)}',
               style: TextStyle(
                 color: item.entry.isRefund
                     ? const Color(0xFF5CB450)

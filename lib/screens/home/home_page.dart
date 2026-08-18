@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/budget_provider.dart';
+import '../../providers/currency_provider.dart';
 import '../../widgets/allocation_confirm_dialog.dart';
 import '../../widgets/app_refresh_indicator.dart';
 import '../../widgets/barrier_blur.dart';
@@ -685,6 +686,7 @@ class _AnimatedCurrencyAmount extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    final symbol = context.watch<CurrencyProvider>().symbol;
 
     return TweenAnimationBuilder<double>(
       tween: Tween<double>(begin: 0, end: amount),
@@ -695,7 +697,7 @@ class _AnimatedCurrencyAmount extends StatelessWidget {
       builder: (context, value, _) => FittedBox(
         fit: BoxFit.scaleDown,
         child: Text(
-          '₱${NumberFormat('#,##0').format(value)}',
+          '$symbol${NumberFormat('#,##0').format(value)}',
           style: const TextStyle(
             fontSize: 32,
             fontWeight: FontWeight.bold,

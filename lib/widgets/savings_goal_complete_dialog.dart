@@ -1,8 +1,9 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
+import '../providers/currency_provider.dart';
 import 'barrier_blur.dart';
 
 /// Congrats popup with a short confetti burst when a savings goal is reached.
@@ -15,11 +16,8 @@ class SavingsGoalCompleteDialog {
     required double targetAmount,
   }) {
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
-    final amountLabel = NumberFormat.currency(
-      locale: 'en_PH',
-      symbol: '₱',
-      decimalDigits: targetAmount % 1 == 0 ? 0 : 2,
-    ).format(targetAmount);
+    final amountLabel =
+        context.read<CurrencyProvider>().format(targetAmount);
     final title = goalTitle.trim().isEmpty ? 'savings goal' : goalTitle.trim();
 
     return showGeneralDialog<void>(

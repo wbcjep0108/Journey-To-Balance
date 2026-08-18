@@ -4,8 +4,10 @@ import 'package:provider/provider.dart';
 
 import '../../providers/app_lock_provider.dart';
 import '../../providers/budget_provider.dart';
+import '../../providers/currency_provider.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/barrier_blur.dart';
+import 'currency_settings_page.dart';
 import 'security_settings_page.dart';
 
 class AccountPage extends StatefulWidget {
@@ -39,6 +41,12 @@ class _AccountPageState extends State<AccountPage> {
       );
       setState(() => _isSigningOut = false);
     }
+  }
+
+  void _openCurrency() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const CurrencySettingsPage()),
+    );
   }
 
   void _openSecurity() {
@@ -157,7 +165,9 @@ class _AccountPageState extends State<AccountPage> {
                       child: _AccountCard(
                         user: user,
                         isSigningOut: _isSigningOut,
+                        currencyLabel: context.watch<CurrencyProvider>().code,
                         onSwitchProfile: _signOut,
+                        onCurrency: _openCurrency,
                         onSecurity: _openSecurity,
                         onHelp: _openHelp,
                         onSignOut: _signOut,
@@ -187,7 +197,9 @@ class _AccountCard extends StatelessWidget {
   const _AccountCard({
     required this.user,
     required this.isSigningOut,
+    required this.currencyLabel,
     required this.onSwitchProfile,
+    required this.onCurrency,
     required this.onSecurity,
     required this.onHelp,
     required this.onSignOut,
@@ -195,7 +207,9 @@ class _AccountCard extends StatelessWidget {
 
   final User? user;
   final bool isSigningOut;
+  final String currencyLabel;
   final VoidCallback onSwitchProfile;
+  final VoidCallback onCurrency;
   final VoidCallback onSecurity;
   final VoidCallback onHelp;
   final VoidCallback onSignOut;
@@ -264,6 +278,13 @@ class _AccountCard extends StatelessWidget {
           const SizedBox(height: 30),
           const Divider(height: 1, color: Color(0xFFE5E7EB)),
           _AccountLinkTile(
+            icon: Icons.attach_money_rounded,
+            label: 'Currency',
+            trailingLabel: currencyLabel,
+            onTap: onCurrency,
+          ),
+          const Divider(height: 1, color: Color(0xFFE5E7EB)),
+          _AccountLinkTile(
             icon: Icons.lock_outline_rounded,
             label: 'Security',
             onTap: onSecurity,
@@ -303,11 +324,13 @@ class _AccountLinkTile extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.onTap,
+    this.trailingLabel,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+  final String? trailingLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -334,6 +357,17 @@ class _AccountLinkTile extends StatelessWidget {
                 ),
               ),
             ),
+            if (trailingLabel != null) ...[
+              Text(
+                trailingLabel!,
+                style: const TextStyle(
+                  color: Color(0xFF6B7280),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(width: 6),
+            ],
             const Icon(Icons.chevron_right, color: Colors.black, size: 24),
           ],
         ),

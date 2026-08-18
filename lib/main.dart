@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'firebase_options.dart';
 import 'providers/app_lock_provider.dart';
 import 'providers/budget_provider.dart';
+import 'providers/currency_provider.dart';
 import 'providers/loan_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/pin_setup_screen.dart';
@@ -35,6 +36,7 @@ void main() async {
         ),
         ChangeNotifierProvider(create: (_) => LoanProvider()),
         ChangeNotifierProvider(create: (_) => AppLockProvider()),
+        ChangeNotifierProvider(create: (_) => CurrencyProvider()),
       ],
       child: const MyApp(),
     ),

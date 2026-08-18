@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import '../../models/financial_entry.dart';
 import '../../models/loan_entry.dart';
 import '../../providers/budget_provider.dart';
+import '../../providers/currency_provider.dart';
 import '../../providers/loan_provider.dart';
 import '../../services/finance_api_service.dart';
 import '../../widgets/barrier_blur.dart';
@@ -183,9 +184,10 @@ class _TotalLoanPageState extends State<TotalLoanPage> {
   @override
   Widget build(BuildContext context) {
     final loans = context.watch<LoanProvider>();
+    final currency = context.watch<CurrencyProvider>();
     final totalLabel = NumberFormat.currency(
-      locale: 'en_PH',
-      symbol: '₱',
+      locale: currency.currency.locale,
+      symbol: currency.symbol,
       decimalDigits: loans.totalLoan % 1 == 0 ? 0 : 2,
     ).format(loans.totalLoan);
 
@@ -768,9 +770,10 @@ class _LoanCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final currency = context.watch<CurrencyProvider>();
     final amountLabel = NumberFormat.currency(
-      locale: 'en_PH',
-      symbol: '₱',
+      locale: currency.currency.locale,
+      symbol: currency.symbol,
       decimalDigits: loan.amount % 1 == 0 ? 0 : 2,
     ).format(loan.amount);
     final monthlyLabel = DateFormat('MMM d, yyyy').format(
@@ -919,11 +922,12 @@ class _LoanScheduleDialogState extends State<_LoanScheduleDialog> {
 
     if (loan.amount > billsLeft + 0.001) {
       if (!mounted) return;
+      final symbol = context.read<CurrencyProvider>().symbol;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Not enough Bills balance. Need ₱${loan.amount.toStringAsFixed(loan.amount % 1 == 0 ? 0 : 2)}, '
-            'have ₱${billsLeft.toStringAsFixed(billsLeft % 1 == 0 ? 0 : 2)}.',
+            'Not enough Bills balance. Need $symbol${loan.amount.toStringAsFixed(loan.amount % 1 == 0 ? 0 : 2)}, '
+            'have $symbol${billsLeft.toStringAsFixed(billsLeft % 1 == 0 ? 0 : 2)}.',
           ),
         ),
       );
@@ -1039,9 +1043,10 @@ class _LoanScheduleDialogState extends State<_LoanScheduleDialog> {
     final current = loan;
     _jumpToActionableIfNeeded(current);
     final actionable = current.nextActionableDue;
+    final currency = context.watch<CurrencyProvider>();
     final amountLabel = NumberFormat.currency(
-      locale: 'en_PH',
-      symbol: '₱',
+      locale: currency.currency.locale,
+      symbol: currency.symbol,
       decimalDigits: current.amount % 1 == 0 ? 0 : 2,
     ).format(current.amount);
     final dates = current.installmentDates;

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../models/financial_entry.dart';
 import '../providers/budget_provider.dart';
+import '../providers/currency_provider.dart';
 import 'app_refresh_indicator.dart';
 import 'budget_modal.dart';
 import 'entry_title_with_icon.dart';
@@ -66,6 +67,7 @@ class _FinancialCategoryPageState extends State<FinancialCategoryPage> {
     final iconPath = widget.iconPath;
     final entries = budget.entriesFor(category);
     final allocatedBalance = budget.allocationFor(category);
+    final currency = context.watch<CurrencyProvider>();
     final percentage = switch (category) {
       FinancialCategory.bills => budget.billsPercentage,
       FinancialCategory.savings => budget.savingsPercentage,
@@ -146,7 +148,7 @@ class _FinancialCategoryPageState extends State<FinancialCategoryPage> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      '${NumberFormat('#,##0.##').format(allocatedBalance)}php',
+                                      currency.formatAmount(allocatedBalance),
                                       style: const TextStyle(
                                         color: Colors.white,
                                         fontSize: 40,
@@ -370,11 +372,12 @@ class _FinancialCategoryPageState extends State<FinancialCategoryPage> {
     required bool refund,
   }) async {
     final amountLabel = NumberFormat('#,##0.##').format(entry.amount);
+    final symbol = context.read<CurrencyProvider>().symbol;
     final authorized = await showSensitiveActionAuth(
       context: context,
       title: refund ? 'Confirm refund' : 'Confirm delete',
       description: refund
-          ? 'Enter your PIN or use fingerprint to refund ₱$amountLabel '
+          ? 'Enter your PIN or use fingerprint to refund $symbol$amountLabel '
                 'back to ${widget.title}.'
           : 'Enter your PIN or use fingerprint to delete "${entry.title}". '
                 'This will not return the money.',
@@ -394,7 +397,7 @@ class _FinancialCategoryPageState extends State<FinancialCategoryPage> {
             SnackBar(
               content: Text(
                 refund
-                    ? '₱$amountLabel returned to ${widget.title}.'
+                    ? '$symbol$amountLabel returned to ${widget.title}.'
                     : '"${entry.title}" deleted.',
               ),
             ),
@@ -491,8 +494,9 @@ class _EntryRowState extends State<_EntryRow> {
   @override
   Widget build(BuildContext context) {
     final isRefund = widget.entry.isRefund;
+    final symbol = context.watch<CurrencyProvider>().symbol;
     final amountLabel =
-        '${isRefund ? '+' : '-'}₱${NumberFormat('#,##0.##').format(widget.entry.amount)}';
+        '${isRefund ? '+' : '-'}$symbol${NumberFormat('#,##0.##').format(widget.entry.amount)}';
     final panelWidth = _panelWidth;
 
     return ClipRRect(

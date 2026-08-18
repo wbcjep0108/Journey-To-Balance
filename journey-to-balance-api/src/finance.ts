@@ -76,10 +76,14 @@ function normalizeIconAsset(value: unknown): string | undefined {
   if (trimmed.length > 200) {
     throw badRequest("Invalid iconAsset.");
   }
-  if (!trimmed.startsWith("assets/images/icons_")) {
-    return undefined;
+  // PNG presets under assets/, or Material icon sentinels (e.g. Others).
+  if (
+    trimmed.startsWith("assets/images/icons_") ||
+    trimmed === "material:more_horiz"
+  ) {
+    return trimmed;
   }
-  return trimmed;
+  return undefined;
 }
 
 function loadBudget(userDoc: Record<string, unknown> | null): BudgetState {
@@ -373,6 +377,7 @@ export async function handleFinance(
           typeof entry.createdAt === "string" ?
             new Date(entry.createdAt) :
             new Date();
+        const refundIcon = normalizeIconAsset(entry.iconAsset);
         return saveBudget(client, uid, budget, {
           category,
           entryId,
@@ -381,10 +386,7 @@ export async function handleFinance(
             amount,
             createdAt,
             isRefund: true,
-            ...(typeof entry.iconAsset === "string" &&
-            entry.iconAsset.trim().startsWith("assets/images/icons_") ?
-              {iconAsset: entry.iconAsset.trim()} :
-              {}),
+            ...(refundIcon ? {iconAsset: refundIcon} : {}),
           },
         }).then((result) => ({
           ...result,

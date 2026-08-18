@@ -87,6 +87,7 @@ class BudgetProvider extends ChangeNotifier {
     required bool confirmPending,
   }) {
     final previous = _entries[category]!;
+    final previousById = {for (final entry in previous) entry.id: entry};
     final pendingLocals = previous
         .where(
           (entry) =>
@@ -99,6 +100,18 @@ class BudgetProvider extends ChangeNotifier {
           (entry) =>
               !_pendingDeleteKeys.contains(_entryKey(category, entry.id)),
         )
+        .map((entry) {
+          // Keep a local icon if the remote doc omitted it (e.g. older API
+          // rejected material: sentinels like Others).
+          final localIcon = previousById[entry.id]?.iconAsset?.trim();
+          final remoteIcon = entry.iconAsset?.trim();
+          if ((remoteIcon == null || remoteIcon.isEmpty) &&
+              localIcon != null &&
+              localIcon.isNotEmpty) {
+            return entry.copyWith(iconAsset: localIcon);
+          }
+          return entry;
+        })
         .toList();
 
     // Only clear pending markers after backend ack (not local pending writes).

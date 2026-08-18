@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/budget_provider.dart';
+import '../providers/currency_provider.dart';
 import '../screens/home/daily_spending_page.dart';
 
 class WeeklySpendingCard extends StatelessWidget {
@@ -155,9 +156,10 @@ class _DayBar extends StatelessWidget {
         ? _minBarHeight
         : (_minBarHeight + ratio * (_chartHeight - _minBarHeight));
 
+    final currencyProvider = context.watch<CurrencyProvider>();
     final currency = NumberFormat.currency(
-      locale: 'en_PH',
-      symbol: '₱',
+      locale: currencyProvider.currency.locale,
+      symbol: currencyProvider.symbol,
       decimalDigits: day.amount % 1 == 0 ? 0 : 2,
     ).format(day.amount);
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/budget_provider.dart';
+import '../../providers/currency_provider.dart';
 import '../../widgets/allocation_confirm_dialog.dart';
 import '../../widgets/rate_limit_dialog.dart';
 import '../../widgets/sensitive_action_auth.dart';
@@ -96,6 +97,7 @@ class _SalarySetupDialogState extends State<SalarySetupDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final symbol = context.watch<CurrencyProvider>().symbol;
     return Dialog(
       insetAnimationDuration: Duration.zero,
       backgroundColor: Colors.white,
@@ -122,7 +124,7 @@ class _SalarySetupDialogState extends State<SalarySetupDialog> {
               homeDialogField(
                 label: 'Monthly Salary/Income',
                 controller: _salaryController,
-                prefixText: '₱ ',
+                prefixText: '$symbol ',
               ),
               const SizedBox(height: 28),
               Row(
@@ -254,6 +256,7 @@ class _BalanceEditDialogState extends State<BalanceEditDialog> {
   @override
   Widget build(BuildContext context) {
     final budget = widget.hostContext.read<BudgetProvider>();
+    final symbol = context.watch<CurrencyProvider>().symbol;
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
@@ -289,7 +292,7 @@ class _BalanceEditDialogState extends State<BalanceEditDialog> {
               homeDialogField(
                 label: 'Available Balance',
                 controller: _balanceController,
-                prefixText: '₱ ',
+                prefixText: '$symbol ',
               ),
               const SizedBox(height: 14),
               homeDialogField(
@@ -465,6 +468,7 @@ class _AddMoneyDialogState extends State<AddMoneyDialog> {
   @override
   Widget build(BuildContext context) {
     final budget = widget.hostContext.read<BudgetProvider>();
+    final symbol = context.watch<CurrencyProvider>().symbol;
     return Dialog(
       backgroundColor: Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
@@ -496,7 +500,7 @@ class _AddMoneyDialogState extends State<AddMoneyDialog> {
             homeDialogField(
               label: 'Amount',
               controller: _amountController,
-              prefixText: '₱ ',
+              prefixText: '$symbol ',
             ),
             const SizedBox(height: 28),
             Row(
@@ -567,7 +571,7 @@ class _AddMoneyDialogState extends State<AddMoneyDialog> {
                               ..showSnackBar(
                                 SnackBar(
                                   content: Text(
-                                    '${AllocationConfirmDialog.formatPeso(amount)} '
+                                    '${AllocationConfirmDialog.formatMoney(widget.hostContext, amount)} '
                                     'added to your available balance.',
                                   ),
                                 ),

@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/loan_entry.dart';
+import '../../providers/currency_provider.dart';
 import '../../providers/loan_provider.dart';
 import '../../widgets/barrier_blur.dart';
 import '../../widgets/sensitive_action_auth.dart';
@@ -249,14 +250,15 @@ class _PaidLoanCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final installmentCount = loan.installmentDates.length;
     final totalPaid = installmentCount * loan.amount;
+    final currency = context.watch<CurrencyProvider>();
     final totalLabel = NumberFormat.currency(
-      locale: 'en_PH',
-      symbol: '₱',
+      locale: currency.currency.locale,
+      symbol: currency.symbol,
       decimalDigits: totalPaid % 1 == 0 ? 0 : 2,
     ).format(totalPaid);
     final monthlyLabel = NumberFormat.currency(
-      locale: 'en_PH',
-      symbol: '₱',
+      locale: currency.currency.locale,
+      symbol: currency.symbol,
       decimalDigits: loan.amount % 1 == 0 ? 0 : 2,
     ).format(loan.amount);
     final completedOn = loan.installmentDates.isEmpty

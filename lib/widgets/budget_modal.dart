@@ -3,9 +3,11 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 import '../models/financial_entry.dart';
 import '../models/spend_category_option.dart';
+import '../providers/currency_provider.dart';
 import 'barrier_blur.dart';
 import 'category_icon_badge.dart';
 import 'rate_limit_dialog.dart';
@@ -269,6 +271,7 @@ class _BudgetModalState extends State<BudgetModal>
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
     final horizontalMargin = width < 600 ? width * 0.05 : 24.0;
+    final symbol = context.watch<CurrencyProvider>().symbol;
 
     return CallbackShortcuts(
       bindings: {
@@ -326,7 +329,7 @@ class _BudgetModalState extends State<BudgetModal>
                     const SizedBox(height: 8),
                     Center(
                       child: Text(
-                        'Available: ₱${NumberFormat('#,##0.00').format(widget.availableBalance)}',
+                        'Available: $symbol${NumberFormat('#,##0.00').format(widget.availableBalance)}',
                         style: const TextStyle(
                           color: Color(0xFF737983),
                           fontSize: 13,
@@ -366,7 +369,7 @@ class _BudgetModalState extends State<BudgetModal>
                         decimal: true,
                       ),
                       textInputAction: TextInputAction.done,
-                      prefixText: '₱ ',
+                      prefixText: '$symbol ',
                       inputFormatters: [_CurrencyInputFormatter()],
                       onSubmitted: (_) {
                         if (_isValid && !_isSaving) _submit();

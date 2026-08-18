@@ -81,8 +81,7 @@ class SpendCategoryPresets {
           ),
           SpendCategoryOption(
             label: 'Others',
-            assetPath: SpendCategoryOption.materialOthers,
-            materialIcon: Icons.more_horiz,
+            assetPath: '$billsAssetDir/others.png',
           ),
         ];
       case FinancialCategory.personal:
@@ -113,8 +112,7 @@ class SpendCategoryPresets {
           ),
           SpendCategoryOption(
             label: 'Others',
-            assetPath: SpendCategoryOption.materialOthers,
-            materialIcon: Icons.more_horiz,
+            assetPath: '$personalAssetDir/others.png',
           ),
         ];
       case FinancialCategory.savings:

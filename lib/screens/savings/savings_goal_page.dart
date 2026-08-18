@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../models/financial_entry.dart';
 import '../../providers/budget_provider.dart';
+import '../../providers/currency_provider.dart';
 import '../../widgets/barrier_blur.dart';
 import '../../widgets/rate_limit_dialog.dart';
 import '../../widgets/savings_goal_complete_dialog.dart';
@@ -52,17 +53,18 @@ class _SavingsGoalPageState extends State<SavingsGoalPage> {
   @override
   Widget build(BuildContext context) {
     final budget = _budget ?? context.watch<BudgetProvider>();
+    final preferred = context.watch<CurrencyProvider>();
     final current = budget.savingsGoalCurrent;
     final target = budget.savingsGoalTarget;
     final progress = budget.savingsGoalProgress;
     final currency = NumberFormat.currency(
-      locale: 'en_PH',
-      symbol: '₱ ',
+      locale: preferred.currency.locale,
+      symbol: '${preferred.symbol} ',
       decimalDigits: current % 1 == 0 ? 0 : 2,
     );
     final goalCurrency = NumberFormat.currency(
-      locale: 'en_PH',
-      symbol: '₱ ',
+      locale: preferred.currency.locale,
+      symbol: '${preferred.symbol} ',
       decimalDigits: target % 1 == 0 ? 0 : 2,
     );
     final targetDateLabel = DateFormat(
@@ -524,10 +526,11 @@ class _ContributeToGoalModalState extends State<_ContributeToGoalModal> {
       return;
     }
     if (amount > budget.remainingFor(widget.category) + 0.001) {
+      final symbol = context.read<CurrencyProvider>().symbol;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Only ₱${NumberFormat('#,##0.##').format(budget.remainingFor(widget.category))} '
+            'Only $symbol${NumberFormat('#,##0.##').format(budget.remainingFor(widget.category))} '
             'left in ${SavingsGoalPage.categoryLabel(widget.category)}.',
           ),
         ),
@@ -537,6 +540,7 @@ class _ContributeToGoalModalState extends State<_ContributeToGoalModal> {
 
     final category = widget.category;
     final messenger = ScaffoldMessenger.of(context);
+    final symbol = context.read<CurrencyProvider>().symbol;
     final previousCurrent = budget.savingsGoalCurrent;
     final goalTarget = budget.savingsGoalTarget;
     FocusManager.instance.primaryFocus?.unfocus();
@@ -558,7 +562,7 @@ class _ContributeToGoalModalState extends State<_ContributeToGoalModal> {
           ..showSnackBar(
             SnackBar(
               content: Text(
-                '₱${NumberFormat('#,##0.##').format(amount)} added to your savings goal.',
+                '$symbol${NumberFormat('#,##0.##').format(amount)} added to your savings goal.',
               ),
             ),
           );
@@ -575,10 +579,11 @@ class _ContributeToGoalModalState extends State<_ContributeToGoalModal> {
   @override
   Widget build(BuildContext context) {
     final budget = context.watch<BudgetProvider>();
+    final preferred = context.watch<CurrencyProvider>();
     final remaining = budget.remainingFor(widget.category);
     final remainingLabel = NumberFormat.currency(
-      locale: 'en_PH',
-      symbol: '₱',
+      locale: preferred.currency.locale,
+      symbol: preferred.symbol,
       decimalDigits: remaining % 1 == 0 ? 0 : 2,
     ).format(remaining);
     final title = 'From ${SavingsGoalPage.categoryLabel(widget.category)}';
@@ -1002,7 +1007,7 @@ class _RecentActivityList extends StatelessWidget {
       title: 'Undo contribution',
       description:
           'Enter your PIN or use fingerprint to return '
-          '₱${NumberFormat('#,##0.##').format(item.entry.amount)} '
+          '${context.read<CurrencyProvider>().formatAmount(item.entry.amount)} '
           'to ${SavingsGoalPage.categoryLabel(item.category)}.',
     );
     if (!authorized || !context.mounted) return false;
@@ -1018,7 +1023,7 @@ class _RecentActivityList extends StatelessWidget {
           ..showSnackBar(
             SnackBar(
               content: Text(
-                '₱${NumberFormat('#,##0.##').format(item.entry.amount)} '
+                '${context.read<CurrencyProvider>().formatAmount(item.entry.amount)} '
                 'returned to ${SavingsGoalPage.categoryLabel(item.category)}.',
               ),
             ),
@@ -1151,7 +1156,7 @@ class _RecentActivityList extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      '+₱${NumberFormat('#,##0.##').format(items[i].entry.amount)}',
+                      '+${context.watch<CurrencyProvider>().formatAmount(items[i].entry.amount)}',
                       style: const TextStyle(
                         fontFamily: 'Inter',
                         fontSize: 18,
@@ -1221,14 +1226,14 @@ class _AmountField extends StatelessWidget {
               fontWeight: FontWeight.w600,
               color: Color(0xFF121212),
             ),
-            decoration: const InputDecoration(
-              prefixText: '₱ ',
-              prefixStyle: TextStyle(
+            decoration: InputDecoration(
+              prefixText: '${context.watch<CurrencyProvider>().symbol} ',
+              prefixStyle: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
                 color: Color(0xFF121212),
               ),
-              contentPadding: EdgeInsets.symmetric(
+              contentPadding: const EdgeInsets.symmetric(
                 horizontal: 20,
                 vertical: 16,
               ),
