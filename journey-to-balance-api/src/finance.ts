@@ -9,6 +9,7 @@ import {
   parseBudget,
   reallocateAllFromAvailableBalance,
   remainingFor,
+  roundMoney,
   SAVINGS_GOAL_ENTRY_TITLE,
 } from "./budgetMath";
 import {
@@ -150,6 +151,11 @@ async function saveBudget(
   budget: BudgetState,
   entry?: {category: CategoryKey; entryId: string; data: Record<string, unknown>},
   deleteEntry?: {category: CategoryKey; entryId: string},
+  entries?: Array<{
+    category: CategoryKey;
+    entryId: string;
+    data: Record<string, unknown>;
+  }>,
 ): Promise<Record<string, unknown>> {
   const payload = budgetToFirestore(budget);
   payload.updatedAt = new Date().toISOString();
@@ -163,6 +169,11 @@ async function saveBudget(
         data: entry.data,
       } :
       undefined,
+    entries: entries?.map((item) => ({
+      category: item.category,
+      entryId: item.entryId,
+      data: item.data,
+    })),
     deleteEntry: deleteEntry ?
       {
         category: deleteEntry.category,
@@ -171,6 +182,47 @@ async function saveBudget(
       undefined,
   });
   return {budget: payload};
+}
+
+/** Credit rows shown in category history when envelopes receive funds. */
+function allocationCreditEntries(options: {
+  requestId: string | undefined;
+  title: string;
+  createdAt: Date;
+  billsAdd: number;
+  savingsAdd: number;
+  personalAdd: number;
+}): Array<{
+  category: CategoryKey;
+  entryId: string;
+  data: Record<string, unknown>;
+}> {
+  const seed = options.requestId?.trim() || `alloc_${options.createdAt.getTime()}`;
+  const rows: Array<{category: CategoryKey; amount: number}> = [
+    {category: "bills", amount: options.billsAdd},
+    {category: "savings", amount: options.savingsAdd},
+    {category: "personal", amount: options.personalAdd},
+  ];
+  const out: Array<{
+    category: CategoryKey;
+    entryId: string;
+    data: Record<string, unknown>;
+  }> = [];
+  for (const row of rows) {
+    const amount = roundMoney(row.amount);
+    if (amount <= EPS) continue;
+    out.push({
+      category: row.category,
+      entryId: `alloc_${seed}_${row.category}`.slice(0, 128),
+      data: {
+        title: options.title,
+        amount,
+        createdAt: options.createdAt,
+        isRefund: true,
+      },
+    });
+  }
+  return out;
 }
 
 export async function handleFinance(
@@ -190,9 +242,19 @@ export async function handleFinance(
       if (budget.monthlySalary <= 0) {
         throw conflict("Set a monthly salary before receiving it.");
       }
-      budget.availableBalance += budget.monthlySalary;
-      distributeAddedFunds(budget, budget.monthlySalary);
-      return saveBudget(client, uid, budget);
+      const amount = budget.monthlySalary;
+      budget.availableBalance += amount;
+      distributeAddedFunds(budget, amount);
+      const createdAt = new Date();
+      const credits = allocationCreditEntries({
+        requestId,
+        title: "Received salary",
+        createdAt,
+        billsAdd: amount * (budget.billsPercentage / 100),
+        savingsAdd: amount * (budget.savingsPercentage / 100),
+        personalAdd: amount * (budget.personalPercentage / 100),
+      });
+      return saveBudget(client, uid, budget, undefined, undefined, credits);
     });
 
   case "add-money": {
@@ -202,7 +264,16 @@ export async function handleFinance(
       const budget = loadBudget(userDoc);
       budget.availableBalance += amount;
       distributeAddedFunds(budget, amount);
-      return saveBudget(client, uid, budget);
+      const createdAt = new Date();
+      const credits = allocationCreditEntries({
+        requestId,
+        title: "Added money",
+        createdAt,
+        billsAdd: amount * (budget.billsPercentage / 100),
+        savingsAdd: amount * (budget.savingsPercentage / 100),
+        personalAdd: amount * (budget.personalPercentage / 100),
+      });
+      return saveBudget(client, uid, budget, undefined, undefined, credits);
     });
   }
 
@@ -219,9 +290,21 @@ export async function handleFinance(
       async () => {
         const userDoc = await client.getUserDoc(uid);
         const budget = loadBudget(userDoc);
+        const prevBills = budget.billsRemaining;
+        const prevSavings = budget.savingsRemaining;
+        const prevPersonal = budget.personalRemaining;
         budget.availableBalance = availableBalance;
         reallocateAllFromAvailableBalance(budget);
-        return saveBudget(client, uid, budget);
+        const createdAt = new Date();
+        const credits = allocationCreditEntries({
+          requestId,
+          title: "Allocation update",
+          createdAt,
+          billsAdd: budget.billsRemaining - prevBills,
+          savingsAdd: budget.savingsRemaining - prevSavings,
+          personalAdd: budget.personalRemaining - prevPersonal,
+        });
+        return saveBudget(client, uid, budget, undefined, undefined, credits);
       },
     );
   }

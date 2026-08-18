@@ -215,6 +215,11 @@ export class FirestoreClient {
       entryId: string;
       data: Record<string, unknown>;
     };
+    entries?: Array<{
+      category: string;
+      entryId: string;
+      data: Record<string, unknown>;
+    }>;
     deleteEntry?: {
       category: string;
       entryId: string;
@@ -233,16 +238,20 @@ export class FirestoreClient {
       },
     });
 
-    if (options.entry) {
+    const entryWrites = [
+      ...(options.entry ? [options.entry] : []),
+      ...(options.entries ?? []),
+    ];
+    for (const entry of entryWrites) {
       const entryName = this.docPath(
         options.uid,
-        options.entry.category,
-        options.entry.entryId,
+        entry.category,
+        entry.entryId,
       );
       writes.push({
         update: {
           name: entryName,
-          fields: encodeFields(options.entry.data),
+          fields: encodeFields(entry.data),
         },
       });
     }

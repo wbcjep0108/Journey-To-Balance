@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 
 import '../../providers/budget_provider.dart';
 import '../../providers/currency_provider.dart';
+import '../../providers/wallet_cards_provider.dart';
+import '../../providers/wallet_cash_provider.dart';
 import '../../widgets/allocation_confirm_dialog.dart';
 import '../../widgets/rate_limit_dialog.dart';
 import '../../widgets/sensitive_action_auth.dart';
@@ -221,18 +223,37 @@ class BalanceEditDialog extends StatefulWidget {
 }
 
 class _BalanceEditDialogState extends State<BalanceEditDialog> {
-  late final TextEditingController _balanceController;
+  late final TextEditingController _walletController;
   late final TextEditingController _billsController;
   late final TextEditingController _savingsController;
   late final TextEditingController _personalController;
+  late final List<WalletCardModel> _cards;
+  late final List<TextEditingController> _cardControllers;
+
+  double _parseAmount(TextEditingController controller) {
+    return double.tryParse(controller.text.replaceAll(',', '').trim()) ?? 0;
+  }
+
+  void _onFieldChanged() {
+    if (mounted) setState(() {});
+  }
 
   @override
   void initState() {
     super.initState();
     final budget = widget.hostContext.read<BudgetProvider>();
-    _balanceController = TextEditingController(
-      text: budget.availableBalance.toStringAsFixed(0),
+    final cash = widget.hostContext.read<WalletCashProvider>().amount;
+    _cards = widget.hostContext.read<WalletCardsProvider>().cards.toList();
+
+    _walletController = TextEditingController(
+      text: cash == 0 ? '' : cash.toStringAsFixed(0),
     );
+    _cardControllers = [
+      for (final card in _cards)
+        TextEditingController(
+          text: card.amount == 0 ? '' : card.amount.toStringAsFixed(0),
+        ),
+    ];
     _billsController = TextEditingController(
       text: budget.billsPercentage.toStringAsFixed(0),
     );
@@ -242,15 +263,35 @@ class _BalanceEditDialogState extends State<BalanceEditDialog> {
     _personalController = TextEditingController(
       text: budget.personalPercentage.toStringAsFixed(0),
     );
+
+    _walletController.addListener(_onFieldChanged);
+    for (final controller in _cardControllers) {
+      controller.addListener(_onFieldChanged);
+    }
   }
 
   @override
   void dispose() {
-    _balanceController.dispose();
+    _walletController
+      ..removeListener(_onFieldChanged)
+      ..dispose();
+    for (final controller in _cardControllers) {
+      controller
+        ..removeListener(_onFieldChanged)
+        ..dispose();
+    }
     _billsController.dispose();
     _savingsController.dispose();
     _personalController.dispose();
     super.dispose();
+  }
+
+  double get _previewTotal {
+    var total = _parseAmount(_walletController);
+    for (final controller in _cardControllers) {
+      total += _parseAmount(controller);
+    }
+    return total;
   }
 
   @override
@@ -279,7 +320,7 @@ class _BalanceEditDialogState extends State<BalanceEditDialog> {
             mainAxisSize: MainAxisSize.min,
             children: [
               const Text(
-                'Edit Available Balance',
+                'Edit available balance',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 22,
@@ -288,13 +329,43 @@ class _BalanceEditDialogState extends State<BalanceEditDialog> {
                   letterSpacing: -0.2,
                 ),
               ),
-              const SizedBox(height: 22),
+              const SizedBox(height: 8),
+              Text(
+                'Available balance is wallet cash plus your selected cards.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+              const SizedBox(height: 18),
               homeDialogField(
-                label: 'Available Balance',
-                controller: _balanceController,
+                label: 'Wallet',
+                controller: _walletController,
                 prefixText: '$symbol ',
               ),
-              const SizedBox(height: 14),
+              for (var i = 0; i < _cards.length; i++) ...[
+                const SizedBox(height: 14),
+                homeDialogField(
+                  label: _cards[i].bankLabel,
+                  controller: _cardControllers[i],
+                  prefixText: '$symbol ',
+                ),
+              ],
+              const SizedBox(height: 16),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Available balance: $symbol${_previewTotal.toStringAsFixed(0)}',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF121212),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
               homeDialogField(
                 label: 'Bills %',
                 controller: _billsController,
@@ -308,7 +379,7 @@ class _BalanceEditDialogState extends State<BalanceEditDialog> {
               ),
               const SizedBox(height: 14),
               homeDialogField(
-                label: 'Personal',
+                label: 'Personal %',
                 controller: _personalController,
                 suffixText: '%',
               ),
@@ -332,8 +403,11 @@ class _BalanceEditDialogState extends State<BalanceEditDialog> {
                   const SizedBox(width: 4),
                   TextButton(
                     onPressed: () async {
-                      final balance =
-                          double.tryParse(_balanceController.text) ?? -1;
+                      final walletCash = _parseAmount(_walletController);
+                      final cardAmounts = <String, double>{
+                        for (var i = 0; i < _cards.length; i++)
+                          _cards[i].id: _parseAmount(_cardControllers[i]),
+                      };
                       final billsPercentage =
                           double.tryParse(_billsController.text) ?? 0;
                       final savingsPercentage =
@@ -344,11 +418,17 @@ class _BalanceEditDialogState extends State<BalanceEditDialog> {
                           billsPercentage +
                           savingsPercentage +
                           personalPercentage;
+                      final balance = walletCash +
+                          cardAmounts.values.fold<double>(
+                            0,
+                            (sum, amount) => sum + amount,
+                          );
 
-                      if (balance < 0) {
+                      if (walletCash < 0 ||
+                          cardAmounts.values.any((amount) => amount < 0)) {
                         ScaffoldMessenger.of(widget.hostContext).showSnackBar(
                           const SnackBar(
-                            content: Text('Enter a valid available balance.'),
+                            content: Text('Enter valid money amounts.'),
                           ),
                         );
                         return;
@@ -362,20 +442,23 @@ class _BalanceEditDialogState extends State<BalanceEditDialog> {
                         return;
                       }
 
-                      final previousBalance = budget.availableBalance;
-                      final delta = balance - previousBalance;
-
-                      if (delta != 0) {
-                        final confirmed = await AllocationConfirmDialog
-                            .showEditBalanceRecalculateConfirm(
-                          context: widget.hostContext,
-                          newAvailableBalance: balance,
-                          billsPercentage: billsPercentage,
-                          savingsPercentage: savingsPercentage,
-                          personalPercentage: personalPercentage,
-                        );
-                        if (confirmed != true) return;
-                      }
+                      final previewCards = [
+                        for (final card in _cards)
+                          card.copyWith(amount: cardAmounts[card.id] ?? 0),
+                      ];
+                      final confirmed = await AllocationConfirmDialog
+                          .showWalletSourcesConfirm(
+                        context: widget.hostContext,
+                        walletCash: walletCash,
+                        cards: [
+                          for (final card in previewCards)
+                            (card.bankLabel, card.amount),
+                        ],
+                        billsPercentage: billsPercentage,
+                        savingsPercentage: savingsPercentage,
+                        personalPercentage: personalPercentage,
+                      );
+                      if (confirmed != true) return;
 
                       if (!widget.hostContext.mounted) return;
                       final authorized = await showSensitiveActionAuth(
@@ -383,21 +466,25 @@ class _BalanceEditDialogState extends State<BalanceEditDialog> {
                         title: 'Confirm budget change',
                         description:
                             'Enter your PIN or use fingerprint to update '
-                            'your available balance or percentages.',
+                            'your wallet, cards, and allocation percentages.',
                       );
                       if (!widget.hostContext.mounted || authorized != true) {
                         return;
                       }
 
                       try {
+                        await widget.hostContext
+                            .read<WalletCashProvider>()
+                            .setAmount(walletCash);
+                        await widget.hostContext
+                            .read<WalletCardsProvider>()
+                            .setCardAmounts(cardAmounts);
                         await budget.updatePercentages(
                           billsPercentage: billsPercentage,
                           savingsPercentage: savingsPercentage,
                           personalPercentage: personalPercentage,
                         );
-                        if (delta != 0) {
-                          await budget.updateAvailableBalance(balance);
-                        }
+                        await budget.updateAvailableBalance(balance);
                         if (context.mounted) Navigator.pop(context);
                         widget.onSaved();
                       } catch (error) {

@@ -8,6 +8,8 @@ import 'providers/app_lock_provider.dart';
 import 'providers/budget_provider.dart';
 import 'providers/currency_provider.dart';
 import 'providers/loan_provider.dart';
+import 'providers/wallet_cards_provider.dart';
+import 'providers/wallet_cash_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/pin_setup_screen.dart';
 import 'screens/auth/pin_unlock_screen.dart';
@@ -37,6 +39,8 @@ void main() async {
         ChangeNotifierProvider(create: (_) => LoanProvider()),
         ChangeNotifierProvider(create: (_) => AppLockProvider()),
         ChangeNotifierProvider(create: (_) => CurrencyProvider()),
+        ChangeNotifierProvider(create: (_) => WalletCashProvider()..load()),
+        ChangeNotifierProvider(create: (_) => WalletCardsProvider()..load()),
       ],
       child: const MyApp(),
     ),

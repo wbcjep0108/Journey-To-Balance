@@ -197,6 +197,58 @@ class BudgetProvider extends ChangeNotifier {
     _personalRemaining = availableBalance * (personalPercentage / 100);
   }
 
+  /// History credits when envelopes receive allocated funds (shown as green +).
+  void _recordAllocationCredits({
+    required String requestId,
+    required String title,
+    required double billsAdd,
+    required double savingsAdd,
+    required double personalAdd,
+    DateTime? createdAt,
+  }) {
+    final at = createdAt ?? DateTime.now();
+    final rows = <(FinancialCategory, double)>[
+      (FinancialCategory.bills, billsAdd),
+      (FinancialCategory.savings, savingsAdd),
+      (FinancialCategory.personal, personalAdd),
+    ];
+    for (final row in rows) {
+      final amount = double.parse(row.$2.toStringAsFixed(2));
+      if (amount <= 0.001) continue;
+      final category = row.$1;
+      final id = 'alloc_${requestId}_${category.collection}';
+      final entry = FinancialEntry(
+        id: id.length > 128 ? id.substring(0, 128) : id,
+        title: title,
+        amount: amount,
+        createdAt: at,
+        isRefund: true,
+      );
+      final list = _entries[category]!;
+      final existing = list.indexWhere((item) => item.id == entry.id);
+      if (existing >= 0) {
+        list[existing] = entry;
+      } else {
+        list.insert(0, entry);
+      }
+      _pendingUpsertKeys.add(_entryKey(category, entry.id));
+    }
+  }
+
+  void _recordDistributedCredits({
+    required String requestId,
+    required String title,
+    required double amount,
+  }) {
+    _recordAllocationCredits(
+      requestId: requestId,
+      title: title,
+      billsAdd: amount * (billsPercentage / 100),
+      savingsAdd: amount * (savingsPercentage / 100),
+      personalAdd: amount * (personalPercentage / 100),
+    );
+  }
+
   Map<String, double> _remainingSnapshot() => {
     'bills': _billsRemaining,
     'savings': _savingsRemaining,
@@ -554,12 +606,18 @@ class BudgetProvider extends ChangeNotifier {
     }
 
     final salary = monthlySalary;
+    final requestId = _api.newRequestId();
     errorMessage = null;
     _budgetMutationDepth++;
     try {
-      await _api.receiveSalary(requestId: _api.newRequestId());
+      await _api.receiveSalary(requestId: requestId);
       availableBalance += salary;
       _distributeAddedFunds(salary);
+      _recordDistributedCredits(
+        requestId: requestId,
+        title: 'Received salary',
+        amount: salary,
+      );
       notifyListeners();
     } catch (error) {
       _reportMutationFailure(
@@ -581,15 +639,21 @@ class BudgetProvider extends ChangeNotifier {
 
     // Do not optimistically credit funds. A rejected/rate-limited Worker call
     // must leave balances unchanged (no flash-add, no listener races).
+    final requestId = _api.newRequestId();
     errorMessage = null;
     _budgetMutationDepth++;
     try {
       await _api.addMoney(
         amount: amount,
-        requestId: _api.newRequestId(),
+        requestId: requestId,
       );
       availableBalance += amount;
       _distributeAddedFunds(amount);
+      _recordDistributedCredits(
+        requestId: requestId,
+        title: 'Added money',
+        amount: amount,
+      );
       notifyListeners();
     } catch (error) {
       _reportMutationFailure(
@@ -610,6 +674,7 @@ class BudgetProvider extends ChangeNotifier {
     }
 
     final previous = _remainingSnapshot();
+    final requestId = _api.newRequestId();
     availableBalance = newBalance;
     // Manual AB edit: always recalculate all categories from the new total
     // using the user's current percentages (not incremental delta).
@@ -620,8 +685,16 @@ class BudgetProvider extends ChangeNotifier {
     try {
       await _api.updateAvailableBalance(
           availableBalance: newBalance,
-          requestId: _api.newRequestId(),
+          requestId: requestId,
         );
+      _recordAllocationCredits(
+        requestId: requestId,
+        title: 'Allocation update',
+        billsAdd: _billsRemaining - previous['bills']!,
+        savingsAdd: _savingsRemaining - previous['savings']!,
+        personalAdd: _personalRemaining - previous['personal']!,
+      );
+      notifyListeners();
     } catch (error) {
       _restoreRemainings(previous);
       _reportMutationFailure(

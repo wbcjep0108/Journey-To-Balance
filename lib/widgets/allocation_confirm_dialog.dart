@@ -183,6 +183,163 @@ class AllocationConfirmDialog {
     return result == true;
   }
 
+  /// Confirm wallet cash + selected cards becoming the new Available Balance.
+  static Future<bool> showWalletSourcesConfirm({
+    required BuildContext context,
+    required double walletCash,
+    required List<(String label, double amount)> cards,
+    required double billsPercentage,
+    required double savingsPercentage,
+    required double personalPercentage,
+  }) async {
+    final total = walletCash +
+        cards.fold<double>(0, (sum, card) => sum + card.$2);
+    if (total < 0) return false;
+
+    final totalLabel = formatMoney(context, total);
+    final billsAmount = total * (billsPercentage / 100);
+    final personalAmount = total * (personalPercentage / 100);
+    final savingsAmount = total * (savingsPercentage / 100);
+
+    final result = await _showAnimatedDialog<bool>(
+      context: context,
+      builder: (dialogContext) => _ConfirmCard(
+        title: 'Budget Allocation Update',
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'Your Available Balance will be the total of wallet cash and your selected cards.\n\n'
+              'That total will be allocated using your current percentages:',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                height: 1.45,
+                color: Color(0xFF4B5563),
+              ),
+            ),
+            const SizedBox(height: 16),
+            _SourceRow(
+              label: 'Wallet',
+              amountLabel: formatMoney(context, walletCash),
+            ),
+            for (final card in cards)
+              _SourceRow(
+                label: card.$1,
+                amountLabel: formatMoney(context, card.$2),
+              ),
+            const SizedBox(height: 8),
+            _NewMoneyBox(
+              amountLabel: totalLabel,
+              caption: 'Available Balance',
+            ),
+            const SizedBox(height: 14),
+            _AllocationRow(
+              label: 'Bills',
+              percentage: billsPercentage,
+              amountLabel: formatMoney(context, billsAmount),
+            ),
+            _AllocationRow(
+              label: 'Personal',
+              percentage: personalPercentage,
+              amountLabel: formatMoney(context, personalAmount),
+            ),
+            _AllocationRow(
+              label: 'Savings',
+              percentage: savingsPercentage,
+              amountLabel: formatMoney(context, savingsAmount),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Category balances will be recalculated from this total.',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                height: 1.4,
+                color: Color(0xFF6B7280),
+              ),
+            ),
+            const SizedBox(height: 22),
+            _ActionRow(
+              cancelLabel: 'Cancel',
+              confirmLabel: 'Continue',
+              onCancel: () => Navigator.pop(dialogContext, false),
+              onConfirm: () => Navigator.pop(dialogContext, true),
+            ),
+          ],
+        ),
+      ),
+    );
+    return result == true;
+  }
+
+  /// Warn that deleting cards also removes their amounts from Available Balance.
+  static Future<bool> showDeleteCardsWarning({
+    required BuildContext context,
+    required List<(String label, double amount)> cardsToRemove,
+    required double currentAvailable,
+    required double nextAvailable,
+  }) async {
+    if (cardsToRemove.isEmpty) return false;
+
+    final removedTotal = cardsToRemove.fold<double>(
+      0,
+      (sum, card) => sum + card.$2,
+    );
+    final isSingle = cardsToRemove.length == 1;
+    final names = cardsToRemove.map((card) => card.$1).join(', ');
+
+    final result = await _showAnimatedDialog<bool>(
+      context: context,
+      builder: (dialogContext) => _ConfirmCard(
+        title: isSingle ? 'Delete card' : 'Delete cards',
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              isSingle
+                  ? 'Deleting $names will also delete its stored amount and lower your Available Balance.'
+                  : 'Deleting $names will also delete their stored amounts and lower your Available Balance.',
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                height: 1.45,
+                color: Color(0xFF4B5563),
+              ),
+            ),
+            const SizedBox(height: 16),
+            for (final card in cardsToRemove)
+              _SourceRow(
+                label: card.$1,
+                amountLabel: formatMoney(context, card.$2),
+              ),
+            const SizedBox(height: 8),
+            _SourceRow(
+              label: 'Amount removed',
+              amountLabel: formatMoney(context, removedTotal),
+            ),
+            const SizedBox(height: 12),
+            _NewMoneyBox(
+              amountLabel: formatMoney(context, nextAvailable),
+              caption:
+                  'Available Balance after delete (${formatMoney(context, currentAvailable)} now)',
+            ),
+            const SizedBox(height: 22),
+            _ActionRow(
+              cancelLabel: 'Cancel',
+              confirmLabel: 'Delete',
+              onCancel: () => Navigator.pop(dialogContext, false),
+              onConfirm: () => Navigator.pop(dialogContext, true),
+            ),
+          ],
+        ),
+      ),
+    );
+    return result == true;
+  }
+
   static Future<T?> _showAnimatedDialog<T>({
     required BuildContext context,
     required WidgetBuilder builder,
@@ -305,6 +462,42 @@ class _NewMoneyBox extends StatelessWidget {
             style: const TextStyle(
               fontSize: 26,
               fontWeight: FontWeight.w800,
+              color: Color(0xFF121212),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SourceRow extends StatelessWidget {
+  const _SourceRow({required this.label, required this.amountLabel});
+
+  final String label;
+  final String amountLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF121212),
+              ),
+            ),
+          ),
+          Text(
+            amountLabel,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
               color: Color(0xFF121212),
             ),
           ),
