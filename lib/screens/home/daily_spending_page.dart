@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 
 import '../../models/financial_entry.dart';
 import '../../providers/budget_provider.dart';
-import '../../widgets/budget_modal.dart';
 import '../../widgets/category_icon_badge.dart';
 import '../../widgets/rate_limit_dialog.dart';
 import '../../widgets/sensitive_action_auth.dart';
@@ -130,7 +129,6 @@ class DailySpendingPage extends StatelessWidget {
                     for (var i = 0; i < transactions.length; i++) ...[
                       _DayEntryRow(
                         item: transactions[i],
-                        onEdit: () => _openEditor(context, transactions[i]),
                         onDelete: () => _delete(context, transactions[i]),
                       ),
                       if (i < transactions.length - 1)
@@ -145,31 +143,6 @@ class DailySpendingPage extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-
-  Future<void> _openEditor(BuildContext context, DayTransaction item) async {
-    final provider = context.read<BudgetProvider>();
-    final availableBalance =
-        provider.remainingFor(item.category) + item.entry.amount;
-
-    await BudgetModal.show(
-      context: context,
-      category: item.category,
-      title: 'Use ${categoryLabel(item.category)}',
-      availableBalance: availableBalance,
-      initialEntry: item.entry,
-      onSave: (name, amount, iconAsset) async {
-        await provider.updateEntry(
-          item.category,
-          item.entry.copyWith(
-            title: name,
-            amount: amount,
-            iconAsset: iconAsset,
-            clearIconAsset: iconAsset == null || iconAsset.isEmpty,
-          ),
-        );
-      },
     );
   }
 
@@ -206,12 +179,10 @@ class DailySpendingPage extends StatelessWidget {
 class _DayEntryRow extends StatelessWidget {
   const _DayEntryRow({
     required this.item,
-    required this.onEdit,
     required this.onDelete,
   });
 
   final DayTransaction item;
-  final VoidCallback onEdit;
   final Future<bool> Function() onDelete;
 
   @override
@@ -243,63 +214,56 @@ class _DayEntryRow extends StatelessWidget {
           ],
         ),
       ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onEdit,
-          borderRadius: BorderRadius.circular(12),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: Row(
-              children: [
-                if (item.entry.iconAsset != null &&
-                    item.entry.iconAsset!.isNotEmpty) ...[
-                  CategoryIconBadge(
-                    iconAsset: item.entry.iconAsset!,
-                    size: 34,
-                    showBorder: false,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(
+          children: [
+            if (item.entry.iconAsset != null &&
+                item.entry.iconAsset!.isNotEmpty) ...[
+              CategoryIconBadge(
+                iconAsset: item.entry.iconAsset!,
+                size: 34,
+                showBorder: false,
+              ),
+              const SizedBox(width: 12),
+            ],
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.entry.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(height: 4),
+                  Text(
+                    DailySpendingPage.categoryLabel(item.category),
+                    style: TextStyle(
+                      color: Colors.grey.shade500,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ],
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        item.entry.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        DailySpendingPage.categoryLabel(item.category),
-                        style: TextStyle(
-                          color: Colors.grey.shade500,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Text(
-                  '${item.entry.isRefund ? '+' : '-'}₱${NumberFormat('#,##0.##').format(item.entry.amount)}',
-                  style: TextStyle(
-                    color: item.entry.isRefund
-                        ? const Color(0xFF5CB450)
-                        : const Color(0xFFFF5252),
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
+            Text(
+              '${item.entry.isRefund ? '+' : '-'}₱${NumberFormat('#,##0.##').format(item.entry.amount)}',
+              style: TextStyle(
+                color: item.entry.isRefund
+                    ? const Color(0xFF5CB450)
+                    : const Color(0xFFFF5252),
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
         ),
       ),
     );

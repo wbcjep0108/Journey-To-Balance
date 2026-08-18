@@ -185,7 +185,7 @@ class _TotalLoanPageState extends State<TotalLoanPage> {
     final loans = context.watch<LoanProvider>();
     final totalLabel = NumberFormat.currency(
       locale: 'en_PH',
-      symbol: 'PHP ',
+      symbol: '₱',
       decimalDigits: loans.totalLoan % 1 == 0 ? 0 : 2,
     ).format(loans.totalLoan);
 
@@ -770,7 +770,7 @@ class _LoanCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final amountLabel = NumberFormat.currency(
       locale: 'en_PH',
-      symbol: 'PHP ',
+      symbol: '₱',
       decimalDigits: loan.amount % 1 == 0 ? 0 : 2,
     ).format(loan.amount);
     final monthlyLabel = DateFormat('MMM d, yyyy').format(
@@ -1041,7 +1041,7 @@ class _LoanScheduleDialogState extends State<_LoanScheduleDialog> {
     final actionable = current.nextActionableDue;
     final amountLabel = NumberFormat.currency(
       locale: 'en_PH',
-      symbol: 'PHP ',
+      symbol: '₱',
       decimalDigits: current.amount % 1 == 0 ? 0 : 2,
     ).format(current.amount);
     final dates = current.installmentDates;

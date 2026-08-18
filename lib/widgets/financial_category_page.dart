@@ -306,12 +306,6 @@ class _FinancialCategoryPageState extends State<FinancialCategoryPage> {
           ) ...[
             _EntryRow(
               entry: groupedDays[groupIndex].value[entryIndex],
-              onEdit: groupedDays[groupIndex].value[entryIndex].isRefund
-                  ? null
-                  : () => _openEditor(
-                      context,
-                      groupedDays[groupIndex].value[entryIndex],
-                    ),
               onRefund: groupedDays[groupIndex].value[entryIndex].isRefund
                   ? null
                   : () => _refundOrDelete(
@@ -454,13 +448,11 @@ class _ViewMoreButton extends StatelessWidget {
 class _EntryRow extends StatefulWidget {
   const _EntryRow({
     required this.entry,
-    required this.onEdit,
     required this.onRefund,
     required this.onDelete,
   });
 
   final FinancialEntry entry;
-  final VoidCallback? onEdit;
   final Future<bool> Function()? onRefund;
   final Future<bool> Function() onDelete;
 
@@ -570,13 +562,7 @@ class _EntryRowState extends State<_EntryRow> {
                 child: Material(
                   color: Colors.transparent,
                   child: InkWell(
-                    onTap: () {
-                      if (_dragExtent < 0) {
-                        _close();
-                        return;
-                      }
-                      widget.onEdit?.call();
-                    },
+                    onTap: _dragExtent < 0 ? _close : null,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       child: Row(

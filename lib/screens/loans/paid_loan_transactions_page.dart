@@ -251,12 +251,12 @@ class _PaidLoanCard extends StatelessWidget {
     final totalPaid = installmentCount * loan.amount;
     final totalLabel = NumberFormat.currency(
       locale: 'en_PH',
-      symbol: 'PHP ',
+      symbol: '₱',
       decimalDigits: totalPaid % 1 == 0 ? 0 : 2,
     ).format(totalPaid);
     final monthlyLabel = NumberFormat.currency(
       locale: 'en_PH',
-      symbol: 'PHP ',
+      symbol: '₱',
       decimalDigits: loan.amount % 1 == 0 ? 0 : 2,
     ).format(loan.amount);
     final completedOn = loan.installmentDates.isEmpty
