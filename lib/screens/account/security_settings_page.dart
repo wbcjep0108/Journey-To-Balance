@@ -308,7 +308,7 @@ class _ChangePinSheetState extends State<_ChangePinSheet> {
                 hasError: _error != null,
                 onChanged: (v) => setState(() {
                   _current = v;
-                  _error = null;
+                  if (v.isNotEmpty) _error = null;
                 }),
                 onCompleted: (v) => setState(() => _current = v),
               ),
@@ -319,7 +319,7 @@ class _ChangePinSheetState extends State<_ChangePinSheet> {
                 hasError: _error != null,
                 onChanged: (v) => setState(() {
                   _next = v;
-                  _error = null;
+                  if (v.isNotEmpty) _error = null;
                 }),
                 onCompleted: (v) => setState(() => _next = v),
               ),
@@ -331,7 +331,7 @@ class _ChangePinSheetState extends State<_ChangePinSheet> {
                 hasError: _error != null,
                 onChanged: (v) => setState(() {
                   _confirm = v;
-                  _error = null;
+                  if (v.isNotEmpty) _error = null;
                 }),
                 onCompleted: (v) => setState(() => _confirm = v),
               ),

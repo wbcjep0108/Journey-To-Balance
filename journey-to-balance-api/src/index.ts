@@ -8,6 +8,7 @@ import {
   rateLimitHeaders,
 } from "./errors";
 import {Env, handleFinance} from "./finance";
+import {handlePinReset} from "./pinReset";
 import {IsolatedRateLimitOutcome, UserGate} from "./UserGate";
 
 export {UserGate};
@@ -83,6 +84,27 @@ export default {
       }
 
       const projectId = env.FIREBASE_PROJECT_ID || "journey-to-balance";
+
+      if (
+        request.method === "POST" &&
+        url.pathname.startsWith("/api/auth/forgot-pin/")
+      ) {
+        const user = await verifyFirebaseIdToken(request, projectId);
+        const route = url.pathname
+          .slice("/api/auth/forgot-pin/".length)
+          .replace(/\/$/, "");
+        let body: Record<string, unknown> = {};
+        const text = await request.text();
+        if (text.trim()) {
+          const parsed: unknown = JSON.parse(text);
+          if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+            return jsonError(new Error("Invalid JSON body"));
+          }
+          body = parsed as Record<string, unknown>;
+        }
+        const result = await handlePinReset(env, user, route, body);
+        return jsonOk(result);
+      }
 
       // Non-mutating auth probe: verifies Firebase ID token and returns UID.
       // Does not read or write any financial data.

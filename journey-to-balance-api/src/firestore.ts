@@ -204,6 +204,55 @@ export class FirestoreClient {
       {}) as Record<string, unknown>;
   }
 
+  async getSubDoc(
+    uid: string,
+    ...parts: string[]
+  ): Promise<Record<string, unknown> | null> {
+    const name = this.docPath(uid, ...parts);
+    const url = `https://firestore.googleapis.com/v1/${name}`;
+    const res = await this.authedFetch(url);
+    if (res.status === 404) return null;
+    if (!res.ok) {
+      console.error("Firestore get subdoc failed", await res.text());
+      throw internal("Could not load security data.");
+    }
+    const doc = (await res.json()) as {
+      fields?: Record<string, FirestoreValue>;
+    };
+    return (decodeValue({mapValue: {fields: doc.fields ?? {}}}) ??
+      {}) as Record<string, unknown>;
+  }
+
+  async setSubDoc(
+    uid: string,
+    parts: string[],
+    data: Record<string, unknown>,
+  ): Promise<void> {
+    const name = this.docPath(uid, ...parts);
+    const url = `https://firestore.googleapis.com/v1/projects/${this.projectId}/databases/(default)/documents:commit`;
+    const res = await this.authedFetch(url, {
+      method: "POST",
+      body: JSON.stringify({
+        writes: [{update: {name, fields: encodeFields(data)}}],
+      }),
+    });
+    if (!res.ok) {
+      console.error("Firestore set subdoc failed", await res.text());
+      throw internal("Could not save security data.");
+    }
+  }
+
+  async deleteSubDoc(uid: string, ...parts: string[]): Promise<void> {
+    const name = this.docPath(uid, ...parts);
+    const url = `https://firestore.googleapis.com/v1/${name}`;
+    const res = await this.authedFetch(url, {method: "DELETE"});
+    if (res.status === 404) return;
+    if (!res.ok) {
+      console.error("Firestore delete subdoc failed", await res.text());
+      throw internal("Could not update security data.");
+    }
+  }
+
   /**
    * Atomically write budget (+ optional entry set/delete) via Commit API.
    */

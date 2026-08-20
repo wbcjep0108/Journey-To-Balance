@@ -5,6 +5,7 @@ import '../bills/bills_page.dart';
 import '../home/home_page.dart';
 import '../personal/personal_page.dart';
 import '../savings/savings_page.dart';
+import '../../services/notification_router.dart';
 
 class BottomNavScreen extends StatefulWidget {
   const BottomNavScreen({super.key});
@@ -80,6 +81,13 @@ class _BottomNavScreenState extends State<BottomNavScreen>
         setState(() => _isTransitioning = false);
       }
     });
+    NotificationRouter.selectTab = (index) {
+      if (!mounted) return;
+      _onItemTapped(index);
+    };
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      NotificationRouter.consumePending();
+    });
   }
 
   @override
@@ -97,6 +105,7 @@ class _BottomNavScreenState extends State<BottomNavScreen>
 
   @override
   void dispose() {
+    NotificationRouter.selectTab = null;
     _entranceController.dispose();
     _pageController.dispose();
     super.dispose();

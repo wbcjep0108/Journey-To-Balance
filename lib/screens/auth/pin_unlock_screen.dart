@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../providers/app_lock_provider.dart';
 import '../../widgets/pin_digit_boxes.dart';
 import '../../widgets/security_ui.dart';
+import 'forgot_pin_screens.dart';
 
 /// Returning-user unlock: PIN entry with optional fingerprint.
 class PinUnlockScreen extends StatefulWidget {
@@ -150,7 +151,7 @@ class _PinUnlockScreenState extends State<PinUnlockScreen>
                       onChanged: (value) {
                         setState(() {
                           _pin = value;
-                          _error = null;
+                          if (value.isNotEmpty) _error = null;
                         });
                       },
                       onCompleted: _submit,
@@ -197,6 +198,28 @@ class _PinUnlockScreenState extends State<PinUnlockScreen>
                       label: 'Cancel',
                       isPrimary: false,
                       onPressed: _busy ? null : _onCancel,
+                    ),
+                    TextButton(
+                      onPressed: _busy
+                          ? null
+                          : () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => const ForgotPinEmailScreen(),
+                                ),
+                              );
+                            },
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFF6B7280),
+                      ),
+                      child: const Text(
+                        'Forgot your PIN?',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                   ],
                 ),

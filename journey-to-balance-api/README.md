@@ -37,6 +37,9 @@ npx wrangler secret put FIREBASE_PROJECT_ID
 
 npx wrangler secret put FIREBASE_SERVICE_ACCOUNT_JSON
 # paste the full JSON file contents
+
+npx wrangler secret put RESEND_API_KEY
+# Resend API key for Forgot PIN emails
 ```
 
 Local dev (never commit):
@@ -61,6 +64,8 @@ All finance routes: `POST` + `Authorization: Bearer <Firebase ID token>`
 
 | Path | Rate bucket |
 |------|-------------|
+| `/api/auth/forgot-pin/request` | 3/min |
+| `/api/auth/forgot-pin/verify` | 10/min |
 | `/api/finance/receive-salary` | 10/min |
 | `/api/finance/add-money` | 20/min |
 | `/api/finance/update-available-balance` | 20/min |

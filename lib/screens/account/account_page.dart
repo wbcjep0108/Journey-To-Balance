@@ -8,6 +8,7 @@ import '../../providers/currency_provider.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/barrier_blur.dart';
 import 'currency_settings_page.dart';
+import 'notification_settings_page.dart';
 import 'security_settings_page.dart';
 
 class AccountPage extends StatefulWidget {
@@ -52,6 +53,14 @@ class _AccountPageState extends State<AccountPage> {
   void _openSecurity() {
     Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (_) => const SecuritySettingsPage()),
+    );
+  }
+
+  void _openNotifications() {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const NotificationSettingsPage(),
+      ),
     );
   }
 
@@ -169,6 +178,7 @@ class _AccountPageState extends State<AccountPage> {
                         onSwitchProfile: _signOut,
                         onCurrency: _openCurrency,
                         onSecurity: _openSecurity,
+                        onNotifications: _openNotifications,
                         onHelp: _openHelp,
                         onSignOut: _signOut,
                       ),
@@ -201,6 +211,7 @@ class _AccountCard extends StatelessWidget {
     required this.onSwitchProfile,
     required this.onCurrency,
     required this.onSecurity,
+    required this.onNotifications,
     required this.onHelp,
     required this.onSignOut,
   });
@@ -211,6 +222,7 @@ class _AccountCard extends StatelessWidget {
   final VoidCallback onSwitchProfile;
   final VoidCallback onCurrency;
   final VoidCallback onSecurity;
+  final VoidCallback onNotifications;
   final VoidCallback onHelp;
   final VoidCallback onSignOut;
 
@@ -288,6 +300,12 @@ class _AccountCard extends StatelessWidget {
             icon: Icons.lock_outline_rounded,
             label: 'Security',
             onTap: onSecurity,
+          ),
+          const Divider(height: 1, color: Color(0xFFE5E7EB)),
+          _AccountLinkTile(
+            icon: Icons.notifications_none_rounded,
+            label: 'Notifications',
+            onTap: onNotifications,
           ),
           const Divider(height: 1, color: Color(0xFFE5E7EB)),
           _AccountLinkTile(

@@ -344,6 +344,13 @@ class BudgetProvider extends ChangeNotifier {
     return results;
   }
 
+  /// True when the user logged a non-refund spend today.
+  bool get hasTrackedSpendingToday {
+    final now = DateTime.now();
+    return entriesForDay(DateTime(now.year, now.month, now.day))
+        .any((item) => !item.entry.isRefund);
+  }
+
   Future<void>? _activeLoad;
   String? _activeLoadUid;
 

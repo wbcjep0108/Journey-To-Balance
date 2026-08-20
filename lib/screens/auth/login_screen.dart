@@ -21,10 +21,13 @@ class LoginScreen extends StatelessWidget {
 
               const Text(
                 "Journey to Balance",
+                textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
                   color: Color(0xFF000000),
+                  decoration: TextDecoration.none,
+                  decorationColor: Colors.transparent,
                 ),
               ),
 
@@ -59,6 +62,24 @@ class LoginScreen extends StatelessWidget {
                       }
                     }
                   },
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextButton(
+                onPressed: () {},
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF6B7280),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                ),
+                child: const Text(
+                  'Having a trouble signing in?',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
             ],

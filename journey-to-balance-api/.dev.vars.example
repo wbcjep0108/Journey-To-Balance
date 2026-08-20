@@ -6,3 +6,9 @@
 #
 # FIREBASE_SERVICE_ACCOUNT_JSON must be the full service account JSON
 # (client_email + private_key) with Cloud Datastore / Firestore access.
+#
+# PIN reset emails (Forgot PIN):
+#   wrangler secret put RESEND_API_KEY
+# Optional from-address (must be a verified Resend sender):
+#   OTP_FROM=Journey to Balance <noreply@your-domain.com>
+

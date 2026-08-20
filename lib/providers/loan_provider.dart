@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../models/loan_entry.dart';
+import '../services/notification_service.dart';
 
 class LoanProvider extends ChangeNotifier {
   LoanProvider({FlutterSecureStorage? storage})
@@ -51,6 +54,7 @@ class LoanProvider extends ChangeNotifier {
       _loans = [];
       _loaded = true;
       notifyListeners();
+      unawaited(NotificationService.instance.syncLoans(const []));
       return;
     }
 
@@ -69,6 +73,7 @@ class LoanProvider extends ChangeNotifier {
 
     _loaded = true;
     notifyListeners();
+    unawaited(NotificationService.instance.syncLoans(_loans));
   }
 
   Future<void> addLoan({
@@ -133,5 +138,6 @@ class LoanProvider extends ChangeNotifier {
       key: _storageKey(uid),
       value: LoanEntry.listToJsonString(_loans),
     );
+    unawaited(NotificationService.instance.syncLoans(_loans));
   }
 }

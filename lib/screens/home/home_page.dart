@@ -10,6 +10,7 @@ import '../../widgets/app_refresh_indicator.dart';
 import '../../widgets/barrier_blur.dart';
 import '../../widgets/rate_limit_dialog.dart';
 import '../../widgets/sensitive_action_auth.dart';
+import '../../widgets/foreign_exchange_card.dart';
 import '../../widgets/weekly_spending_card.dart';
 import '../loans/total_loan_page.dart';
 import '../savings/savings_goal_page.dart';
@@ -515,6 +516,10 @@ class _HomePageState extends State<HomePage> {
               const Padding(
                 padding: EdgeInsets.fromLTRB(28, 16, 28, 8),
                 child: _QuickActionsRow(),
+              ),
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 40, 16, 12),
+                child: ForeignExchangeCard(),
               ),
             ],
           ),

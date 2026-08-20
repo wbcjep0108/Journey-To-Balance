@@ -132,7 +132,7 @@ class _PinSetupScreenState extends State<PinSetupScreen> {
                         onChanged: (value) {
                           setState(() {
                             _pin = value;
-                            _error = null;
+                            if (value.isNotEmpty) _error = null;
                           });
                         },
                         onCompleted: (value) {
@@ -148,7 +148,7 @@ class _PinSetupScreenState extends State<PinSetupScreen> {
                         onChanged: (value) {
                           setState(() {
                             _confirm = value;
-                            _error = null;
+                            if (value.isNotEmpty) _error = null;
                           });
                         },
                         onCompleted: (value) {

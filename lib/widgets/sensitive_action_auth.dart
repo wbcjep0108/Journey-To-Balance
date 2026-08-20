@@ -160,7 +160,7 @@ class _SensitiveActionAuthSheetState extends State<_SensitiveActionAuthSheet> {
                 onChanged: (value) {
                   setState(() {
                     _pin = value;
-                    _error = null;
+                    if (value.isNotEmpty) _error = null;
                   });
                 },
                 onCompleted: _submitPin,

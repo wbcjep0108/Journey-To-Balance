@@ -241,6 +241,20 @@ class FinanceApiService {
       'requestId': requestId,
     });
   }
+
+  Future<Map<String, dynamic>> requestPinResetOtp({required String email}) {
+    return _post('/api/auth/forgot-pin/request', {'email': email});
+  }
+
+  Future<Map<String, dynamic>> verifyPinResetOtp({
+    required String email,
+    required String otp,
+  }) {
+    return _post('/api/auth/forgot-pin/verify', {
+      'email': email,
+      'otp': otp,
+    });
+  }
 }
 
 class FinanceApiException implements Exception {

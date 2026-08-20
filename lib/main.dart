@@ -1,13 +1,17 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 
 import 'firebase_options.dart';
+import 'models/loan_entry.dart';
 import 'providers/app_lock_provider.dart';
 import 'providers/budget_provider.dart';
 import 'providers/currency_provider.dart';
 import 'providers/loan_provider.dart';
+import 'providers/notification_prefs_provider.dart';
 import 'providers/wallet_cards_provider.dart';
 import 'providers/wallet_cash_provider.dart';
 import 'screens/auth/login_screen.dart';
@@ -15,8 +19,11 @@ import 'screens/auth/pin_setup_screen.dart';
 import 'screens/auth/pin_unlock_screen.dart';
 import 'screens/navigation/bottom_nav_screen.dart';
 import 'screens/splash/splash_screen.dart';
+import 'screens/splash/welcome_transition.dart';
 import 'services/finance_api_service.dart';
 import 'services/firestore_finance_service.dart';
+import 'services/notification_router.dart';
+import 'services/notification_service.dart';
 import 'widgets/app_privacy_blur.dart';
 import 'widgets/rate_limit_dialog.dart';
 
@@ -24,6 +31,10 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  NotificationService.instance.onNotificationTap = NotificationRouter.handle;
+  try {
+    await NotificationService.instance.init();
+  } catch (_) {}
 
   runApp(
     MultiProvider(
@@ -39,6 +50,9 @@ void main() async {
         ChangeNotifierProvider(create: (_) => LoanProvider()),
         ChangeNotifierProvider(create: (_) => AppLockProvider()),
         ChangeNotifierProvider(create: (_) => CurrencyProvider()),
+        ChangeNotifierProvider(
+          create: (_) => NotificationPrefsProvider()..load(),
+        ),
         ChangeNotifierProvider(create: (_) => WalletCashProvider()..load()),
         ChangeNotifierProvider(create: (_) => WalletCardsProvider()..load()),
       ],
@@ -54,6 +68,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
+      navigatorKey: NotificationRouter.navigatorKey,
       theme: ThemeData(
         useMaterial3: true,
         fontFamily: 'Inter',
@@ -99,6 +114,9 @@ class _AuthGateState extends State<AuthGate> {
               // Only clear if we are still signed out.
               if (_boundUid == null && previousUid != null) {
                 context.read<AppLockProvider>().clearUser();
+                context.read<LoanProvider>().loadForUser(null);
+                NotificationService.instance.cancelAllReminders();
+                PostLoginWelcome.resetSession();
               }
             });
           }
@@ -226,11 +244,19 @@ class _UserDataGateState extends State<_UserDataGate> {
     try {
       await context.read<BudgetProvider>().loadForUser(widget.uid);
       if (!mounted) return;
+      await context.read<LoanProvider>().loadForUser(widget.uid);
+      if (!mounted) return;
+      await context.read<NotificationPrefsProvider>().load();
+      if (!mounted) return;
       final error = context.read<BudgetProvider>().errorMessage;
+      final loans = context.read<LoanProvider>().loans;
       setState(() {
         _error = error;
         _ready = error == null;
       });
+      if (error == null) {
+        unawaited(_activateReminders(loans));
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -240,6 +266,13 @@ class _UserDataGateState extends State<_UserDataGate> {
     } finally {
       _loading = false;
     }
+  }
+
+  Future<void> _activateReminders(List<LoanEntry> loans) async {
+    try {
+      await NotificationService.instance.requestPermission();
+      await NotificationService.instance.syncAll(loans: loans);
+    } catch (_) {}
   }
 
   void _retry() {
@@ -258,7 +291,9 @@ class _UserDataGateState extends State<_UserDataGate> {
   Widget build(BuildContext context) {
     // Keep BottomNav mounted once ready — never swap it for Splash on reload.
     if (_ready) {
-      return const RateLimitListener(child: BottomNavScreen());
+      return const RateLimitListener(
+        child: PostLoginWelcome(child: BottomNavScreen()),
+      );
     }
 
     if (_error != null) {

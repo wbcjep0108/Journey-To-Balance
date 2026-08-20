@@ -15,6 +15,8 @@ export const RATE_LIMITS = {
   updateMonthlySalary: 20,
   updateSavingsGoalSettings: 20,
   migrateBudgetSchema: 10,
+  pinResetRequest: 3,
+  pinResetVerify: 10,
   /**
    * Isolated non-mutating probe bucket. Does NOT share counters with
    * `general` or any financial operation buckets.

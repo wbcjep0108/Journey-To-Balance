@@ -227,9 +227,7 @@ class _WalletPageState extends State<WalletPage> {
                     height: MediaQuery.sizeOf(context).height * 0.52,
                     decoration: const BoxDecoration(
                       color: Color(0xFFF1F2F4),
-                      borderRadius: BorderRadius.vertical(
-                        top: Radius.circular(26),
-                      ),
+                      borderRadius: BorderRadius.all(Radius.circular(26)),
                     ),
                     child: Column(
                       children: [
@@ -772,42 +770,28 @@ class _WalletCardPreview extends StatelessWidget {
   }
 }
 
-/// Crops the 1080x1350 bank PNGs down to the physical card in the center.
+/// Bank PNGs are already card-sized (~3:2). Cover the frame so no letterbox gaps.
 class _BankCardArt extends StatelessWidget {
-  const _BankCardArt({required this.assetPath});
+  const _BankCardArt({
+    required this.assetPath,
+    this.borderRadius = 18,
+  });
 
   final String assetPath;
+  final double borderRadius;
 
-  static const srcW = 1080.0;
-  static const srcH = 1350.0;
-  static const cropW = 1032.0;
-  static const cropH = 680.0;
-  static const aspectRatio = cropW / cropH;
+  static const aspectRatio = 3 / 2;
 
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(18),
-      child: FittedBox(
-        fit: BoxFit.cover,
-        alignment: Alignment.center,
-        child: SizedBox(
-          width: cropW,
-          height: cropH,
-          child: OverflowBox(
-            alignment: Alignment.center,
-            minWidth: srcW,
-            maxWidth: srcW,
-            minHeight: srcH,
-            maxHeight: srcH,
-            child: Image.asset(
-              assetPath,
-              width: srcW,
-              height: srcH,
-              fit: BoxFit.fill,
-              filterQuality: FilterQuality.high,
-            ),
-          ),
+      borderRadius: BorderRadius.circular(borderRadius),
+      child: SizedBox.expand(
+        child: Image.asset(
+          assetPath,
+          fit: BoxFit.cover,
+          alignment: Alignment.center,
+          filterQuality: FilterQuality.high,
         ),
       ),
     );
@@ -1411,6 +1395,7 @@ class _BankPickTile extends StatelessWidget {
       borderRadius: BorderRadius.circular(16),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
+        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
@@ -1418,11 +1403,10 @@ class _BankPickTile extends StatelessWidget {
             width: 2,
           ),
         ),
-        padding: const EdgeInsets.all(2),
         child: Stack(
           fit: StackFit.expand,
           children: [
-            _BankCardArt(assetPath: iconAsset),
+            _BankCardArt(assetPath: iconAsset, borderRadius: 14),
             if (alreadyAdded)
               const Positioned(
                 right: 8,

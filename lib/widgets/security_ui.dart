@@ -188,6 +188,7 @@ class LabeledPinField extends StatelessWidget {
     this.enabled = true,
     this.clearTrigger,
     this.autoFocus = false,
+    this.obscureText = true,
   });
 
   final String label;
@@ -197,6 +198,7 @@ class LabeledPinField extends StatelessWidget {
   final bool enabled;
   final int? clearTrigger;
   final bool autoFocus;
+  final bool obscureText;
 
   @override
   Widget build(BuildContext context) {
@@ -220,6 +222,7 @@ class LabeledPinField extends StatelessWidget {
           enabled: enabled,
           clearTrigger: clearTrigger,
           autoFocus: autoFocus,
+          obscureText: obscureText,
         ),
       ],
     );

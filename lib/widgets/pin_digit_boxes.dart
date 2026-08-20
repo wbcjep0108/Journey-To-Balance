@@ -11,6 +11,7 @@ class PinDigitBoxes extends StatefulWidget {
     this.hasError = false,
     this.autoFocus = true,
     this.clearTrigger,
+    this.obscureText = true,
   });
 
   final ValueChanged<String> onCompleted;
@@ -18,6 +19,7 @@ class PinDigitBoxes extends StatefulWidget {
   final bool enabled;
   final bool hasError;
   final bool autoFocus;
+  final bool obscureText;
 
   /// Increment to clear all digits from outside.
   final int? clearTrigger;
@@ -60,7 +62,9 @@ class PinDigitBoxesState extends State<PinDigitBoxes> {
     if (widget.clearTrigger != null &&
         widget.clearTrigger != _lastClearTrigger) {
       _lastClearTrigger = widget.clearTrigger;
-      clear();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) clear();
+      });
     }
   }
 
@@ -182,7 +186,7 @@ class PinDigitBoxesState extends State<PinDigitBoxes> {
                 enabled: widget.enabled,
                 textAlign: TextAlign.center,
                 keyboardType: TextInputType.number,
-                obscureText: true,
+                obscureText: widget.obscureText,
                 obscuringCharacter: '•',
                 maxLength: 1,
                 style: const TextStyle(
