@@ -22,6 +22,8 @@ import 'screens/splash/splash_screen.dart';
 import 'screens/splash/welcome_transition.dart';
 import 'services/finance_api_service.dart';
 import 'services/firestore_finance_service.dart';
+import 'services/wallet_firestore_service.dart';
+import 'services/wallet_migration_service.dart';
 import 'services/notification_router.dart';
 import 'services/notification_service.dart';
 import 'widgets/app_privacy_blur.dart';
@@ -40,6 +42,12 @@ void main() async {
     MultiProvider(
       providers: [
         Provider(create: (_) => FirestoreFinanceService()),
+        Provider(create: (_) => WalletFirestoreService()),
+        Provider(
+          create: (context) => WalletMigrationService(
+            firestore: context.read<WalletFirestoreService>(),
+          ),
+        ),
         Provider(create: (_) => FinanceApiService()),
         ChangeNotifierProvider(
           create: (context) => BudgetProvider(
@@ -47,14 +55,28 @@ void main() async {
             financeApi: context.read<FinanceApiService>(),
           ),
         ),
-        ChangeNotifierProvider(create: (_) => LoanProvider()),
+        ChangeNotifierProvider(
+          create: (context) =>
+              LoanProvider(service: context.read<WalletFirestoreService>()),
+        ),
         ChangeNotifierProvider(create: (_) => AppLockProvider()),
-        ChangeNotifierProvider(create: (_) => CurrencyProvider()),
+        ChangeNotifierProvider(
+          create: (context) =>
+              CurrencyProvider(service: context.read<WalletFirestoreService>()),
+        ),
         ChangeNotifierProvider(
           create: (_) => NotificationPrefsProvider()..load(),
         ),
-        ChangeNotifierProvider(create: (_) => WalletCashProvider()..load()),
-        ChangeNotifierProvider(create: (_) => WalletCardsProvider()..load()),
+        ChangeNotifierProvider(
+          create: (context) => WalletCashProvider(
+            service: context.read<WalletFirestoreService>(),
+          ),
+        ),
+        ChangeNotifierProvider(
+          create: (context) => WalletCardsProvider(
+            service: context.read<WalletFirestoreService>(),
+          ),
+        ),
       ],
       child: const MyApp(),
     ),
@@ -114,7 +136,12 @@ class _AuthGateState extends State<AuthGate> {
               // Only clear if we are still signed out.
               if (_boundUid == null && previousUid != null) {
                 context.read<AppLockProvider>().clearUser();
-                context.read<LoanProvider>().loadForUser(null);
+                // Stop wallet realtime listeners and reset synced state so the
+                // next user doesn't briefly see the previous user's wallet.
+                context.read<LoanProvider>().clear();
+                context.read<CurrencyProvider>().clear();
+                context.read<WalletCashProvider>().clear();
+                context.read<WalletCardsProvider>().clear();
                 NotificationService.instance.cancelAllReminders();
                 PostLoginWelcome.resetSession();
               }
@@ -244,7 +271,23 @@ class _UserDataGateState extends State<_UserDataGate> {
     try {
       await context.read<BudgetProvider>().loadForUser(widget.uid);
       if (!mounted) return;
-      await context.read<LoanProvider>().loadForUser(widget.uid);
+      // One-time migration of legacy local wallet data -> Firestore. MUST run
+      // before the wallet providers attach realtime listeners below, otherwise
+      // an empty remote snapshot could seed over the local values. Firestore is
+      // the source of truth if it already has data; local data is never deleted
+      // and is kept as a fallback. On failure this throws into the catch below,
+      // surfacing the retry UI without touching local data.
+      await context.read<WalletMigrationService>().migrateIfNeeded(widget.uid);
+      if (!mounted) return;
+      // Wallet data (cash, cards, currency, loans) now syncs from Firestore
+      // under users/{uid}/wallet. Loaded in parallel; each provider also opens
+      // a realtime listener so changes on another device appear automatically.
+      await Future.wait<void>([
+        context.read<LoanProvider>().loadForUser(widget.uid),
+        context.read<CurrencyProvider>().loadForUser(widget.uid),
+        context.read<WalletCashProvider>().loadForUser(widget.uid),
+        context.read<WalletCardsProvider>().loadForUser(widget.uid),
+      ]);
       if (!mounted) return;
       await context.read<NotificationPrefsProvider>().load();
       if (!mounted) return;

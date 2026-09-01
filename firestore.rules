@@ -30,6 +30,15 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      // Synced wallet data: cash, currency, cards, loans.
+      // Path: users/{uid}/wallet/{docId} (client uses doc id "data").
+      // Unlike budget/entries (Worker-only writes), wallet is self-owned state
+      // written directly by the authenticated owner from any of their devices.
+      // Realtime listeners: users/{uid}/wallet/data.snapshots()
+      match /wallet/{docId} {
+        allow read, write: if isOwner(userId);
+      }
+
       // Rate limits / idempotency (legacy or future) — never client-accessible.
       // Must stay deny-all: overlapping rules use OR, so a broader owner-read
       // catch-all would reopen security/** to the owner.
