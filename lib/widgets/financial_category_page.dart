@@ -5,6 +5,8 @@ import 'package:provider/provider.dart';
 import '../models/financial_entry.dart';
 import '../providers/budget_provider.dart';
 import '../providers/currency_provider.dart';
+import '../providers/wallet_cards_provider.dart';
+import '../providers/wallet_cash_provider.dart';
 import 'app_refresh_indicator.dart';
 import 'budget_modal.dart';
 import 'entry_title_with_icon.dart';
@@ -334,6 +336,8 @@ class _FinancialCategoryPageState extends State<FinancialCategoryPage> {
     FinancialEntry? entry,
   ]) async {
     final provider = context.read<BudgetProvider>();
+    final walletCash = context.read<WalletCashProvider>();
+    final walletCards = context.read<WalletCardsProvider>();
     final availableBalance =
         provider.remainingFor(widget.category) + (entry?.amount ?? 0);
 
@@ -343,7 +347,7 @@ class _FinancialCategoryPageState extends State<FinancialCategoryPage> {
       title: 'Use ${widget.title}',
       availableBalance: availableBalance,
       initialEntry: entry,
-      onSave: (name, amount, iconAsset) async {
+      onSave: (name, amount, iconAsset, source) async {
         if (entry == null) {
           await provider.addEntry(
             widget.category,
@@ -351,6 +355,20 @@ class _FinancialCategoryPageState extends State<FinancialCategoryPage> {
             amount: amount,
             iconAsset: iconAsset,
           );
+          // Deduct the spent amount from the chosen wallet or card.
+          if (source != null) {
+            if (source.isWallet) {
+              await walletCash.setAmount(walletCash.amount - amount);
+            } else if (source.cardId != null) {
+              final card = walletCards.cardById(source.cardId!);
+              if (card != null) {
+                await walletCards.setCardAmount(
+                  cardId: card.id,
+                  amount: card.amount - amount,
+                );
+              }
+            }
+          }
         } else {
           await provider.updateEntry(
             widget.category,

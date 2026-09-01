@@ -28,10 +28,14 @@ class DailySpendingPage extends StatelessWidget {
     final currency = context.watch<CurrencyProvider>();
     final target = DateTime(day.year, day.month, day.day);
     final transactions = budget.entriesForDay(target);
-    final total = transactions.fold<double>(
-      0,
-      (sum, item) => sum + item.entry.amount,
-    );
+    // Daily statistics show only money that was USED (spent). Refunds and
+    // added-money credits (isRefund) are excluded from the total.
+    final total = transactions
+        .where((item) => !item.entry.isRefund)
+        .fold<double>(
+          0,
+          (sum, item) => sum + item.entry.amount,
+        );
     final dateLabel = DateFormat('EEEE, MMMM d, yyyy').format(target);
 
     return Scaffold(

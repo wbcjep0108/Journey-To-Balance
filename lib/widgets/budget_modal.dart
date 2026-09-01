@@ -8,12 +8,32 @@ import 'package:provider/provider.dart';
 import '../models/financial_entry.dart';
 import '../models/spend_category_option.dart';
 import '../providers/currency_provider.dart';
+import '../providers/wallet_cards_provider.dart';
+import '../providers/wallet_cash_provider.dart';
 import 'barrier_blur.dart';
 import 'category_icon_badge.dart';
 import 'rate_limit_dialog.dart';
 
+/// The account a spend is paid from. Either the cash wallet, or a specific
+/// bank card identified by [cardId].
+class PaymentSource {
+  const PaymentSource.wallet()
+      : isWallet = true,
+        cardId = null;
+
+  const PaymentSource.card(String this.cardId) : isWallet = false;
+
+  final bool isWallet;
+  final String? cardId;
+}
+
 typedef BudgetModalSave =
-    Future<void> Function(String name, double amount, String? iconAsset);
+    Future<void> Function(
+      String name,
+      double amount,
+      String? iconAsset,
+      PaymentSource? source,
+    );
 
 class BudgetModal extends StatefulWidget {
   const BudgetModal({
@@ -102,11 +122,19 @@ class _BudgetModalState extends State<BudgetModal>
   late final List<SpendCategoryOption> _quickSelectOptions;
   SpendCategoryOption? _selectedOption;
 
+  /// Selected payment source (Wallet or a specific card). Only shown for new
+  /// spends; editing an existing entry does not re-charge a source.
+  PaymentSource _paymentSource = const PaymentSource.wallet();
+  String? _selectedCardId;
+
   bool _nameTouched = false;
   bool _amountTouched = false;
   bool _iconTouched = false;
   bool _isSaving = false;
   String? _submissionError;
+
+  /// Payment source is only relevant when recording a new spend.
+  bool get _showPaymentSource => widget.initialEntry == null;
 
   String get _name => _nameController.text.trim();
   double? get _amount => double.tryParse(_amountController.text);
@@ -217,6 +245,25 @@ class _BudgetModalState extends State<BudgetModal>
     _amountFocus.requestFocus();
   }
 
+  /// Resolves the chosen payment source and confirms it can cover [_amount].
+  /// Returns null when the selection is invalid or has insufficient balance.
+  PaymentSource? _resolvePaymentSource() {
+    final amount = _amount;
+    if (amount == null) return null;
+
+    if (_paymentSource.isWallet) {
+      final cash = context.read<WalletCashProvider>().amount;
+      if (amount > cash + 0.001) return null;
+      return const PaymentSource.wallet();
+    }
+
+    final cardId = _selectedCardId;
+    if (cardId == null) return null;
+    final card = context.read<WalletCardsProvider>().cardById(cardId);
+    if (card == null || amount > card.amount + 0.001) return null;
+    return PaymentSource.card(cardId);
+  }
+
   Future<void> _submit() async {
     _nameTouched = true;
     _amountTouched = true;
@@ -227,6 +274,20 @@ class _BudgetModalState extends State<BudgetModal>
       return;
     }
 
+    PaymentSource? source;
+    if (_showPaymentSource) {
+      final resolved = _resolvePaymentSource();
+      if (resolved == null) {
+        setState(
+          () => _submissionError =
+              'Select a payment method that can cover this amount.',
+        );
+        _shakeController.forward(from: 0);
+        return;
+      }
+      source = resolved;
+    }
+
     setState(() => _isSaving = true);
     final messenger = ScaffoldMessenger.maybeOf(context);
     try {
@@ -234,6 +295,7 @@ class _BudgetModalState extends State<BudgetModal>
         _name,
         _amount!,
         _selectedOption?.assetPath,
+        source,
       );
       if (mounted) Navigator.pop(context);
       await saveOperation;
@@ -376,6 +438,27 @@ class _BudgetModalState extends State<BudgetModal>
                       },
                       errorText: _amountTouched ? _amountError : null,
                     ),
+                    if (_showPaymentSource) ...[
+                      const SizedBox(height: 20),
+                      _PaymentSourceSection(
+                        walletSelected: _paymentSource.isWallet,
+                        selectedCardId: _selectedCardId,
+                        onSelectWallet: () {
+                          setState(() {
+                            _paymentSource = const PaymentSource.wallet();
+                            _selectedCardId = null;
+                            _submissionError = null;
+                          });
+                        },
+                        onSelectCard: (cardId) {
+                          setState(() {
+                            _paymentSource = PaymentSource.card(cardId);
+                            _selectedCardId = cardId;
+                            _submissionError = null;
+                          });
+                        },
+                      ),
+                    ],
                     AnimatedSwitcher(
                       duration: const Duration(milliseconds: 180),
                       child: _submissionError == null
@@ -554,6 +637,176 @@ class _QuickSelectChips extends StatelessWidget {
             onTap: () => onSelected(option),
           ),
       ],
+    );
+  }
+}
+
+class _PaymentSourceSection extends StatelessWidget {
+  const _PaymentSourceSection({
+    required this.walletSelected,
+    required this.selectedCardId,
+    required this.onSelectWallet,
+    required this.onSelectCard,
+  });
+
+  final bool walletSelected;
+  final String? selectedCardId;
+  final VoidCallback onSelectWallet;
+  final ValueChanged<String> onSelectCard;
+
+  @override
+  Widget build(BuildContext context) {
+    final symbol = context.watch<CurrencyProvider>().symbol;
+    final cash = context.watch<WalletCashProvider>().amount;
+    final cards = context.watch<WalletCardsProvider>().cards;
+
+    String money(double value) =>
+        '$symbol${NumberFormat('#,##0.00').format(value)}';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Payment method',
+          style: TextStyle(
+            color: Color(0xFF25282D),
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _PaymentSourceChip(
+                icon: Icons.account_balance_wallet_outlined,
+                label: 'Wallet',
+                subtitle: money(cash),
+                selected: walletSelected,
+                onTap: onSelectWallet,
+              ),
+              for (final card in cards)
+                _PaymentSourceChip(
+                  iconAsset: card.iconAsset,
+                  label: card.bankLabel,
+                  subtitle: money(card.amount),
+                  selected: !walletSelected && selectedCardId == card.id,
+                  onTap: () => onSelectCard(card.id),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PaymentSourceChip extends StatelessWidget {
+  const _PaymentSourceChip({
+    required this.label,
+    required this.subtitle,
+    required this.selected,
+    required this.onTap,
+    this.icon,
+    this.iconAsset,
+  });
+
+  final String label;
+  final String subtitle;
+  final bool selected;
+  final VoidCallback onTap;
+  final IconData? icon;
+  final String? iconAsset;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(30),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          padding: const EdgeInsets.fromLTRB(10, 8, 14, 8),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(30),
+            border: Border.all(
+              color: selected ? const Color(0xFF25282D) : Colors.transparent,
+              width: 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: selected ? 0.12 : 0.07),
+                blurRadius: selected ? 14 : 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (iconAsset != null)
+                Image.asset(
+                  iconAsset!,
+                  width: 22,
+                  height: 22,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, _, _) => const Icon(
+                    Icons.credit_card,
+                    size: 20,
+                    color: Color(0xFF737983),
+                  ),
+                )
+              else
+                Icon(
+                  icon ?? Icons.credit_card,
+                  size: 22,
+                  color: const Color(0xFF25282D),
+                ),
+              const SizedBox(width: 8),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: const Color(0xFF25282D),
+                      fontSize: 13,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      color: Color(0xFF737983),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
