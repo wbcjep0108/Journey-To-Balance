@@ -20,7 +20,7 @@ class FinanceApiService {
 
   /// Deployed Worker URL (workers.dev).
   static const defaultBaseUrl =
-      'https://journey-to-balance-api.bcueva1217.workers.dev';
+      'https://journey-to-balance-api.nu-clouds.workers.dev';
 
   final http.Client _http;
   final FirebaseAuth _auth;
