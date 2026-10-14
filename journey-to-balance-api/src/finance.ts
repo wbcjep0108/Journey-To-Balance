@@ -89,6 +89,25 @@ function normalizeIconAsset(value: unknown): string | undefined {
   return undefined;
 }
 
+function requireFundingSource(value: unknown, label: string): string {
+  if (typeof value !== "string") {
+    throw badRequest(`Invalid ${label}.`);
+  }
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > 128) {
+    throw badRequest(`Invalid ${label}.`);
+  }
+  return trimmed;
+}
+
+function optionalFundingSource(
+  value: unknown,
+  label: string,
+): string | undefined {
+  if (value == null) return undefined;
+  return requireFundingSource(value, label);
+}
+
 function loadBudget(userDoc: Record<string, unknown> | null): BudgetState {
   const budget = parseBudget(userDoc?.budget);
   migrateBudgetSchemaIfNeeded(budget);
@@ -353,6 +372,14 @@ export async function handleFinance(
     const createdAtMs =
       typeof body.createdAtMs === "number" ? body.createdAtMs : Date.now();
     const iconAsset = normalizeIconAsset(body.iconAsset);
+    const fundingSourceId = optionalFundingSource(
+      body.fundingSourceId,
+      "fundingSourceId",
+    );
+    const fundingSourceLabel = optionalFundingSource(
+      body.fundingSourceLabel,
+      "fundingSourceLabel",
+    );
 
     return withProtection(env, uid, "addTransaction", requestId, async () => {
       const userDoc = await client.getUserDoc(uid);
@@ -375,6 +402,8 @@ export async function handleFinance(
           createdAt: new Date(createdAtMs),
           isRefund: false,
           ...(iconAsset ? {iconAsset} : {}),
+          ...(fundingSourceId ? {fundingSourceId} : {}),
+          ...(fundingSourceLabel ? {fundingSourceLabel} : {}),
         },
       }).then((result) => ({...result, entryId}));
     });
@@ -416,6 +445,11 @@ export async function handleFinance(
           normalizeIconAsset(previous.iconAsset) :
           undefined;
       const nextIcon = iconAsset ?? previousIcon;
+      const fundingSourceId = typeof previous.fundingSourceId === "string" ?
+        previous.fundingSourceId.trim() : "";
+      const fundingSourceLabel =
+        typeof previous.fundingSourceLabel === "string" ?
+          previous.fundingSourceLabel.trim() : "";
       return saveBudget(client, uid, budget, {
         category,
         entryId,
@@ -425,6 +459,8 @@ export async function handleFinance(
           createdAt: previousCreatedAt,
           isRefund: false,
           ...(nextIcon ? {iconAsset: nextIcon} : {}),
+          ...(fundingSourceId ? {fundingSourceId} : {}),
+          ...(fundingSourceLabel ? {fundingSourceLabel} : {}),
         },
       }).then((result) => ({...result, entryId}));
     });
@@ -463,6 +499,10 @@ export async function handleFinance(
             new Date(entry.createdAt) :
             new Date();
         const refundIcon = normalizeIconAsset(entry.iconAsset);
+        const fundingSourceId = typeof entry.fundingSourceId === "string" ?
+          entry.fundingSourceId.trim() : "";
+        const fundingSourceLabel = typeof entry.fundingSourceLabel === "string" ?
+          entry.fundingSourceLabel.trim() : "";
         return saveBudget(client, uid, budget, {
           category,
           entryId,
@@ -472,6 +512,8 @@ export async function handleFinance(
             createdAt,
             isRefund: true,
             ...(refundIcon ? {iconAsset: refundIcon} : {}),
+            ...(fundingSourceId ? {fundingSourceId} : {}),
+            ...(fundingSourceLabel ? {fundingSourceLabel} : {}),
           },
         }).then((result) => ({
           ...result,
@@ -494,6 +536,14 @@ export async function handleFinance(
   case "contribute-to-savings-goal": {
     if (!isCategory(body.source)) throw badRequest("Invalid source category.");
     const source = body.source;
+    const fundingSourceId = requireFundingSource(
+      body.fundingSourceId,
+      "fundingSourceId",
+    );
+    const fundingSourceLabel = requireFundingSource(
+      body.fundingSourceLabel,
+      "fundingSourceLabel",
+    );
     const amount = requirePositiveAmount(body.amount);
     const entryId = typeof body.entryId === "string" ? body.entryId.trim() : "";
     if (!entryId) throw badRequest("Invalid entryId.");
@@ -526,6 +576,8 @@ export async function handleFinance(
             amount,
             createdAt: new Date(createdAtMs),
             isRefund: false,
+            fundingSourceId,
+            fundingSourceLabel,
           },
         }).then((result) => ({...result, entryId}));
       },

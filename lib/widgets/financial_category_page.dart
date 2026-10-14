@@ -348,11 +348,24 @@ class _FinancialCategoryPageState extends State<FinancialCategoryPage> {
       initialEntry: entry,
       onSave: (name, amount, iconAsset, source) async {
         if (entry == null) {
+          String? sourceId;
+          String? sourceLabel;
+          if (source != null) {
+            if (source.isWallet) {
+              sourceId = 'wallet';
+              sourceLabel = 'Wallet';
+            } else if (source.cardId != null) {
+              sourceId = source.cardId;
+              sourceLabel = walletCards.cardById(source.cardId!)?.bankLabel;
+            }
+          }
           await provider.addEntry(
             widget.category,
             title: name,
             amount: amount,
             iconAsset: iconAsset,
+            fundingSourceId: sourceId,
+            fundingSourceLabel: sourceLabel,
           );
           // Deduct the spent amount from the chosen wallet or card.
           if (source != null) {
@@ -520,7 +533,7 @@ class _EntryRowState extends State<_EntryRow> {
       borderRadius: BorderRadius.circular(12),
       child: SizedBox(
         width: double.infinity,
-        height: 56,
+        height: 68,
         child: Stack(
           fit: StackFit.expand,
           children: [
@@ -592,6 +605,10 @@ class _EntryRowState extends State<_EntryRow> {
                             child: EntryTitleWithIcon(
                               title: widget.entry.title,
                               iconAsset: widget.entry.iconAsset,
+                              subtitle: widget.entry.fundingSourceLabel == null
+                                  ? null
+                                  : 'Payment method: '
+                                        '${widget.entry.fundingSourceLabel}',
                               titleStyle: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 16,

@@ -33,7 +33,10 @@ class FinancialEntry {
   /// Optional Flutter asset path for the quick-select category icon.
   final String? iconAsset;
 
-  /// Wallet/card account used for a savings-goal contribution.
+  /// Wallet/card account used to fund this transaction.
+  ///
+  /// These fields are also used by savings-goal contributions so every
+  /// transaction can explain where its money came from.
   final String? fundingSourceId;
   final String? fundingSourceLabel;
 

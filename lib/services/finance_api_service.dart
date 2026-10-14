@@ -160,6 +160,8 @@ class FinanceApiService {
     required int createdAtMs,
     required String requestId,
     String? iconAsset,
+    String? fundingSourceId,
+    String? fundingSourceLabel,
   }) {
     return _post('/api/finance/add-transaction', {
       'category': category,
@@ -169,6 +171,10 @@ class FinanceApiService {
       'createdAtMs': createdAtMs,
       'requestId': requestId,
       if (iconAsset != null && iconAsset.isNotEmpty) 'iconAsset': iconAsset,
+      if (fundingSourceId != null && fundingSourceId.isNotEmpty)
+        'fundingSourceId': fundingSourceId,
+      if (fundingSourceLabel != null && fundingSourceLabel.isNotEmpty)
+        'fundingSourceLabel': fundingSourceLabel,
     });
   }
 

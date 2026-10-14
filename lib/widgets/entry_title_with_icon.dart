@@ -8,6 +8,7 @@ class EntryTitleWithIcon extends StatelessWidget {
     super.key,
     required this.title,
     this.iconAsset,
+    this.subtitle,
     this.titleStyle,
     this.iconSize = 34,
     this.spacing = 12,
@@ -15,6 +16,7 @@ class EntryTitleWithIcon extends StatelessWidget {
 
   final String title;
   final String? iconAsset;
+  final String? subtitle;
   final TextStyle? titleStyle;
   final double iconSize;
   final double spacing;
@@ -40,11 +42,30 @@ class EntryTitleWithIcon extends StatelessWidget {
           SizedBox(width: spacing),
         ],
         Expanded(
-          child: Text(
-            title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: style,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: style,
+              ),
+              if (subtitle != null && subtitle!.trim().isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(
+                  subtitle!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFFAAAAAA),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
       ],

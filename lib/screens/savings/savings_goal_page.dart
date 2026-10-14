@@ -1070,6 +1070,35 @@ class _RecentActivityList extends StatelessWidget {
 
   final List<DayTransaction> items;
 
+  Future<String?> _restoreFundingSource(
+    BuildContext context,
+    FinancialEntry entry,
+  ) async {
+    final sourceId = entry.fundingSourceId;
+    if (sourceId == null || sourceId.isEmpty) return null;
+
+    if (sourceId == 'wallet') {
+      final wallet = context.read<WalletCashProvider>();
+      await wallet.setAmount(wallet.amount + entry.amount);
+      return 'Wallet';
+    }
+
+    final cards = context.read<WalletCardsProvider>();
+    final card = cards.cardById(sourceId);
+    if (card != null) {
+      await cards.setCardAmount(
+        cardId: card.id,
+        amount: card.amount + entry.amount,
+      );
+      return card.bankLabel;
+    }
+
+    // If a previously used card was removed, return the money to Wallet.
+    final wallet = context.read<WalletCashProvider>();
+    await wallet.setAmount(wallet.amount + entry.amount);
+    return 'Wallet';
+  }
+
   Future<bool> _confirmDelete(
     BuildContext context,
     DayTransaction item,
@@ -1089,6 +1118,10 @@ class _RecentActivityList extends StatelessWidget {
         item.category,
         item.entry,
       );
+      final restoredAccount = await _restoreFundingSource(
+        context,
+        item.entry,
+      );
       if (context.mounted) {
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
@@ -1096,7 +1129,8 @@ class _RecentActivityList extends StatelessWidget {
             SnackBar(
               content: Text(
                 '${context.read<CurrencyProvider>().formatAmount(item.entry.amount)} '
-                'returned to ${SavingsGoalPage.categoryLabel(item.category)}.',
+                'returned to ${SavingsGoalPage.categoryLabel(item.category)}'
+                '${restoredAccount == null ? '.' : ' and $restoredAccount.'}',
               ),
             ),
           );
@@ -1245,6 +1279,78 @@ class _RecentActivityList extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+class _SavingsFundingSourceField extends StatelessWidget {
+  const _SavingsFundingSourceField({
+    required this.value,
+    required this.walletAmount,
+    required this.cards,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final String value;
+  final double walletAmount;
+  final List<WalletCardModel> cards;
+  final bool enabled;
+  final ValueChanged<String?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final currency = context.watch<CurrencyProvider>();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Take money from',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w800,
+            color: Color(0xFF121212),
+          ),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: value,
+          onChanged: enabled ? onChanged : null,
+          dropdownColor: Colors.white,
+          isExpanded: true,
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: const Color(0xFFF3F4F6),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 14,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide.none,
+            ),
+          ),
+          items: [
+            DropdownMenuItem<String>(
+              value: 'wallet',
+              child: Text(
+                'Wallet  •  ${currency.formatAmount(walletAmount)}',
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+            for (final card in cards)
+              DropdownMenuItem<String>(
+                value: card.id,
+                child: Text(
+                  '${card.bankLabel}  •  ${currency.formatAmount(card.amount)}',
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+          ],
+        ),
+      ],
     );
   }
 }

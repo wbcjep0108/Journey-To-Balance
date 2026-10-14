@@ -101,6 +101,7 @@ class BudgetProvider extends ChangeNotifier {
               !_pendingDeleteKeys.contains(_entryKey(category, entry.id)),
         )
         .map((entry) {
+          var mergedEntry = entry;
           // Keep a local icon if the remote doc omitted it (e.g. older API
           // rejected material: sentinels like Others).
           final localIcon = previousById[entry.id]?.iconAsset?.trim();
@@ -108,9 +109,22 @@ class BudgetProvider extends ChangeNotifier {
           if ((remoteIcon == null || remoteIcon.isEmpty) &&
               localIcon != null &&
               localIcon.isNotEmpty) {
-            return entry.copyWith(iconAsset: localIcon);
+            mergedEntry = mergedEntry.copyWith(iconAsset: localIcon);
           }
-          return entry;
+          // Preserve the physical Wallet/Card source while older backends are
+          // being upgraded to persist the new fields.
+          final localSource = previousById[entry.id]?.fundingSourceId?.trim();
+          final remoteSource = entry.fundingSourceId?.trim();
+          if ((remoteSource == null || remoteSource.isEmpty) &&
+              localSource != null &&
+              localSource.isNotEmpty) {
+            mergedEntry = mergedEntry.copyWith(
+              fundingSourceId: localSource,
+              fundingSourceLabel:
+                  previousById[entry.id]?.fundingSourceLabel,
+            );
+          }
+          return mergedEntry;
         })
         .toList();
 
@@ -788,6 +802,8 @@ class BudgetProvider extends ChangeNotifier {
     required String title,
     required double amount,
     String? iconAsset,
+    String? fundingSourceId,
+    String? fundingSourceLabel,
     bool awaitRemote = false,
   }) async {
     final uid = _requireUid();
@@ -803,6 +819,8 @@ class BudgetProvider extends ChangeNotifier {
       iconAsset: (trimmedIcon != null && trimmedIcon.isNotEmpty)
           ? trimmedIcon
           : null,
+      fundingSourceId: fundingSourceId,
+      fundingSourceLabel: fundingSourceLabel,
     );
     final key = _entryKey(category, entry.id);
     final previous = _remainingSnapshot();
@@ -828,6 +846,8 @@ class BudgetProvider extends ChangeNotifier {
           createdAtMs: entry.createdAt.millisecondsSinceEpoch,
           requestId: requestId,
           iconAsset: entry.iconAsset,
+          fundingSourceId: entry.fundingSourceId,
+          fundingSourceLabel: entry.fundingSourceLabel,
         );
       } catch (error) {
         _entries[category]!.removeWhere((item) => item.id == entry.id);

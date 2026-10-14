@@ -95,6 +95,25 @@ function requirePositiveAmount(amount: unknown): number {
   return amount;
 }
 
+function requireFundingSource(value: unknown, label: string): string {
+  if (typeof value !== "string") {
+    throw invalidArgument(`Invalid ${label}.`);
+  }
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > 128) {
+    throw invalidArgument(`Invalid ${label}.`);
+  }
+  return trimmed;
+}
+
+function optionalFundingSource(
+  value: unknown,
+  label: string,
+): string | undefined {
+  if (value == null) return undefined;
+  return requireFundingSource(value, label);
+}
+
 function requireNonNegative(amount: unknown, label: string): number {
   if (typeof amount !== "number" || !Number.isFinite(amount) || amount < 0) {
     throw invalidArgument(`${label} cannot be negative.`);
@@ -247,6 +266,14 @@ export async function addTransactionOp(
   const createdAtMs = typeof data.createdAtMs === "number" ?
     data.createdAtMs :
     Date.now();
+  const fundingSourceId = optionalFundingSource(
+    data.fundingSourceId,
+    "fundingSourceId",
+  );
+  const fundingSourceLabel = optionalFundingSource(
+    data.fundingSourceLabel,
+    "fundingSourceLabel",
+  );
 
   return withIdempotency(uid, requestId, "addTransaction", async () => {
     return getFirestore().runTransaction(async (tx) => {
@@ -274,6 +301,8 @@ export async function addTransactionOp(
         amount,
         createdAt: Timestamp.fromMillis(createdAtMs),
         isRefund: false,
+        ...(fundingSourceId ? {fundingSourceId} : {}),
+        ...(fundingSourceLabel ? {fundingSourceLabel} : {}),
       });
       writeBudget(tx, uid, budget);
       return {budget: budgetToFirestore(budget), entryId};
@@ -415,6 +444,14 @@ export async function contributeToSavingsGoalOp(
     throw invalidArgument("Invalid source category.");
   }
   const amount = requirePositiveAmount(data.amount);
+  const fundingSourceId = requireFundingSource(
+    data.fundingSourceId,
+    "fundingSourceId",
+  );
+  const fundingSourceLabel = requireFundingSource(
+    data.fundingSourceLabel,
+    "fundingSourceLabel",
+  );
   const entryId = typeof data.entryId === "string" ? data.entryId.trim() : "";
   if (!entryId) {
     throw invalidArgument("Invalid entryId.");
@@ -456,6 +493,8 @@ export async function contributeToSavingsGoalOp(
           amount,
           createdAt: Timestamp.fromMillis(createdAtMs),
           isRefund: false,
+          fundingSourceId,
+          fundingSourceLabel,
         });
         writeBudget(tx, uid, budget);
         return {budget: budgetToFirestore(budget), entryId};
