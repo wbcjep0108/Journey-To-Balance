@@ -18,6 +18,8 @@ class FinancialEntry {
     required this.createdAt,
     this.isRefund = false,
     this.iconAsset,
+    this.fundingSourceId,
+    this.fundingSourceLabel,
   });
 
   final String id;
@@ -31,6 +33,10 @@ class FinancialEntry {
   /// Optional Flutter asset path for the quick-select category icon.
   final String? iconAsset;
 
+  /// Wallet/card account used for a savings-goal contribution.
+  final String? fundingSourceId;
+  final String? fundingSourceLabel;
+
   FinancialEntry copyWith({
     String? title,
     double? amount,
@@ -38,6 +44,8 @@ class FinancialEntry {
     bool? isRefund,
     String? iconAsset,
     bool clearIconAsset = false,
+    String? fundingSourceId,
+    String? fundingSourceLabel,
   }) {
     return FinancialEntry(
       id: id,
@@ -46,6 +54,8 @@ class FinancialEntry {
       createdAt: createdAt ?? this.createdAt,
       isRefund: isRefund ?? this.isRefund,
       iconAsset: clearIconAsset ? null : (iconAsset ?? this.iconAsset),
+      fundingSourceId: fundingSourceId ?? this.fundingSourceId,
+      fundingSourceLabel: fundingSourceLabel ?? this.fundingSourceLabel,
     );
   }
 
@@ -56,6 +66,10 @@ class FinancialEntry {
       'createdAt': Timestamp.fromDate(createdAt),
       'isRefund': isRefund,
       if (iconAsset != null && iconAsset!.isNotEmpty) 'iconAsset': iconAsset,
+      if (fundingSourceId != null && fundingSourceId!.isNotEmpty)
+        'fundingSourceId': fundingSourceId,
+      if (fundingSourceLabel != null && fundingSourceLabel!.isNotEmpty)
+        'fundingSourceLabel': fundingSourceLabel,
     };
   }
 
@@ -65,6 +79,8 @@ class FinancialEntry {
     final data = document.data() ?? const <String, dynamic>{};
     final createdAt = data['createdAt'];
     final rawIcon = data['iconAsset'];
+    final rawFundingSourceId = data['fundingSourceId'];
+    final rawFundingSourceLabel = data['fundingSourceLabel'];
 
     return FinancialEntry(
       id: document.id,
@@ -76,6 +92,14 @@ class FinancialEntry {
       isRefund: data['isRefund'] == true,
       iconAsset: rawIcon is String && rawIcon.trim().isNotEmpty
           ? rawIcon.trim()
+          : null,
+      fundingSourceId:
+          rawFundingSourceId is String && rawFundingSourceId.trim().isNotEmpty
+              ? rawFundingSourceId.trim()
+              : null,
+      fundingSourceLabel: rawFundingSourceLabel is String &&
+              rawFundingSourceLabel.trim().isNotEmpty
+          ? rawFundingSourceLabel.trim()
           : null,
     );
   }

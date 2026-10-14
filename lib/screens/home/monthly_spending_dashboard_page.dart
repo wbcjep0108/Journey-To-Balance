@@ -750,16 +750,10 @@ class _CategoryBreakdownRow extends StatelessWidget {
                 ],
               ),
               padding: const EdgeInsets.all(8),
-              child: Image.asset(
-                categoryIconAsset(item.category),
-                fit: BoxFit.contain,
+              child: Icon(
+                categoryIcon(item.category),
+                size: 24,
                 color: Colors.black,
-                colorBlendMode: BlendMode.srcIn,
-                errorBuilder: (_, _, _) => const Icon(
-                  Icons.category_outlined,
-                  size: 16,
-                  color: Colors.black,
-                ),
               ),
             ),
             const SizedBox(width: 10),

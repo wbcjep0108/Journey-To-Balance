@@ -6,6 +6,8 @@ import 'package:provider/provider.dart';
 import '../../models/financial_entry.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/currency_provider.dart';
+import '../../providers/wallet_cards_provider.dart';
+import '../../providers/wallet_cash_provider.dart';
 import '../../widgets/barrier_blur.dart';
 import '../../widgets/rate_limit_dialog.dart';
 import '../../widgets/savings_goal_complete_dialog.dart';
@@ -506,8 +508,34 @@ class _ContributeToGoalModal extends StatefulWidget {
 }
 
 class _ContributeToGoalModalState extends State<_ContributeToGoalModal> {
+  static const _walletSourceId = 'wallet';
+
   final _controller = TextEditingController();
+  String _fundingSourceId = _walletSourceId;
   bool _saving = false;
+
+  String _fundingSourceLabel(
+    String sourceId,
+    List<WalletCardModel> cards,
+  ) {
+    if (sourceId == _walletSourceId) return 'Wallet';
+    for (final card in cards) {
+      if (card.id == sourceId) return card.bankLabel;
+    }
+    return 'Card';
+  }
+
+  double _fundingSourceBalance(
+    String sourceId,
+    double walletAmount,
+    List<WalletCardModel> cards,
+  ) {
+    if (sourceId == _walletSourceId) return walletAmount;
+    for (final card in cards) {
+      if (card.id == sourceId) return card.amount;
+    }
+    return 0;
+  }
 
   @override
   void dispose() {
@@ -518,10 +546,31 @@ class _ContributeToGoalModalState extends State<_ContributeToGoalModal> {
   Future<void> _confirm() async {
     if (_saving) return;
     final budget = context.read<BudgetProvider>();
+    final wallet = context.read<WalletCashProvider>();
+    final cardsProvider = context.read<WalletCardsProvider>();
+    final cards = cardsProvider.cards;
     final amount = double.tryParse(_controller.text) ?? 0;
     if (amount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Enter an amount greater than zero.')),
+      );
+      return;
+    }
+    final fundingBalance = _fundingSourceBalance(
+      _fundingSourceId,
+      wallet.amount,
+      cards,
+    );
+    final fundingLabel = _fundingSourceLabel(_fundingSourceId, cards);
+    if (amount > fundingBalance + 0.001) {
+      final symbol = context.read<CurrencyProvider>().symbol;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Only $symbol${NumberFormat('#,##0.##').format(fundingBalance)} '
+            'is available in $fundingLabel.',
+          ),
+        ),
       );
       return;
     }
@@ -550,8 +599,21 @@ class _ContributeToGoalModalState extends State<_ContributeToGoalModal> {
       // Optimistic update BEFORE closing so the page already shows new totals.
       await budget.contributeToSavingsGoal(
         source: category,
+        fundingSourceId: _fundingSourceId,
+        fundingSourceLabel: fundingLabel,
         amount: amount,
       );
+      if (_fundingSourceId == _walletSourceId) {
+        await wallet.setAmount(wallet.amount - amount);
+      } else {
+        final card = cardsProvider.cardById(_fundingSourceId);
+        if (card != null) {
+          await cardsProvider.setCardAmount(
+            cardId: card.id,
+            amount: card.amount - amount,
+          );
+        }
+      }
       final justCompleted =
           previousCurrent < goalTarget - 0.001 &&
           budget.savingsGoalCurrent >= goalTarget - 0.001;
@@ -562,7 +624,7 @@ class _ContributeToGoalModalState extends State<_ContributeToGoalModal> {
           ..showSnackBar(
             SnackBar(
               content: Text(
-                '$symbol${NumberFormat('#,##0.##').format(amount)} added to your savings goal.',
+                '$symbol${NumberFormat('#,##0.##').format(amount)} added to your savings goal from $fundingLabel.',
               ),
             ),
           );
@@ -580,6 +642,8 @@ class _ContributeToGoalModalState extends State<_ContributeToGoalModal> {
   Widget build(BuildContext context) {
     final budget = context.watch<BudgetProvider>();
     final preferred = context.watch<CurrencyProvider>();
+    final walletAmount = context.watch<WalletCashProvider>().amount;
+    final cards = context.watch<WalletCardsProvider>().cards;
     final remaining = budget.remainingFor(widget.category);
     final remainingLabel = NumberFormat.currency(
       locale: preferred.currency.locale,
@@ -665,6 +729,18 @@ class _ContributeToGoalModalState extends State<_ContributeToGoalModal> {
                         ),
                       ),
                       const SizedBox(height: 24),
+                      _SavingsFundingSourceField(
+                        value: _fundingSourceId,
+                        walletAmount: walletAmount,
+                        cards: cards,
+                        enabled: !_saving,
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(() => _fundingSourceId = value);
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 16),
                       _AmountField(
                         label: 'Amount',
                         controller: _controller,
@@ -734,12 +810,10 @@ class _GoalHeader extends StatelessWidget {
           IgnorePointer(
             child: Opacity(
               opacity: 0.10,
-              child: Image.asset(
-                'assets/images/icons/piggybank.png',
-                width: 230,
-                height: 230,
+              child: const Icon(
+                Icons.savings_outlined,
+                size: 230,
                 color: const Color(0xFF9CA3AF),
-                colorBlendMode: BlendMode.srcIn,
               ),
             ),
           ),
@@ -899,7 +973,7 @@ class _QuickActionCardsRow extends StatelessWidget {
       children: [
         Expanded(
           child: _ActionCard(
-            assetPath: 'assets/images/icons/bills.png',
+            icon: Icons.receipt_long_outlined,
             label: 'Bills',
             onTap: () => onCategoryTap(FinancialCategory.bills),
           ),
@@ -907,7 +981,7 @@ class _QuickActionCardsRow extends StatelessWidget {
         const SizedBox(width: 12),
         Expanded(
           child: _ActionCard(
-            assetPath: 'assets/images/icons/savings.png',
+            icon: Icons.savings_outlined,
             label: 'Savings',
             onTap: () => onCategoryTap(FinancialCategory.savings),
           ),
@@ -915,7 +989,7 @@ class _QuickActionCardsRow extends StatelessWidget {
         const SizedBox(width: 12),
         Expanded(
           child: _ActionCard(
-            assetPath: 'assets/images/icons/personal.png',
+            icon: Icons.person_outline,
             label: 'Personal',
             onTap: () => onCategoryTap(FinancialCategory.personal),
           ),
@@ -927,12 +1001,12 @@ class _QuickActionCardsRow extends StatelessWidget {
 
 class _ActionCard extends StatelessWidget {
   const _ActionCard({
-    required this.assetPath,
+    required this.icon,
     required this.label,
     required this.onTap,
   });
 
-  final String assetPath;
+  final IconData icon;
   final String label;
   final VoidCallback onTap;
 
@@ -966,12 +1040,10 @@ class _ActionCard extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Image.asset(
-                    assetPath,
-                    width: 30,
-                    height: 30,
+                  Icon(
+                    icon,
+                    size: 30,
                     color: const Color(0xFF121212),
-                    colorBlendMode: BlendMode.srcIn,
                   ),
                   const SizedBox(height: 8),
                   Text(

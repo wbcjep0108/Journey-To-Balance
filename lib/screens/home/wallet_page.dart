@@ -147,6 +147,40 @@ class _WalletPageState extends State<WalletPage> {
     );
   }
 
+  Future<void> _showTransferDialog() async {
+    final cards = context.read<WalletCardsProvider>().cards;
+    if (cards.isEmpty) {
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.white,
+          title: const Text('Transfer money'),
+          content: const Text(
+            'Add at least one card before transferring money between accounts.',
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF121212),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _WalletTransferDialog(hostContext: context),
+    );
+  }
+
   void _clampSelectedIndex(int cardCount) {
     if (cardCount <= 0) {
       _selectedIndex = 0;
@@ -462,18 +496,36 @@ class _WalletPageState extends State<WalletPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    IconButton(
-                      onPressed: () => Navigator.of(context).maybePop(),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(
-                        minWidth: 40,
-                        minHeight: 40,
-                      ),
-                      icon: const Icon(
-                        Icons.arrow_back_ios_new_rounded,
-                        color: Colors.white,
-                        size: 18,
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        IconButton(
+                          onPressed: () => Navigator.of(context).maybePop(),
+                          tooltip: 'Back',
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(
+                            minWidth: 40,
+                            minHeight: 40,
+                          ),
+                          icon: const Icon(
+                            Icons.arrow_back_ios_new_rounded,
+                            color: Colors.white,
+                            size: 18,
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: _showTransferDialog,
+                          tooltip: 'Transfer money',
+                          style: IconButton.styleFrom(
+                            foregroundColor: Colors.white,
+                            backgroundColor: Colors.white.withValues(alpha: 0.10),
+                          ),
+                          icon: const Icon(
+                            Icons.swap_horiz_rounded,
+                            size: 25,
+                          ),
+                        ),
+                      ],
                     ),
                     Expanded(
                       child: Center(
@@ -605,6 +657,355 @@ class _WalletPageState extends State<WalletPage> {
     );
   }
 
+}
+
+class _WalletTransferDialog extends StatefulWidget {
+  const _WalletTransferDialog({required this.hostContext});
+
+  final BuildContext hostContext;
+
+  @override
+  State<_WalletTransferDialog> createState() =>
+      _WalletTransferDialogState();
+}
+
+class _WalletTransferDialogState extends State<_WalletTransferDialog> {
+  static const _walletId = 'wallet';
+
+  late final TextEditingController _amountController;
+  late String _sourceId;
+  late String _destinationId;
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    final cards = widget.hostContext.read<WalletCardsProvider>().cards;
+    _sourceId = _walletId;
+    _destinationId = cards.first.id;
+    _amountController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    super.dispose();
+  }
+
+  String _labelFor(String id, List<WalletCardModel> cards) {
+    if (id == _walletId) return 'Wallet';
+    for (final card in cards) {
+      if (card.id == id) return card.bankLabel;
+    }
+    return 'Card';
+  }
+
+  double _balanceFor(
+    String id,
+    double walletAmount,
+    List<WalletCardModel> cards,
+  ) {
+    if (id == _walletId) return walletAmount;
+    for (final card in cards) {
+      if (card.id == id) return card.amount;
+    }
+    return 0;
+  }
+
+  void _selectSource(String? value, List<String> accountIds) {
+    if (value == null) return;
+    setState(() {
+      _sourceId = value;
+      if (_destinationId == value) {
+        _destinationId = accountIds.firstWhere((id) => id != value);
+      }
+      _error = null;
+    });
+  }
+
+  Future<void> _transfer() async {
+    if (_saving) return;
+
+    final amount = double.tryParse(
+      _amountController.text.replaceAll(',', '').trim(),
+    );
+    final wallet = widget.hostContext.read<WalletCashProvider>();
+    final cardsProvider = widget.hostContext.read<WalletCardsProvider>();
+    final cards = cardsProvider.cards;
+    final sourceBalance = _balanceFor(_sourceId, wallet.amount, cards);
+
+    if (amount == null || amount <= 0) {
+      setState(() => _error = 'Enter an amount greater than zero.');
+      return;
+    }
+    if (_sourceId == _destinationId) {
+      setState(() => _error = 'Choose two different accounts.');
+      return;
+    }
+    if (amount > sourceBalance) {
+      setState(() => _error = 'The selected source does not have enough money.');
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+
+    final authorized = await showSensitiveActionAuth(
+      context: widget.hostContext,
+      title: 'Confirm money transfer',
+      description:
+          'Enter your PIN or use fingerprint to transfer money between your wallet and cards.',
+    );
+    if (!mounted) return;
+    if (authorized != true) {
+      setState(() => _saving = false);
+      return;
+    }
+
+    var nextWalletAmount = wallet.amount;
+    final nextCardAmounts = <String, double>{};
+    for (final card in cards) {
+      nextCardAmounts[card.id] = card.amount;
+    }
+
+    if (_sourceId == _walletId) {
+      nextWalletAmount -= amount;
+    } else {
+      nextCardAmounts[_sourceId] = nextCardAmounts[_sourceId]! - amount;
+    }
+    if (_destinationId == _walletId) {
+      nextWalletAmount += amount;
+    } else {
+      nextCardAmounts[_destinationId] =
+          nextCardAmounts[_destinationId]! + amount;
+    }
+
+    try {
+      if (_sourceId == _walletId || _destinationId == _walletId) {
+        await wallet.setAmount(nextWalletAmount);
+      }
+      if (_sourceId != _walletId || _destinationId != _walletId) {
+        await cardsProvider.setCardAmounts(nextCardAmounts);
+      }
+
+      if (!mounted) return;
+      final sourceLabel = _labelFor(_sourceId, cards);
+      final destinationLabel = _labelFor(_destinationId, cards);
+      Navigator.pop(context);
+      if (widget.hostContext.mounted) {
+        ScaffoldMessenger.of(widget.hostContext)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(
+                'Money transferred from $sourceLabel to $destinationLabel.',
+              ),
+            ),
+          );
+      }
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _error = 'The transfer could not be completed. Please try again.';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final currency = context.watch<CurrencyProvider>();
+    final walletAmount = context.watch<WalletCashProvider>().amount;
+    final cards = context.watch<WalletCardsProvider>().cards;
+    final accountIds = [_walletId, for (final card in cards) card.id];
+
+    return AlertDialog(
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      title: const Text(
+        'Transfer money',
+        style: TextStyle(
+          color: Color(0xFF121212),
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 380),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Move money between your wallet and selected cards. Your total available balance will not change.',
+                style: TextStyle(color: Color(0xFF4B5563)),
+              ),
+              const SizedBox(height: 20),
+              _TransferAccountField(
+                label: 'From',
+                value: _sourceId,
+                accountIds: accountIds,
+                labelFor: (id) => _labelFor(id, cards),
+                balanceFor: (id) => currency.formatAmount(
+                  _balanceFor(id, walletAmount, cards),
+                ),
+                onChanged: (value) => _selectSource(value, accountIds),
+              ),
+              const SizedBox(height: 14),
+              Center(
+                child: IconButton(
+                  tooltip: 'Swap accounts',
+                  onPressed: _saving
+                      ? null
+                      : () {
+                          setState(() {
+                            final previousSource = _sourceId;
+                            _sourceId = _destinationId;
+                            _destinationId = previousSource;
+                            _error = null;
+                          });
+                        },
+                  style: IconButton.styleFrom(
+                    backgroundColor: const Color(0xFF121212),
+                    foregroundColor: Colors.white,
+                  ),
+                  icon: const Icon(Icons.swap_vert_rounded),
+                ),
+              ),
+              const SizedBox(height: 14),
+              _TransferAccountField(
+                label: 'To',
+                value: _destinationId,
+                accountIds: accountIds.where((id) => id != _sourceId).toList(),
+                labelFor: (id) => _labelFor(id, cards),
+                balanceFor: (id) => currency.formatAmount(
+                  _balanceFor(id, walletAmount, cards),
+                ),
+                onChanged: _saving
+                    ? null
+                    : (value) {
+                        if (value != null) {
+                          setState(() {
+                            _destinationId = value;
+                            _error = null;
+                          });
+                        }
+                      },
+              ),
+              const SizedBox(height: 18),
+              TextField(
+                controller: _amountController,
+                enabled: !_saving,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+                ],
+                decoration: InputDecoration(
+                  labelText: 'Amount',
+                  prefixText: '${currency.symbol} ',
+                  errorText: _error,
+                  filled: true,
+                  fillColor: const Color(0xFFF3F4F6),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.pop(context),
+          style: TextButton.styleFrom(
+            foregroundColor: const Color(0xFF121212),
+          ),
+          child: const Text('Cancel'),
+        ),
+        FilledButton.icon(
+          onPressed: _saving ? null : _transfer,
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xFF121212),
+            foregroundColor: Colors.white,
+            disabledBackgroundColor: const Color(0xFF6B7280),
+            shape: const StadiumBorder(),
+          ),
+          icon: _saving
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : const Icon(Icons.swap_horiz_rounded),
+          label: Text(_saving ? 'Transferring' : 'Transfer'),
+        ),
+      ],
+    );
+  }
+}
+
+class _TransferAccountField extends StatelessWidget {
+  const _TransferAccountField({
+    required this.label,
+    required this.value,
+    required this.accountIds,
+    required this.labelFor,
+    required this.balanceFor,
+    required this.onChanged,
+  });
+
+  final String label;
+  final String value;
+  final List<String> accountIds;
+  final String Function(String id) labelFor;
+  final String Function(String id) balanceFor;
+  final ValueChanged<String?>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButtonFormField<String>(
+      value: value,
+      onChanged: onChanged,
+      dropdownColor: Colors.white,
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: const TextStyle(
+          color: Color(0xFF121212),
+          fontWeight: FontWeight.w800,
+        ),
+        floatingLabelStyle: const TextStyle(
+          color: Color(0xFF121212),
+          fontWeight: FontWeight.w800,
+        ),
+        filled: true,
+        fillColor: const Color(0xFFF3F4F6),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
+      ),
+      items: [
+        for (final id in accountIds)
+          DropdownMenuItem<String>(
+            value: id,
+            child: Text(
+              '${labelFor(id)}  •  ${balanceFor(id)}',
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+      ],
+    );
+  }
 }
 
 class _StackedCardDeck extends StatelessWidget {
@@ -949,10 +1350,17 @@ class _BankCardPopupState extends State<_BankCardPopup> {
                           left: 20,
                           bottom: 16,
                           right: 88,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: Colors.black.withValues(alpha: 0.52),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
                               Row(
                                 mainAxisSize: MainAxisSize.min,
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -974,7 +1382,7 @@ class _BankCardPopupState extends State<_BankCardPopup> {
                                               ),
                                             ],
                                             style: const TextStyle(
-                                              color: Colors.black,
+                                              color: Colors.white,
                                               fontSize: 28,
                                               fontWeight: FontWeight.w800,
                                               height: 1,
@@ -985,7 +1393,7 @@ class _BankCardPopupState extends State<_BankCardPopup> {
                                               contentPadding: EdgeInsets.zero,
                                               prefixText: currency.symbol,
                                               prefixStyle: const TextStyle(
-                                                color: Colors.black,
+                                                color: Colors.white,
                                                 fontSize: 28,
                                                 fontWeight: FontWeight.w800,
                                               ),
@@ -997,7 +1405,7 @@ class _BankCardPopupState extends State<_BankCardPopup> {
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
                                             style: const TextStyle(
-                                              color: Colors.black,
+                                              color: Colors.white,
                                               fontSize: 28,
                                               fontWeight: FontWeight.w800,
                                               height: 1,
@@ -1022,7 +1430,7 @@ class _BankCardPopupState extends State<_BankCardPopup> {
                                           ? Icons.check_rounded
                                           : Icons.edit_rounded,
                                       size: 16,
-                                      color: Colors.black,
+                                      color: Colors.white,
                                     ),
                                   ),
                                 ],
@@ -1031,12 +1439,14 @@ class _BankCardPopupState extends State<_BankCardPopup> {
                               const Text(
                                 'Remaining money',
                                 style: TextStyle(
-                                  color: Colors.black,
+                                  color: Colors.white70,
                                   fontSize: 12,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
-                            ],
+                                ],
+                              ),
+                            ),
                           ),
                         ),
                       ],

@@ -206,6 +206,8 @@ class FinanceApiService {
 
   Future<Map<String, dynamic>> contributeToSavingsGoal({
     required String source,
+    required String fundingSourceId,
+    required String fundingSourceLabel,
     required double amount,
     required String entryId,
     required int createdAtMs,
@@ -213,6 +215,8 @@ class FinanceApiService {
   }) {
     return _post('/api/finance/contribute-to-savings-goal', {
       'source': source,
+      'fundingSourceId': fundingSourceId,
+      'fundingSourceLabel': fundingSourceLabel,
       'amount': amount,
       'entryId': entryId,
       'createdAtMs': createdAtMs,

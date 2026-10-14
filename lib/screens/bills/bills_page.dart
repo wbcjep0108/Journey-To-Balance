@@ -12,7 +12,7 @@ class BillsPage extends StatelessWidget {
       category: FinancialCategory.bills,
       title: 'Bills',
       sectionTitle: 'Recent Bills',
-      iconPath: 'assets/images/icons/bills.png',
+      icon: Icons.receipt_long_outlined,
     );
   }
 }

@@ -21,7 +21,7 @@ class CategoryIconBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isMaterial = SpendCategoryOption.isMaterialAsset(iconAsset);
+    final isMaterial = SpendCategoryOption.usesMaterialIconForAsset(iconAsset);
 
     return Container(
       width: size,

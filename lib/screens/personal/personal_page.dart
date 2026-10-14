@@ -12,7 +12,7 @@ class PersonalPage extends StatelessWidget {
       category: FinancialCategory.personal,
       title: 'Personal',
       sectionTitle: 'Recent Personal Expenses',
-      iconPath: 'assets/images/icons/personal.png',
+      icon: Icons.person_outline,
     );
   }
 }

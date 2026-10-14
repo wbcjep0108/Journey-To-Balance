@@ -9,6 +9,139 @@ import '../../widgets/allocation_confirm_dialog.dart';
 import '../../widgets/rate_limit_dialog.dart';
 import '../../widgets/sensitive_action_auth.dart';
 
+class SalaryDepositSource {
+  const SalaryDepositSource.wallet()
+    : isWallet = true,
+      cardId = null,
+      label = 'Wallet';
+
+  const SalaryDepositSource.card({required this.cardId, required this.label})
+    : isWallet = false;
+
+  final bool isWallet;
+  final String? cardId;
+  final String label;
+
+  @override
+  bool operator ==(Object other) =>
+      other is SalaryDepositSource &&
+      isWallet == other.isWallet &&
+      cardId == other.cardId;
+
+  @override
+  int get hashCode => Object.hash(isWallet, cardId);
+}
+
+class SalaryDepositSourceDialog extends StatefulWidget {
+  const SalaryDepositSourceDialog({super.key, required this.hostContext});
+
+  final BuildContext hostContext;
+
+  @override
+  State<SalaryDepositSourceDialog> createState() =>
+      _SalaryDepositSourceDialogState();
+}
+
+class _SalaryDepositSourceDialogState extends State<SalaryDepositSourceDialog> {
+  late final List<WalletCardModel> _cards;
+  SalaryDepositSource _selected = const SalaryDepositSource.wallet();
+
+  @override
+  void initState() {
+    super.initState();
+    _cards = widget.hostContext.read<WalletCardsProvider>().cards.toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      titleTextStyle: const TextStyle(
+        color: Color(0xFF121212),
+        fontSize: 26,
+        fontWeight: FontWeight.w700,
+      ),
+      contentTextStyle: const TextStyle(
+        color: Color(0xFF4B5563),
+        fontSize: 15,
+        fontWeight: FontWeight.w500,
+      ),
+      title: const Text('Where did the salary go?'),
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 360),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Choose the wallet or card that received your salary.',
+              ),
+              const SizedBox(height: 12),
+              RadioListTile<SalaryDepositSource>(
+                value: const SalaryDepositSource.wallet(),
+                groupValue: _selected,
+                activeColor: const Color(0xFF121212),
+                fillColor: WidgetStateProperty.resolveWith(
+                  (states) => states.contains(WidgetState.selected)
+                      ? const Color(0xFF121212)
+                      : const Color(0xFF4B5563),
+                ),
+                title: const Text('Wallet'),
+                secondary: const Icon(Icons.account_balance_wallet_outlined),
+                onChanged: (value) => setState(() => _selected = value!),
+              ),
+              for (final card in _cards)
+                RadioListTile<SalaryDepositSource>(
+                  value: SalaryDepositSource.card(
+                    cardId: card.id,
+                    label: card.bankLabel,
+                  ),
+                  groupValue: _selected,
+                  activeColor: const Color(0xFF121212),
+                  fillColor: WidgetStateProperty.resolveWith(
+                    (states) => states.contains(WidgetState.selected)
+                        ? const Color(0xFF121212)
+                        : const Color(0xFF4B5563),
+                  ),
+                  title: Text(card.bankLabel),
+                  secondary: Image.asset(
+                    card.iconAsset,
+                    width: 28,
+                    height: 28,
+                    errorBuilder: (_, _, _) =>
+                        const Icon(Icons.credit_card_outlined),
+                  ),
+                  onChanged: (value) => setState(() => _selected = value!),
+                ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          style: TextButton.styleFrom(
+            foregroundColor: const Color(0xFF121212),
+          ),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, _selected),
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xFF121212),
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+            shape: const StadiumBorder(),
+          ),
+          child: const Text('Continue'),
+        ),
+      ],
+    );
+  }
+}
+
 Widget homeDialogField({
   required String label,
   required TextEditingController controller,

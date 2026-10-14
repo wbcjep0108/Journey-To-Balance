@@ -854,7 +854,8 @@ class _CategoryChip extends StatelessWidget {
             children: [
               if (option.usesMaterialIcon)
                 Icon(
-                  option.materialIcon,
+                  option.materialIcon ??
+                      SpendCategoryOption.materialIconForAsset(option.assetPath),
                   size: 22,
                   color: const Color(0xFF25282D),
                 )

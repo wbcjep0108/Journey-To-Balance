@@ -12,7 +12,7 @@ class SpendCategoryOption {
 
   final String label;
 
-  /// PNG asset path, or a material sentinel such as [materialOthers].
+  /// A Material-icon sentinel. Legacy PNG paths remain supported for saved data.
   final String assetPath;
 
   /// When set, UI renders this Material icon instead of a PNG.
@@ -20,19 +20,86 @@ class SpendCategoryOption {
 
   static const materialOthers = 'material:more_horiz';
 
-  bool get usesMaterialIcon => materialIcon != null;
+  bool get usesMaterialIcon =>
+      materialIcon != null || isMaterialAsset(assetPath) || _legacyPaths.contains(assetPath);
 
   static bool isMaterialAsset(String? path) =>
       path != null && path.startsWith('material:');
 
+  static bool usesMaterialIconForAsset(String path) =>
+      isMaterialAsset(path) || _legacyPaths.contains(path);
+
   static IconData materialIconForAsset(String path) {
     switch (path) {
+      case 'material:electric_bolt':
+      case 'assets/images/icons_bills/electricity.png':
+        return Icons.electric_bolt_outlined;
+      case 'material:restaurant':
+      case 'assets/images/icons_bills/food.png':
+      case 'assets/images/icons_personal/restaurant.png':
+        return Icons.restaurant_outlined;
+      case 'material:router':
+      case 'assets/images/icons_bills/internet.png':
+        return Icons.router_outlined;
+      case 'material:account_balance':
+      case 'assets/images/icons_bills/loan.png':
+        return Icons.account_balance_outlined;
+      case 'material:medication':
+      case 'assets/images/icons_bills/medicine.png':
+        return Icons.medication_outlined;
+      case 'material:home':
+      case 'assets/images/icons_bills/rent.png':
+        return Icons.home_outlined;
+      case 'material:directions_bus':
+      case 'assets/images/icons_bills/transpo.png':
+        return Icons.directions_bus_outlined;
+      case 'material:water_drop':
+      case 'assets/images/icons_bills/water.png':
+        return Icons.water_drop_outlined;
+      case 'material:checkroom':
+      case 'assets/images/icons_personal/clothes.png':
+        return Icons.checkroom_outlined;
+      case 'material:coffee':
+      case 'assets/images/icons_personal/coffee.png':
+        return Icons.coffee_outlined;
+      case 'material:theaters':
+      case 'assets/images/icons_personal/entertainment.png':
+        return Icons.theaters_outlined;
+      case 'material:card_giftcard':
+      case 'assets/images/icons_personal/gift.png':
+        return Icons.card_giftcard_outlined;
+      case 'material:shopping_bag':
+      case 'assets/images/icons_personal/shopping.png':
+        return Icons.shopping_bag_outlined;
+      case 'material:savings':
+      case 'assets/images/icons_savings/emergency fund.png':
+        return Icons.savings_outlined;
       case materialOthers:
         return Icons.more_horiz;
       default:
         return Icons.more_horiz;
     }
   }
+
+  static const _legacyPaths = {
+    'assets/images/icons_bills/electricity.png',
+    'assets/images/icons_bills/food.png',
+    'assets/images/icons_bills/internet.png',
+    'assets/images/icons_bills/loan.png',
+    'assets/images/icons_bills/medicine.png',
+    'assets/images/icons_bills/rent.png',
+    'assets/images/icons_bills/transpo.png',
+    'assets/images/icons_bills/water.png',
+    'assets/images/icons_bills/others.png',
+    'assets/images/icons_personal/clothes.png',
+    'assets/images/icons_personal/coffee.png',
+    'assets/images/icons_personal/entertainment.png',
+    'assets/images/icons_personal/gift.png',
+    'assets/images/icons_personal/restaurant.png',
+    'assets/images/icons_personal/shopping.png',
+    'assets/images/icons_personal/others.png',
+    'assets/images/icons_savings/emergency fund.png',
+  };
 }
 
 /// Preset chips per financial category, bound to on-disk icon folders.
@@ -49,77 +116,77 @@ class SpendCategoryPresets {
         return const [
           SpendCategoryOption(
             label: 'Electricity',
-            assetPath: '$billsAssetDir/electricity.png',
+            assetPath: 'material:electric_bolt',
           ),
           SpendCategoryOption(
             label: 'Food',
-            assetPath: '$billsAssetDir/food.png',
+            assetPath: 'material:restaurant',
           ),
           SpendCategoryOption(
             label: 'Internet',
-            assetPath: '$billsAssetDir/internet.png',
+            assetPath: 'material:router',
           ),
           SpendCategoryOption(
             label: 'Loan',
-            assetPath: '$billsAssetDir/loan.png',
+            assetPath: 'material:account_balance',
           ),
           SpendCategoryOption(
             label: 'Medicine',
-            assetPath: '$billsAssetDir/medicine.png',
+            assetPath: 'material:medication',
           ),
           SpendCategoryOption(
             label: 'Rent',
-            assetPath: '$billsAssetDir/rent.png',
+            assetPath: 'material:home',
           ),
           SpendCategoryOption(
             label: 'Transpo',
-            assetPath: '$billsAssetDir/transpo.png',
+            assetPath: 'material:directions_bus',
           ),
           SpendCategoryOption(
             label: 'Water',
-            assetPath: '$billsAssetDir/water.png',
+            assetPath: 'material:water_drop',
           ),
           SpendCategoryOption(
             label: 'Others',
-            assetPath: '$billsAssetDir/others.png',
+            assetPath: SpendCategoryOption.materialOthers,
           ),
         ];
       case FinancialCategory.personal:
         return const [
           SpendCategoryOption(
             label: 'Clothes',
-            assetPath: '$personalAssetDir/clothes.png',
+            assetPath: 'material:checkroom',
           ),
           SpendCategoryOption(
             label: 'Coffee',
-            assetPath: '$personalAssetDir/coffee.png',
+            assetPath: 'material:coffee',
           ),
           SpendCategoryOption(
             label: 'Entertainment',
-            assetPath: '$personalAssetDir/entertainment.png',
+            assetPath: 'material:theaters',
           ),
           SpendCategoryOption(
             label: 'Gift',
-            assetPath: '$personalAssetDir/gift.png',
+            assetPath: 'material:card_giftcard',
           ),
           SpendCategoryOption(
             label: 'Restaurant',
-            assetPath: '$personalAssetDir/restaurant.png',
+            assetPath: 'material:restaurant',
           ),
           SpendCategoryOption(
             label: 'Shopping',
-            assetPath: '$personalAssetDir/shopping.png',
+            assetPath: 'material:shopping_bag',
           ),
           SpendCategoryOption(
             label: 'Others',
-            assetPath: '$personalAssetDir/others.png',
+            assetPath: SpendCategoryOption.materialOthers,
           ),
         ];
       case FinancialCategory.savings:
         return const [
           SpendCategoryOption(
             label: 'Emergency Fund',
-            assetPath: '$savingsAssetDir/emergency fund.png',
+            assetPath: 'material:savings',
           ),
         ];
     }

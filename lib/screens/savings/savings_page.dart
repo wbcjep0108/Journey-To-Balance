@@ -12,7 +12,7 @@ class SavingsPage extends StatelessWidget {
       category: FinancialCategory.savings,
       title: 'Savings',
       sectionTitle: 'Recent Savings',
-      iconPath: 'assets/images/icons/savings.png',
+      icon: Icons.savings_outlined,
     );
   }
 }

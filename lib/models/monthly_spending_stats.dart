@@ -180,10 +180,10 @@ String categoryDashboardLabel(FinancialCategory category) {
   };
 }
 
-String categoryIconAsset(FinancialCategory category) {
+IconData categoryIcon(FinancialCategory category) {
   return switch (category) {
-    FinancialCategory.bills => 'assets/images/icons/bills.png',
-    FinancialCategory.savings => 'assets/images/icons/savings.png',
-    FinancialCategory.personal => 'assets/images/icons/personal.png',
+    FinancialCategory.bills => Icons.receipt_long_outlined,
+    FinancialCategory.savings => Icons.savings_outlined,
+    FinancialCategory.personal => Icons.person_outline,
   };
 }

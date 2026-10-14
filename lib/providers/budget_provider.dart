@@ -949,6 +949,8 @@ class BudgetProvider extends ChangeNotifier {
 
   Future<void> contributeToSavingsGoal({
     required FinancialCategory source,
+    required String fundingSourceId,
+    required String fundingSourceLabel,
     required double amount,
   }) async {
     final uid = _requireUid();
@@ -966,6 +968,8 @@ class BudgetProvider extends ChangeNotifier {
       title: savingsGoalEntryTitle,
       amount: amount,
       createdAt: DateTime.now(),
+      fundingSourceId: fundingSourceId,
+      fundingSourceLabel: fundingSourceLabel,
     );
     final key = _entryKey(source, entry.id);
     final requestId = _api.newRequestId();
@@ -982,30 +986,29 @@ class BudgetProvider extends ChangeNotifier {
     errorMessage = null;
     notifyListeners();
 
-    // Persist in background so the contribute modal can close immediately.
-    // Pending upsert/goal locks stay until remote snapshots confirm.
-    unawaited(() async {
-      try {
-        await _api.contributeToSavingsGoal(
-            source: source.collection,
-            amount: amount,
-            entryId: entry.id,
-            createdAtMs: entry.createdAt.millisecondsSinceEpoch,
-            requestId: requestId,
-          );
-      } catch (error) {
-        _entries[source]!.removeWhere((item) => item.id == entry.id);
-        _pendingUpsertKeys.remove(key);
-        _restoreRemainings(previous);
-        savingsGoalCurrent = previousCurrent;
-        _lockSavingsGoal();
-        _reportMutationFailure(
-          error,
-          fallback: 'Could not add to your savings goal.',
-          rateLimitAction: 'Savings Goal',
-        );
-      }
-    }());
+    try {
+      await _api.contributeToSavingsGoal(
+        source: source.collection,
+        fundingSourceId: fundingSourceId,
+        fundingSourceLabel: fundingSourceLabel,
+        amount: amount,
+        entryId: entry.id,
+        createdAtMs: entry.createdAt.millisecondsSinceEpoch,
+        requestId: requestId,
+      );
+    } catch (error) {
+      _entries[source]!.removeWhere((item) => item.id == entry.id);
+      _pendingUpsertKeys.remove(key);
+      _restoreRemainings(previous);
+      savingsGoalCurrent = previousCurrent;
+      _lockSavingsGoal();
+      _reportMutationFailure(
+        error,
+        fallback: 'Could not add to your savings goal.',
+        rateLimitAction: 'Savings Goal',
+      );
+      rethrow;
+    }
   }
 
   /// Removes [entry], or converts it to a refund credit when [refund] is true.

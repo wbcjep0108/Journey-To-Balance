@@ -5,6 +5,8 @@ import 'package:provider/provider.dart';
 
 import '../../providers/budget_provider.dart';
 import '../../providers/currency_provider.dart';
+import '../../providers/wallet_cards_provider.dart';
+import '../../providers/wallet_cash_provider.dart';
 import '../../widgets/allocation_confirm_dialog.dart';
 import '../../widgets/app_refresh_indicator.dart';
 import '../../widgets/barrier_blur.dart';
@@ -88,12 +90,23 @@ class _HomePageState extends State<HomePage> {
 
     final budget = context.read<BudgetProvider>();
     if (budget.monthlySalary <= 0) return;
+    final salary = budget.monthlySalary;
 
     setState(() => _isReceivingSalary = true);
+    final source = await showDialog<SalaryDepositSource>(
+      context: context,
+      builder: (_) => SalaryDepositSourceDialog(hostContext: context),
+    );
+    if (!mounted) return;
+    if (source == null) {
+      setState(() => _isReceivingSalary = false);
+      return;
+    }
+
     final confirmed = await AllocationConfirmDialog.showNewMoneyConfirm(
       context: context,
       kind: AllocationConfirmKind.receiveSalary,
-      amount: budget.monthlySalary,
+      amount: salary,
       billsPercentage: budget.billsPercentage,
       savingsPercentage: budget.savingsPercentage,
       personalPercentage: budget.personalPercentage,
@@ -120,12 +133,27 @@ class _HomePageState extends State<HomePage> {
 
     try {
       await budget.receiveSalary();
+      if (source.isWallet) {
+        final wallet = context.read<WalletCashProvider>();
+        await wallet.setAmount(wallet.amount + salary);
+      } else {
+        final cards = context.read<WalletCardsProvider>();
+        final card = cards.cardById(source.cardId!);
+        if (card != null) {
+          await cards.setCardAmount(
+            cardId: card.id,
+            amount: card.amount + salary,
+          );
+        }
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
-          const SnackBar(
-            content: Text('Monthly salary added to your available balance.'),
+          SnackBar(
+            content: Text(
+              'Monthly salary added to ${source.label} and your available balance.',
+            ),
           ),
         );
     } catch (error) {
@@ -539,7 +567,7 @@ class _QuickActionsRow extends StatelessWidget {
       children: [
         const _SavingsProgressAction(),
         _FilledIconAction(
-          assetPath: 'assets/images/icons/loan.png',
+          icon: Icons.account_balance_outlined,
           label: 'Loan',
           onTap: () {
             Navigator.of(context).push(
@@ -550,7 +578,7 @@ class _QuickActionsRow extends StatelessWidget {
           },
         ),
         _FilledIconAction(
-          assetPath: 'assets/images/icons/calendar.png',
+          icon: Icons.calendar_month_outlined,
           label: 'Calendar',
           onTap: () {
             Navigator.of(context).push(
@@ -634,11 +662,10 @@ class _SavingsProgressActionState extends State<_SavingsProgressAction> {
                     ],
                   ),
                   padding: const EdgeInsets.all(12),
-                  child: Image.asset(
-                    'assets/images/icons/piggybank.png',
-                    fit: BoxFit.contain,
+                  child: const Icon(
+                    Icons.savings_outlined,
+                    size: 30,
                     color: const Color(0xFF121212),
-                    colorBlendMode: BlendMode.srcIn,
                   ),
                 ),
               ],
@@ -652,12 +679,12 @@ class _SavingsProgressActionState extends State<_SavingsProgressAction> {
 
 class _FilledIconAction extends StatelessWidget {
   const _FilledIconAction({
-    required this.assetPath,
+    required this.icon,
     required this.label,
     this.onTap,
   });
 
-  final String assetPath;
+  final IconData icon;
   final String label;
   final VoidCallback? onTap;
 
@@ -686,12 +713,7 @@ class _FilledIconAction extends StatelessWidget {
                 ],
               ),
             alignment: Alignment.center,
-            padding: const EdgeInsets.all(15),
-            child: Image.asset(
-              assetPath,
-              fit: BoxFit.contain,
-              alignment: Alignment.center,
-            ),
+            child: Icon(icon, color: Colors.white, size: 28),
           ),
         ),
       ),

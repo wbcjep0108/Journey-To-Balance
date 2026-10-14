@@ -19,13 +19,13 @@ class FinancialCategoryPage extends StatefulWidget {
     required this.category,
     required this.title,
     required this.sectionTitle,
-    required this.iconPath,
+    required this.icon,
   });
 
   final FinancialCategory category;
   final String title;
   final String sectionTitle;
-  final String iconPath;
+  final IconData icon;
 
   @override
   State<FinancialCategoryPage> createState() => _FinancialCategoryPageState();
@@ -66,7 +66,7 @@ class _FinancialCategoryPageState extends State<FinancialCategoryPage> {
     final category = widget.category;
     final title = widget.title;
     final sectionTitle = widget.sectionTitle;
-    final iconPath = widget.iconPath;
+    final icon = widget.icon;
     final entries = budget.entriesFor(category);
     final allocatedBalance = budget.allocationFor(category);
     final currency = context.watch<CurrencyProvider>();
@@ -120,10 +120,9 @@ class _FinancialCategoryPageState extends State<FinancialCategoryPage> {
                         top: 20,
                         child: Opacity(
                           opacity: 0.25,
-                          child: Image.asset(
-                            iconPath,
-                            width: 140,
-                            height: 140,
+                          child: Icon(
+                            icon,
+                            size: 140,
                             color: Colors.white,
                           ),
                         ),

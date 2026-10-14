@@ -28,11 +28,11 @@ class _BottomNavScreenState extends State<BottomNavScreen>
   ];
 
   final List<_NavDestination> _destinations = const [
-    _NavDestination('Home', 'assets/images/icons/home.png'),
-    _NavDestination('Bills', 'assets/images/icons/bills.png'),
-    _NavDestination('Savings', 'assets/images/icons/savings.png'),
-    _NavDestination('Personal', 'assets/images/icons/personal.png'),
-    _NavDestination('Account', 'assets/images/icons/account.png'),
+    _NavDestination('Home', Icons.home_outlined),
+    _NavDestination('Bills', Icons.receipt_long_outlined),
+    _NavDestination('Savings', Icons.savings_outlined),
+    _NavDestination('Personal', Icons.person_outline),
+    _NavDestination('Account', Icons.account_circle_outlined),
   ];
 
   late final AnimationController _entranceController;
@@ -427,10 +427,9 @@ class _AnimatedNavItemState extends State<_AnimatedNavItem> {
                       ),
                       duration: _duration,
                       curve: Curves.easeOutCubic,
-                      builder: (context, color, _) => Image.asset(
-                        widget.destination.assetPath,
-                        width: 24,
-                        height: 24,
+                      builder: (context, color, _) => Icon(
+                        widget.destination.icon,
+                        size: 24,
                         color: color,
                       ),
                     ),
@@ -446,8 +445,8 @@ class _AnimatedNavItemState extends State<_AnimatedNavItem> {
 }
 
 class _NavDestination {
-  const _NavDestination(this.label, this.assetPath);
+  const _NavDestination(this.label, this.icon);
 
   final String label;
-  final String assetPath;
+  final IconData icon;
 }
