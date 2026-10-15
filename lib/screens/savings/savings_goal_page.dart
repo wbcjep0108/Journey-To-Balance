@@ -4,11 +4,13 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/financial_entry.dart';
+import '../../models/spend_category_option.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/currency_provider.dart';
 import '../../providers/wallet_cards_provider.dart';
 import '../../providers/wallet_cash_provider.dart';
 import '../../widgets/barrier_blur.dart';
+import '../../widgets/category_icon_badge.dart';
 import '../../widgets/rate_limit_dialog.dart';
 import '../../widgets/savings_goal_complete_dialog.dart';
 import '../../widgets/sensitive_action_auth.dart';
@@ -141,67 +143,67 @@ class _SavingsGoalPageState extends State<SavingsGoalPage> {
       builder: (dialogContext) {
         return withBarrierBlur(
           Dialog(
-          backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'Edit Goal Savings',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF121212),
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Edit Goal Savings',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF121212),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 22),
-                _AmountField(label: 'Goal Amount', controller: controller),
-                const SizedBox(height: 24),
-                _ConfirmButton(
-                  label: 'Confirm',
-                  onPressed: () async {
-                    final amount = double.tryParse(controller.text) ?? 0;
-                    if (amount <= 0) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Enter a goal greater than zero.'),
-                        ),
-                      );
-                      return;
-                    }
-                    // Apply optimistic update before closing the dialog.
-                    try {
-                      await budget.updateSavingsGoalSettings(
-                        target: amount,
-                        targetDate: budget.savingsGoalTargetDate,
-                      );
-                      if (dialogContext.mounted) {
-                        Navigator.pop(dialogContext, true);
-                      }
-                    } catch (error) {
-                      if (isFinanceRateLimitError(error)) return;
-                      if (context.mounted) {
+                  const SizedBox(height: 22),
+                  _AmountField(label: 'Goal Amount', controller: controller),
+                  const SizedBox(height: 24),
+                  _ConfirmButton(
+                    label: 'Confirm',
+                    onPressed: () async {
+                      final amount = double.tryParse(controller.text) ?? 0;
+                      if (amount <= 0) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text('Could not update savings goal.'),
+                            content: Text('Enter a goal greater than zero.'),
                           ),
                         );
+                        return;
                       }
-                    }
-                  },
-                ),
-                _CancelButton(
-                  onPressed: () => Navigator.pop(dialogContext, false),
-                ),
-              ],
+                      // Apply optimistic update before closing the dialog.
+                      try {
+                        await budget.updateSavingsGoalSettings(
+                          target: amount,
+                          targetDate: budget.savingsGoalTargetDate,
+                        );
+                        if (dialogContext.mounted) {
+                          Navigator.pop(dialogContext, true);
+                        }
+                      } catch (error) {
+                        if (isFinanceRateLimitError(error)) return;
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Could not update savings goal.'),
+                            ),
+                          );
+                        }
+                      }
+                    },
+                  ),
+                  _CancelButton(
+                    onPressed: () => Navigator.pop(dialogContext, false),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
         );
       },
     ).whenComplete(controller.dispose);
@@ -218,67 +220,68 @@ class _SavingsGoalPageState extends State<SavingsGoalPage> {
       builder: (dialogContext) {
         return withBarrierBlur(
           Dialog(
-          backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'Edit Goal Title',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF121212),
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Edit Goal Title',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF121212),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 22),
-                _TextField(label: 'What are you saving for?', controller: controller),
-                const SizedBox(height: 24),
-                _ConfirmButton(
-                  label: 'Confirm',
-                  onPressed: () async {
-                    final title = controller.text.trim();
-                    if (title.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Enter a goal title.'),
-                        ),
-                      );
-                      return;
-                    }
-                    try {
-                      await budget.updateSavingsGoalSettings(
-                        target: budget.savingsGoalTarget,
-                        targetDate: budget.savingsGoalTargetDate,
-                        title: title,
-                      );
-                      if (dialogContext.mounted) {
-                        Navigator.pop(dialogContext, true);
-                      }
-                    } catch (error) {
-                      if (isFinanceRateLimitError(error)) return;
-                      if (context.mounted) {
+                  const SizedBox(height: 22),
+                  _TextField(
+                    label: 'What are you saving for?',
+                    controller: controller,
+                  ),
+                  const SizedBox(height: 24),
+                  _ConfirmButton(
+                    label: 'Confirm',
+                    onPressed: () async {
+                      final title = controller.text.trim();
+                      if (title.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Could not update goal title.'),
-                          ),
+                          const SnackBar(content: Text('Enter a goal title.')),
                         );
+                        return;
                       }
-                    }
-                  },
-                ),
-                _CancelButton(
-                  onPressed: () => Navigator.pop(dialogContext, false),
-                ),
-              ],
+                      try {
+                        await budget.updateSavingsGoalSettings(
+                          target: budget.savingsGoalTarget,
+                          targetDate: budget.savingsGoalTargetDate,
+                          title: title,
+                        );
+                        if (dialogContext.mounted) {
+                          Navigator.pop(dialogContext, true);
+                        }
+                      } catch (error) {
+                        if (isFinanceRateLimitError(error)) return;
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Could not update goal title.'),
+                            ),
+                          );
+                        }
+                      }
+                    },
+                  ),
+                  _CancelButton(
+                    onPressed: () => Navigator.pop(dialogContext, false),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
         );
       },
     ).whenComplete(controller.dispose);
@@ -303,9 +306,7 @@ class _SavingsGoalPageState extends State<SavingsGoalPage> {
                 surface: Colors.white,
                 onSurface: Color(0xFF121212),
               ),
-              dialogTheme: const DialogThemeData(
-                backgroundColor: Colors.white,
-              ),
+              dialogTheme: const DialogThemeData(backgroundColor: Colors.white),
               datePickerTheme: const DatePickerThemeData(
                 backgroundColor: Colors.white,
                 surfaceTintColor: Colors.transparent,
@@ -359,69 +360,72 @@ class _SavingsGoalPageState extends State<SavingsGoalPage> {
       builder: (dialogContext) {
         return withBarrierBlur(
           Dialog(
-          backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-          ),
-          insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'About Savings Goal',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF121212),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'The Savings Goal is completely up to you. You can save the money '
-                  'wherever you prefer, such as your wallet, bank account, e-wallet, '
-                  'or any other place you use to keep your savings.\n\n'
-                  'This feature only helps you set a goal and track your savings '
-                  'progress. It does not store or transfer your money.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    height: 1.45,
-                    color: Color(0xFF4B5563),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.pop(dialogContext),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF121212),
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                    ),
-                    child: const Text(
-                      'Got it',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 15,
-                      ),
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+            ),
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: 28,
+              vertical: 24,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'About Savings Goal',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF121212),
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 16),
+                  const Text(
+                    'The Savings Goal is completely up to you. You can save the money '
+                    'wherever you prefer, such as your wallet, bank account, e-wallet, '
+                    'or any other place you use to keep your savings.\n\n'
+                    'This feature only helps you set a goal and track your savings '
+                    'progress. It does not store or transfer your money.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      height: 1.45,
+                      color: Color(0xFF4B5563),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(dialogContext),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF121212),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                      child: const Text(
+                        'Got it',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
         );
       },
     );
@@ -514,10 +518,7 @@ class _ContributeToGoalModalState extends State<_ContributeToGoalModal> {
   String _fundingSourceId = _walletSourceId;
   bool _saving = false;
 
-  String _fundingSourceLabel(
-    String sourceId,
-    List<WalletCardModel> cards,
-  ) {
+  String _fundingSourceLabel(String sourceId, List<WalletCardModel> cards) {
     if (sourceId == _walletSourceId) return 'Wallet';
     for (final card in cards) {
       if (card.id == sourceId) return card.bankLabel;
@@ -753,7 +754,9 @@ class _ContributeToGoalModalState extends State<_ContributeToGoalModal> {
                         onPressed: _confirm,
                       ),
                       _CancelButton(
-                        onPressed: _saving ? null : () => Navigator.pop(context),
+                        onPressed: _saving
+                            ? null
+                            : () => Navigator.pop(context),
                       ),
                     ],
                   ),
@@ -1040,11 +1043,7 @@ class _ActionCard extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    icon,
-                    size: 30,
-                    color: const Color(0xFF121212),
-                  ),
+                  Icon(icon, size: 30, color: const Color(0xFF121212)),
                   const SizedBox(height: 8),
                   Text(
                     label,
@@ -1099,10 +1098,7 @@ class _RecentActivityList extends StatelessWidget {
     return 'Wallet';
   }
 
-  Future<bool> _confirmDelete(
-    BuildContext context,
-    DayTransaction item,
-  ) async {
+  Future<bool> _confirmDelete(BuildContext context, DayTransaction item) async {
     final authorized = await showSensitiveActionAuth(
       context: context,
       title: 'Undo contribution',
@@ -1118,10 +1114,7 @@ class _RecentActivityList extends StatelessWidget {
         item.category,
         item.entry,
       );
-      final restoredAccount = await _restoreFundingSource(
-        context,
-        item.entry,
-      );
+      final restoredAccount = await _restoreFundingSource(context, item.entry);
       if (context.mounted) {
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
@@ -1197,7 +1190,12 @@ class _RecentActivityList extends StatelessWidget {
             Dismissible(
               key: ValueKey(items[i].entry.id),
               direction: DismissDirection.endToStart,
-              confirmDismiss: (_) => _confirmDelete(context, items[i]),
+              confirmDismiss: (_) async {
+                // _confirmDelete updates the provider and removes this row.
+                // Keep Dismissible from attempting a second removal.
+                await _confirmDelete(context, items[i]);
+                return false;
+              },
               background: Container(
                 alignment: Alignment.centerRight,
                 padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -1233,6 +1231,16 @@ class _RecentActivityList extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
+                    CategoryIconBadge(
+                      iconAsset:
+                          items[i].entry.iconAsset ??
+                          SpendCategoryPresets.defaultIconAsset(
+                            items[i].category,
+                          ),
+                      size: 36,
+                      showBorder: false,
+                    ),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1425,10 +1433,7 @@ class _AmountField extends StatelessWidget {
 }
 
 class _TextField extends StatelessWidget {
-  const _TextField({
-    required this.label,
-    required this.controller,
-  });
+  const _TextField({required this.label, required this.controller});
 
   final String label;
   final TextEditingController controller;

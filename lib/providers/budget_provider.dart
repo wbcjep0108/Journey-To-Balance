@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../models/financial_entry.dart';
 import '../models/rate_limit_info.dart';
+import '../models/spend_category_option.dart';
 import '../services/finance_api_service.dart';
 import '../services/firestore_finance_service.dart';
 
@@ -818,7 +819,7 @@ class BudgetProvider extends ChangeNotifier {
       createdAt: DateTime.now(),
       iconAsset: (trimmedIcon != null && trimmedIcon.isNotEmpty)
           ? trimmedIcon
-          : null,
+          : SpendCategoryPresets.defaultIconAsset(category),
       fundingSourceId: fundingSourceId,
       fundingSourceLabel: fundingSourceLabel,
     );
@@ -988,6 +989,7 @@ class BudgetProvider extends ChangeNotifier {
       title: savingsGoalEntryTitle,
       amount: amount,
       createdAt: DateTime.now(),
+      iconAsset: 'material:savings',
       fundingSourceId: fundingSourceId,
       fundingSourceLabel: fundingSourceLabel,
     );

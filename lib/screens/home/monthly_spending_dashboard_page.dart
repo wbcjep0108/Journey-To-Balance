@@ -6,6 +6,7 @@ import '../../models/monthly_spending_stats.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/currency_provider.dart';
 import '../../widgets/barrier_blur.dart';
+import '../../widgets/category_icon_badge.dart';
 import 'daily_spending_page.dart';
 
 class MonthlySpendingDashboardPage extends StatefulWidget {
@@ -727,8 +728,8 @@ class _CategoryBreakdownRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final percent = item.percent.clamp(0, 100);
-    final label =
-        '${categoryDashboardLabel(item.category)} ${percent.round()}%';
+    final label = '${item.label} · ${categoryDashboardLabel(item.category)} '
+        '${percent.round()}%';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -749,11 +750,10 @@ class _CategoryBreakdownRow extends StatelessWidget {
                   ),
                 ],
               ),
-              padding: const EdgeInsets.all(8),
-              child: Icon(
-                categoryIcon(item.category),
-                size: 24,
-                color: Colors.black,
+              child: CategoryIconBadge(
+                iconAsset: item.iconAsset,
+                size: 36,
+                showBorder: false,
               ),
             ),
             const SizedBox(width: 10),

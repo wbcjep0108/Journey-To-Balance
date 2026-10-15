@@ -21,7 +21,9 @@ import 'monthly_spending_dashboard_page.dart';
 import 'wallet_page.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  const HomePage({super.key, this.onProfileTap});
+
+  final VoidCallback? onProfileTap;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -64,9 +66,9 @@ class _HomePageState extends State<HomePage> {
           onSaved: () {
             if (mounted) setState(() {});
           },
-                                ),
-                              ),
-                            );
+        ),
+      ),
+    );
   }
 
   void _showBalanceDialog() {
@@ -183,8 +185,8 @@ class _HomePageState extends State<HomePage> {
           },
         ),
       ),
-  );
-}
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -202,72 +204,105 @@ class _HomePageState extends State<HomePage> {
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: EdgeInsets.only(bottom: bottomScrollPadding),
-        child: Column(
-          children: [
-            Container(
-              height: headerHeight,
+          child: Column(
+            children: [
+              Container(
+                height: headerHeight,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 20,
                   vertical: 24,
                 ),
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topRight,
-                  end: Alignment.bottomLeft,
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topRight,
+                    end: Alignment.bottomLeft,
                     colors: [Color(0xFF262626), Color(0xFF000000)],
+                  ),
+                  borderRadius: BorderRadius.only(
+                    bottomLeft: Radius.circular(32),
+                    bottomRight: Radius.circular(32),
+                  ),
                 ),
-                borderRadius: BorderRadius.only(
-                  bottomLeft: Radius.circular(32),
-                  bottomRight: Radius.circular(32),
-                ),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 28,
-                        backgroundColor: Colors.grey[700],
-                        backgroundImage: user?.photoURL != null
-                            ? NetworkImage(user!.photoURL!)
-                            : null,
-                        child: user?.photoURL == null
-                            ? Icon(
-                                Icons.person,
-                                size: 32,
-                                color: Colors.grey[300],
-                              )
-                            : null,
-                      ),
-                      const SizedBox(width: 16),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
                         Expanded(
-                          child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            user?.displayName ?? 'User',
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.white,
+                          child: Semantics(
+                            button: true,
+                            label: 'Open account profile',
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: widget.onProfileTap,
+                                borderRadius: BorderRadius.circular(16),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                    vertical: 6,
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      CircleAvatar(
+                                        radius: 28,
+                                        backgroundColor: Colors.grey[700],
+                                        backgroundImage: user?.photoURL != null
+                                            ? NetworkImage(user!.photoURL!)
+                                            : null,
+                                        child: user?.photoURL == null
+                                            ? Icon(
+                                                Icons.person,
+                                                size: 32,
+                                                color: Colors.grey[300],
+                                              )
+                                            : null,
+                                      ),
+                                      const SizedBox(width: 16),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              user?.displayName ?? 'User',
+                                              style: const TextStyle(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w500,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              user?.email ?? 'No email',
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                color: Colors.grey[400],
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Icon(
+                                        Icons.chevron_right_rounded,
+                                        size: 20,
+                                        color: Colors.white.withValues(
+                                          alpha: 0.72,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            user?.email ?? 'No email',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: Colors.grey[400],
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
                           ),
                         ),
+                        const SizedBox(width: 8),
                         IconButton(
                           tooltip: 'Wallet',
                           onPressed: () {
@@ -288,101 +323,101 @@ class _HomePageState extends State<HomePage> {
                             color: Colors.white,
                           ),
                         ),
-                    ],
-                  ),
-                  Center(
-                    child: SizedBox(
-                      height: 120,
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                Text(
-                                  'Income',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w400,
-                                    color: Colors.grey[400],
-                                    letterSpacing: 0.5,
+                      ],
+                    ),
+                    Center(
+                      child: SizedBox(
+                        height: 120,
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    'Income',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w400,
+                                      color: Colors.grey[400],
+                                      letterSpacing: 0.5,
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(height: 10),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
+                                  const SizedBox(height: 10),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
                                       Flexible(
                                         child: _AnimatedCurrencyAmount(
                                           amount: budget.monthlySalary,
                                         ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    GestureDetector(
-                                      onTap: _showEditDialog,
-                                      child: Container(
-                                        padding: const EdgeInsets.all(6),
-                                        decoration: BoxDecoration(
-                                          color: Colors.grey[700],
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: const Icon(
-                                          Icons.edit,
-                                          size: 16,
-                                          color: Colors.white,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      GestureDetector(
+                                        onTap: _showEditDialog,
+                                        child: Container(
+                                          padding: const EdgeInsets.all(6),
+                                          decoration: BoxDecoration(
+                                            color: Colors.grey[700],
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const Icon(
+                                            Icons.edit,
+                                            size: 16,
+                                            color: Colors.white,
+                                          ),
                                         ),
                                       ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            SizedBox(
+                              width: 30,
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Container(
+                                    width: 8,
+                                    height: 8,
+                                    decoration: const BoxDecoration(
+                                      color: Colors.white,
+                                      shape: BoxShape.circle,
                                     ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                          SizedBox(
-                            width: 30,
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Container(
-                                  width: 8,
-                                  height: 8,
-                                  decoration: const BoxDecoration(
-                                    color: Colors.white,
-                                    shape: BoxShape.circle,
                                   ),
-                                ),
-                                Container(
-                                  width: 1.5,
-                                  height: 100,
+                                  Container(
+                                    width: 1.5,
+                                    height: 100,
                                     color: Colors.white.withValues(alpha: 0.7),
-                                ),
-                                Container(
-                                  width: 8,
-                                  height: 8,
-                                  decoration: const BoxDecoration(
-                                    color: Colors.white,
-                                    shape: BoxShape.circle,
                                   ),
-                                ),
-                              ],
+                                  Container(
+                                    width: 8,
+                                    height: 8,
+                                    decoration: const BoxDecoration(
+                                      color: Colors.white,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                          Expanded(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                Text(
+                            Expanded(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  Text(
                                     'Available Balance',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w400,
-                                    color: Colors.grey[400],
-                                    letterSpacing: 0.5,
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w400,
+                                      color: Colors.grey[400],
+                                      letterSpacing: 0.5,
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(height: 10),
+                                  const SizedBox(height: 10),
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
@@ -403,19 +438,19 @@ class _HomePageState extends State<HomePage> {
                                           child: const Icon(
                                             Icons.edit,
                                             size: 16,
-                                    color: Colors.white,
-                                  ),
+                                            color: Colors.white,
+                                          ),
                                         ),
                                       ),
                                     ],
-                                ),
-                              ],
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                  ),
                     Row(
                       children: [
                         Expanded(
@@ -477,13 +512,14 @@ class _HomePageState extends State<HomePage> {
                                 ),
                         ),
                         const SizedBox(width: 30),
-                  Expanded(
+                        Expanded(
                           child: SizedBox(
                             height: 42,
                             width: double.infinity,
                             child: ElevatedButton.icon(
-                              onPressed:
-                                  _isAddingMoney ? null : _showAddMoneyDialog,
+                              onPressed: _isAddingMoney
+                                  ? null
+                                  : _showAddMoneyDialog,
                               style: ElevatedButton.styleFrom(
                                 foregroundColor: Colors.black,
                                 backgroundColor: Colors.white,
@@ -504,7 +540,10 @@ class _HomePageState extends State<HomePage> {
                                         color: Colors.black,
                                       ),
                                     )
-                                  : const Icon(Icons.add_circle_outline, size: 18),
+                                  : const Icon(
+                                      Icons.add_circle_outline,
+                                      size: 18,
+                                    ),
                               label: const Text(
                                 'Add Money',
                                 style: TextStyle(
@@ -571,9 +610,7 @@ class _QuickActionsRow extends StatelessWidget {
           label: 'Loan',
           onTap: () {
             Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => const TotalLoanPage(),
-              ),
+              MaterialPageRoute<void>(builder: (_) => const TotalLoanPage()),
             );
           },
         ),
@@ -614,13 +651,15 @@ class _SavingsProgressActionState extends State<_SavingsProgressAction> {
         child: InkWell(
           customBorder: const CircleBorder(),
           onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => const SavingsGoalPage(),
-              ),
-            ).then((_) {
-              if (mounted) setState(() {});
-            });
+            Navigator.of(context)
+                .push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const SavingsGoalPage(),
+                  ),
+                )
+                .then((_) {
+                  if (mounted) setState(() {});
+                });
           },
           child: SizedBox(
             width: 74,
@@ -709,9 +748,9 @@ class _FilledIconAction extends StatelessWidget {
                   color: Colors.black.withValues(alpha: 0.12),
                   blurRadius: 12,
                   offset: const Offset(0, 5),
-                  ),
-                ],
-              ),
+                ),
+              ],
+            ),
             alignment: Alignment.center,
             child: Icon(icon, color: Colors.white, size: 28),
           ),
@@ -854,21 +893,21 @@ class _BuildGridCard extends StatelessWidget {
           ),
         ],
       ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
           SizedBox(
             width: double.infinity,
             child: FittedBox(
               fit: BoxFit.scaleDown,
               child: Text(
-              amount,
+                amount,
                 maxLines: 1,
                 softWrap: false,
                 style: TextStyle(
                   fontSize: amountFontSize,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
                 ),
               ),
             ),
@@ -879,19 +918,19 @@ class _BuildGridCard extends StatelessWidget {
             child: FittedBox(
               fit: BoxFit.scaleDown,
               child: Text(
-              label,
+                label,
                 maxLines: 1,
                 softWrap: false,
                 style: TextStyle(
                   fontSize: labelFontSize,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
                   letterSpacing: letterSpacing,
                 ),
               ),
-              ),
             ),
-          ],
+          ),
+        ],
       ),
     );
   }

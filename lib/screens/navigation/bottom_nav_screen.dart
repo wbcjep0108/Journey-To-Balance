@@ -19,13 +19,7 @@ class _BottomNavScreenState extends State<BottomNavScreen>
   static const _pageTransitionDuration = Duration(milliseconds: 360);
   static const _indicatorDuration = Duration(milliseconds: 420);
 
-  final List<Widget> _pages = const [
-    HomePage(),
-    BillsPage(),
-    SavingsPage(),
-    PersonalPage(),
-    AccountPage(),
-  ];
+  late final List<Widget> _pages;
 
   final List<_NavDestination> _destinations = const [
     _NavDestination('Home', Icons.home_outlined),
@@ -44,6 +38,7 @@ class _BottomNavScreenState extends State<BottomNavScreen>
 
   int _selectedIndex = 0;
   int _previousIndex = 0;
+
   /// 1 = navigate toward a right tab, -1 = toward a left tab.
   int _slideDirection = 1;
   bool _entranceStarted = false;
@@ -52,6 +47,13 @@ class _BottomNavScreenState extends State<BottomNavScreen>
   @override
   void initState() {
     super.initState();
+    _pages = [
+      HomePage(onProfileTap: () => _onItemTapped(4)),
+      const BillsPage(),
+      const SavingsPage(),
+      const PersonalPage(),
+      const AccountPage(),
+    ];
     _entranceController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 550),
@@ -427,11 +429,8 @@ class _AnimatedNavItemState extends State<_AnimatedNavItem> {
                       ),
                       duration: _duration,
                       curve: Curves.easeOutCubic,
-                      builder: (context, color, _) => Icon(
-                        widget.destination.icon,
-                        size: 24,
-                        color: color,
-                      ),
+                      builder: (context, color, _) =>
+                          Icon(widget.destination.icon, size: 24, color: color),
                     ),
                   ),
                 ),

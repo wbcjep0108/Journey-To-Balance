@@ -493,6 +493,7 @@ export async function contributeToSavingsGoalOp(
           amount,
           createdAt: Timestamp.fromMillis(createdAtMs),
           isRefund: false,
+          iconAsset: "material:savings",
           fundingSourceId,
           fundingSourceLabel,
         });

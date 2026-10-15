@@ -74,6 +74,10 @@ class SpendCategoryOption {
       case 'material:savings':
       case 'assets/images/icons_savings/emergency fund.png':
         return Icons.savings_outlined;
+      case 'material:receipt_long':
+        return Icons.receipt_long_outlined;
+      case 'material:person':
+        return Icons.person_outline;
       case materialOthers:
         return Icons.more_horiz;
       default:
@@ -109,6 +113,56 @@ class SpendCategoryPresets {
   static const billsAssetDir = 'assets/images/icons_bills';
   static const personalAssetDir = 'assets/images/icons_personal';
   static const savingsAssetDir = 'assets/images/icons_savings';
+
+  /// Icon shown when a legacy or system-created transaction has no saved
+  /// quick-select icon. This keeps every transaction visually identifiable.
+  static String defaultIconAsset(FinancialCategory category) {
+    return switch (category) {
+      FinancialCategory.bills => 'material:receipt_long',
+      FinancialCategory.savings => 'material:savings',
+      FinancialCategory.personal => 'material:person',
+    };
+  }
+
+  static String labelForAsset(
+    FinancialCategory category,
+    String assetPath,
+  ) {
+    for (final option in forCategory(category)) {
+      if (option.assetPath == assetPath) return option.label;
+    }
+    for (final otherCategory in FinancialCategory.values) {
+      for (final option in forCategory(otherCategory)) {
+        if (option.assetPath == assetPath) return option.label;
+      }
+    }
+    final legacyLabel = switch (assetPath) {
+      'assets/images/icons_bills/electricity.png' => 'Electricity',
+      'assets/images/icons_bills/food.png' => 'Food',
+      'assets/images/icons_bills/internet.png' => 'Internet',
+      'assets/images/icons_bills/loan.png' => 'Loan',
+      'assets/images/icons_bills/medicine.png' => 'Medicine',
+      'assets/images/icons_bills/rent.png' => 'Rent',
+      'assets/images/icons_bills/transpo.png' => 'Transpo',
+      'assets/images/icons_bills/water.png' => 'Water',
+      'assets/images/icons_personal/clothes.png' => 'Clothes',
+      'assets/images/icons_personal/coffee.png' => 'Coffee',
+      'assets/images/icons_personal/entertainment.png' => 'Entertainment',
+      'assets/images/icons_personal/gift.png' => 'Gift',
+      'assets/images/icons_personal/restaurant.png' => 'Restaurant',
+      'assets/images/icons_personal/shopping.png' => 'Shopping',
+      'assets/images/icons_savings/emergency fund.png' => 'Emergency Fund',
+      'assets/images/icons_bills/others.png' ||
+      'assets/images/icons_personal/others.png' => 'Others',
+      _ => null,
+    };
+    if (legacyLabel != null) return legacyLabel;
+    return switch (category) {
+      FinancialCategory.bills => 'Bills',
+      FinancialCategory.savings => 'Savings',
+      FinancialCategory.personal => 'Personal',
+    };
+  }
 
   static List<SpendCategoryOption> forCategory(FinancialCategory category) {
     switch (category) {

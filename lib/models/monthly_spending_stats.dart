@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../models/financial_entry.dart';
+import '../models/spend_category_option.dart';
 import '../providers/budget_provider.dart';
 
 enum SpendingIntensity { none, minimal, average, significant }
@@ -9,11 +10,15 @@ enum SpendingIntensity { none, minimal, average, significant }
 class CategoryBreakdown {
   const CategoryBreakdown({
     required this.category,
+    required this.label,
+    required this.iconAsset,
     required this.amount,
     required this.percent,
   });
 
   final FinancialCategory category;
+  final String label;
+  final String iconAsset;
   final double amount;
   final double percent;
 }
@@ -53,9 +58,7 @@ class MonthlySpendingStats {
         : daysInMonth;
 
     final dailyTotals = <DateTime, double>{};
-    final categoryTotals = <FinancialCategory, double>{
-      for (final category in FinancialCategory.values) category: 0,
-    };
+    final spendingTotals = <(FinancialCategory, String), double>{};
 
     for (final category in FinancialCategory.values) {
       for (final entry in budget.entriesFor(category)) {
@@ -64,8 +67,12 @@ class MonthlySpendingStats {
         if (local.year != year || local.month != monthIndex) continue;
         final day = DateTime(local.year, local.month, local.day);
         dailyTotals[day] = (dailyTotals[day] ?? 0) + entry.amount;
-        categoryTotals[category] =
-            (categoryTotals[category] ?? 0) + entry.amount;
+        final savedIcon = entry.iconAsset?.trim();
+        final iconAsset = savedIcon == null || savedIcon.isEmpty
+            ? SpendCategoryPresets.defaultIconAsset(category)
+            : savedIcon;
+        final key = (category, iconAsset);
+        spendingTotals[key] = (spendingTotals[key] ?? 0) + entry.amount;
       }
     }
 
@@ -103,12 +110,16 @@ class MonthlySpendingStats {
     }
 
     final breakdown = <CategoryBreakdown>[];
-    for (final category in FinancialCategory.values) {
-      final amount = categoryTotals[category] ?? 0;
+    for (final totalEntry in spendingTotals.entries) {
+      final category = totalEntry.key.$1;
+      final iconAsset = totalEntry.key.$2;
+      final amount = totalEntry.value;
       if (amount <= 0) continue;
       breakdown.add(
         CategoryBreakdown(
           category: category,
+          label: SpendCategoryPresets.labelForAsset(category, iconAsset),
+          iconAsset: iconAsset,
           amount: amount,
           percent: total > 0 ? (amount / total) * 100 : 0,
         ),

@@ -6,6 +6,7 @@ import {
 } from "./errors";
 import type {Env} from "./finance";
 import {FirestoreClient} from "./firestore";
+import {buildPinResetEmailHtml} from "./pinResetEmail";
 import type {RateBucketName} from "./rateLimit";
 
 const OTP_TTL_MS = 10 * 60 * 1000;
@@ -102,10 +103,7 @@ async function sendOtpEmail(env: Env, to: string, otp: string): Promise<void> {
       text:
         `Your 4-digit code is ${otp}. It expires in 10 minutes.\n\n` +
         `If you didn't request this, you can ignore this email.`,
-      html:
-        `<p>Your 4-digit Journey to Balance code is:</p>` +
-        `<p style="font-size:28px;font-weight:700;letter-spacing:8px">${otp}</p>` +
-        `<p>It expires in 10 minutes. If you didn't request this, you can ignore this email.</p>`,
+      html: buildPinResetEmailHtml(otp),
     }),
   });
 

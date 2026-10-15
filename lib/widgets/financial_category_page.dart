@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../models/financial_entry.dart';
+import '../models/spend_category_option.dart';
 import '../providers/budget_provider.dart';
 import '../providers/currency_provider.dart';
 import '../providers/wallet_cards_provider.dart';
@@ -308,6 +309,7 @@ class _FinancialCategoryPageState extends State<FinancialCategoryPage> {
             entryIndex++
           ) ...[
             _EntryRow(
+              category: widget.category,
               entry: groupedDays[groupIndex].value[entryIndex],
               onRefund: groupedDays[groupIndex].value[entryIndex].isRefund
                   ? null
@@ -480,11 +482,13 @@ class _ViewMoreButton extends StatelessWidget {
 
 class _EntryRow extends StatefulWidget {
   const _EntryRow({
+    required this.category,
     required this.entry,
     required this.onRefund,
     required this.onDelete,
   });
 
+  final FinancialCategory category;
   final FinancialEntry entry;
   final Future<bool> Function()? onRefund;
   final Future<bool> Function() onDelete;
@@ -604,7 +608,10 @@ class _EntryRowState extends State<_EntryRow> {
                           Expanded(
                             child: EntryTitleWithIcon(
                               title: widget.entry.title,
-                              iconAsset: widget.entry.iconAsset,
+                              iconAsset: widget.entry.iconAsset ??
+                                  SpendCategoryPresets.defaultIconAsset(
+                                    widget.category,
+                                  ),
                               subtitle: widget.entry.fundingSourceLabel == null
                                   ? null
                                   : 'Payment method: '

@@ -576,6 +576,7 @@ export async function handleFinance(
             amount,
             createdAt: new Date(createdAtMs),
             isRefund: false,
+            iconAsset: "material:savings",
             fundingSourceId,
             fundingSourceLabel,
           },

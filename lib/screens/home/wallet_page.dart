@@ -24,9 +24,7 @@ Future<bool> _confirmWalletFunding({
   final confirmed = await AllocationConfirmDialog.showWalletSourcesConfirm(
     context: context,
     walletCash: walletCash,
-    cards: [
-      for (final card in cards) (card.bankLabel, card.amount),
-    ],
+    cards: [for (final card in cards) (card.bankLabel, card.amount)],
     billsPercentage: budget.billsPercentage,
     savingsPercentage: budget.savingsPercentage,
     personalPercentage: budget.personalPercentage,
@@ -68,8 +66,7 @@ class _WalletPageState extends State<WalletPage> {
   void _cycleCard(int delta, int cardCount) {
     if (cardCount <= 1) return;
     setState(() {
-      _selectedIndex =
-          (_selectedIndex + delta + cardCount * 8) % cardCount;
+      _selectedIndex = (_selectedIndex + delta + cardCount * 8) % cardCount;
     });
   }
 
@@ -84,8 +81,9 @@ class _WalletPageState extends State<WalletPage> {
       barrierDismissible: true,
       barrierLabel: 'Close card',
       barrierColor: Colors.black.withValues(alpha: 0.5),
-      transitionDuration:
-          reduceMotion ? Duration.zero : const Duration(milliseconds: 240),
+      transitionDuration: reduceMotion
+          ? Duration.zero
+          : const Duration(milliseconds: 240),
       pageBuilder: (dialogContext, _, _) => withBarrierBlur(
         SafeArea(
           child: _BankCardPopup(
@@ -120,8 +118,9 @@ class _WalletPageState extends State<WalletPage> {
       barrierDismissible: true,
       barrierLabel: 'Close wallet',
       barrierColor: Colors.black.withValues(alpha: 0.45),
-      transitionDuration:
-          reduceMotion ? Duration.zero : const Duration(milliseconds: 240),
+      transitionDuration: reduceMotion
+          ? Duration.zero
+          : const Duration(milliseconds: 240),
       pageBuilder: (dialogContext, _, _) => withBarrierBlur(
         SafeArea(
           child: _WalletOpenPopup(
@@ -152,23 +151,25 @@ class _WalletPageState extends State<WalletPage> {
     if (cards.isEmpty) {
       await showDialog<void>(
         context: context,
-        builder: (dialogContext) => AlertDialog(
-          backgroundColor: Colors.white,
-          surfaceTintColor: Colors.white,
-          title: const Text('Transfer money'),
-          content: const Text(
-            'Add at least one card before transferring money between accounts.',
-          ),
-          actions: [
-            FilledButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF121212),
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('OK'),
+        builder: (dialogContext) => withBarrierBlur(
+          AlertDialog(
+            backgroundColor: Colors.white,
+            surfaceTintColor: Colors.white,
+            title: const Text('Transfer money'),
+            content: const Text(
+              'Add at least one card before transferring money between accounts.',
             ),
-          ],
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF121212),
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
         ),
       );
       return;
@@ -177,7 +178,8 @@ class _WalletPageState extends State<WalletPage> {
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => _WalletTransferDialog(hostContext: context),
+      builder: (_) =>
+          withBarrierBlur(_WalletTransferDialog(hostContext: context)),
     );
   }
 
@@ -251,8 +253,7 @@ class _WalletPageState extends State<WalletPage> {
           builder: (context, setSheetState) {
             final wallet = context.watch<WalletCardsProvider>();
             final addedIcons = wallet.cards.map((c) => c.iconAsset).toSet();
-            final canDone =
-                pendingAdd != null || pendingRemove.isNotEmpty;
+            final canDone = pendingAdd != null || pendingRemove.isNotEmpty;
             return withBarrierBlur(
               SafeArea(
                 child: Padding(
@@ -272,8 +273,7 @@ class _WalletPageState extends State<WalletPage> {
                             height: 4,
                             decoration: BoxDecoration(
                               color: Colors.white,
-                              borderRadius:
-                                  BorderRadius.circular(999),
+                              borderRadius: BorderRadius.circular(999),
                               boxShadow: [
                                 BoxShadow(
                                   color: Colors.black.withValues(alpha: 0.08),
@@ -305,7 +305,8 @@ class _WalletPageState extends State<WalletPage> {
                               for (final iconAsset in banks)
                                 _BankPickTile(
                                   iconAsset: iconAsset,
-                                  selected: pendingAdd == iconAsset ||
+                                  selected:
+                                      pendingAdd == iconAsset ||
                                       (addedIcons.contains(iconAsset) &&
                                           !pendingRemove.contains(iconAsset)),
                                   alreadyAdded:
@@ -341,8 +342,7 @@ class _WalletPageState extends State<WalletPage> {
                             children: [
                               Expanded(
                                 child: TextButton(
-                                  onPressed: () =>
-                                      Navigator.pop(sheetContext),
+                                  onPressed: () => Navigator.pop(sheetContext),
                                   style: TextButton.styleFrom(
                                     foregroundColor: const Color(0xFF6B7280),
                                     padding: const EdgeInsets.symmetric(
@@ -367,8 +367,9 @@ class _WalletPageState extends State<WalletPage> {
                                       ? null
                                       : () async {
                                           final pageContext = this.context;
-                                          final nav =
-                                              Navigator.of(sheetContext);
+                                          final nav = Navigator.of(
+                                            sheetContext,
+                                          );
                                           if (pendingRemove.isNotEmpty) {
                                             final cardsProvider = pageContext
                                                 .read<WalletCardsProvider>();
@@ -377,20 +378,20 @@ class _WalletPageState extends State<WalletPage> {
                                                 .amount;
                                             final budget = pageContext
                                                 .read<BudgetProvider>();
-                                            final removing = cardsProvider
-                                                .cards
+                                            final removing = cardsProvider.cards
                                                 .where(
                                                   (card) => pendingRemove
                                                       .contains(card.iconAsset),
                                                 )
                                                 .toList();
-                                            final nextTotal = cash +
+                                            final nextTotal =
+                                                cash +
                                                 cardsProvider.cards
                                                     .where(
                                                       (card) => !pendingRemove
                                                           .contains(
-                                                        card.iconAsset,
-                                                      ),
+                                                            card.iconAsset,
+                                                          ),
                                                     )
                                                     .fold<double>(
                                                       0,
@@ -399,30 +400,29 @@ class _WalletPageState extends State<WalletPage> {
                                                     );
 
                                             final warned =
-                                                await AllocationConfirmDialog
-                                                    .showDeleteCardsWarning(
-                                              context: pageContext,
-                                              cardsToRemove: [
-                                                for (final card in removing)
-                                                  (
-                                                    card.bankLabel,
-                                                    card.amount,
-                                                  ),
-                                              ],
-                                              currentAvailable:
-                                                  budget.availableBalance,
-                                              nextAvailable: nextTotal,
-                                            );
+                                                await AllocationConfirmDialog.showDeleteCardsWarning(
+                                                  context: pageContext,
+                                                  cardsToRemove: [
+                                                    for (final card in removing)
+                                                      (
+                                                        card.bankLabel,
+                                                        card.amount,
+                                                      ),
+                                                  ],
+                                                  currentAvailable:
+                                                      budget.availableBalance,
+                                                  nextAvailable: nextTotal,
+                                                );
                                             if (warned != true) return;
                                             if (!mounted) return;
 
                                             final authorized =
                                                 await showSensitiveActionAuth(
-                                              context: pageContext,
-                                              title: 'Confirm delete card',
-                                              description:
-                                                  'Enter your PIN or use fingerprint to delete the card, remove its amount, and update your available balance.',
-                                            );
+                                                  context: pageContext,
+                                                  title: 'Confirm delete card',
+                                                  description:
+                                                      'Enter your PIN or use fingerprint to delete the card, remove its amount, and update your available balance.',
+                                                );
                                             if (authorized != true) return;
                                           }
 
@@ -439,8 +439,9 @@ class _WalletPageState extends State<WalletPage> {
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: const Color(0xFF121212),
                                     foregroundColor: Colors.white,
-                                    disabledBackgroundColor:
-                                        const Color(0xFFD1D5DB),
+                                    disabledBackgroundColor: const Color(
+                                      0xFFD1D5DB,
+                                    ),
                                     elevation: 0,
                                     padding: const EdgeInsets.symmetric(
                                       vertical: 14,
@@ -518,12 +519,11 @@ class _WalletPageState extends State<WalletPage> {
                           tooltip: 'Transfer money',
                           style: IconButton.styleFrom(
                             foregroundColor: Colors.white,
-                            backgroundColor: Colors.white.withValues(alpha: 0.10),
+                            backgroundColor: Colors.white.withValues(
+                              alpha: 0.10,
+                            ),
                           ),
-                          icon: const Icon(
-                            Icons.swap_horiz_rounded,
-                            size: 25,
-                          ),
+                          icon: const Icon(Icons.swap_horiz_rounded, size: 25),
                         ),
                       ],
                     ),
@@ -656,7 +656,6 @@ class _WalletPageState extends State<WalletPage> {
       ),
     );
   }
-
 }
 
 class _WalletTransferDialog extends StatefulWidget {
@@ -665,8 +664,7 @@ class _WalletTransferDialog extends StatefulWidget {
   final BuildContext hostContext;
 
   @override
-  State<_WalletTransferDialog> createState() =>
-      _WalletTransferDialogState();
+  State<_WalletTransferDialog> createState() => _WalletTransferDialogState();
 }
 
 class _WalletTransferDialogState extends State<_WalletTransferDialog> {
@@ -744,7 +742,9 @@ class _WalletTransferDialogState extends State<_WalletTransferDialog> {
       return;
     }
     if (amount > sourceBalance) {
-      setState(() => _error = 'The selected source does not have enough money.');
+      setState(
+        () => _error = 'The selected source does not have enough money.',
+      );
       return;
     }
 
@@ -828,10 +828,7 @@ class _WalletTransferDialogState extends State<_WalletTransferDialog> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
       title: const Text(
         'Transfer money',
-        style: TextStyle(
-          color: Color(0xFF121212),
-          fontWeight: FontWeight.w800,
-        ),
+        style: TextStyle(color: Color(0xFF121212), fontWeight: FontWeight.w800),
       ),
       content: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 380),
@@ -850,9 +847,8 @@ class _WalletTransferDialogState extends State<_WalletTransferDialog> {
                 value: _sourceId,
                 accountIds: accountIds,
                 labelFor: (id) => _labelFor(id, cards),
-                balanceFor: (id) => currency.formatAmount(
-                  _balanceFor(id, walletAmount, cards),
-                ),
+                balanceFor: (id) =>
+                    currency.formatAmount(_balanceFor(id, walletAmount, cards)),
                 onChanged: (value) => _selectSource(value, accountIds),
               ),
               const SizedBox(height: 14),
@@ -882,9 +878,8 @@ class _WalletTransferDialogState extends State<_WalletTransferDialog> {
                 value: _destinationId,
                 accountIds: accountIds.where((id) => id != _sourceId).toList(),
                 labelFor: (id) => _labelFor(id, cards),
-                balanceFor: (id) => currency.formatAmount(
-                  _balanceFor(id, walletAmount, cards),
-                ),
+                balanceFor: (id) =>
+                    currency.formatAmount(_balanceFor(id, walletAmount, cards)),
                 onChanged: _saving
                     ? null
                     : (value) {
@@ -900,8 +895,9 @@ class _WalletTransferDialogState extends State<_WalletTransferDialog> {
               TextField(
                 controller: _amountController,
                 enabled: !_saving,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
                 ],
@@ -924,9 +920,7 @@ class _WalletTransferDialogState extends State<_WalletTransferDialog> {
       actions: [
         TextButton(
           onPressed: _saving ? null : () => Navigator.pop(context),
-          style: TextButton.styleFrom(
-            foregroundColor: const Color(0xFF121212),
-          ),
+          style: TextButton.styleFrom(foregroundColor: const Color(0xFF121212)),
           child: const Text('Cancel'),
         ),
         FilledButton.icon(
@@ -973,36 +967,95 @@ class _TransferAccountField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DropdownButtonFormField<String>(
-      value: value,
-      onChanged: onChanged,
-      dropdownColor: Colors.white,
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: const TextStyle(
-          color: Color(0xFF121212),
-          fontWeight: FontWeight.w800,
+    final isSource = label == 'From';
+    const accent = Color(0xFF121212);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
+              alignment: Alignment.center,
+              child: Icon(
+                isSource ? Icons.north_east_rounded : Icons.south_west_rounded,
+                color: Colors.white,
+                size: 17,
+              ),
+            ),
+            const SizedBox(width: 9),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label.toUpperCase(),
+                  style: TextStyle(
+                    color: accent,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                Text(
+                  isSource ? 'Money leaves this account' : 'Money goes here',
+                  style: const TextStyle(
+                    color: Color(0xFF6B7280),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
-        floatingLabelStyle: const TextStyle(
-          color: Color(0xFF121212),
-          fontWeight: FontWeight.w800,
-        ),
-        filled: true,
-        fillColor: const Color(0xFFF3F4F6),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide.none,
-        ),
-      ),
-      items: [
-        for (final id in accountIds)
-          DropdownMenuItem<String>(
-            value: id,
-            child: Text(
-              '${labelFor(id)}  •  ${balanceFor(id)}',
-              overflow: TextOverflow.ellipsis,
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: value,
+          onChanged: onChanged,
+          dropdownColor: Colors.white,
+          icon: Icon(Icons.expand_more_rounded, color: accent),
+          style: const TextStyle(
+            color: Color(0xFF121212),
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+          ),
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: Colors.white,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 16,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: accent, width: 1.5),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: accent, width: 2.5),
+            ),
+            disabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(
+                color: Color(0xFF9CA3AF),
+                width: 1.5,
+              ),
             ),
           ),
+          items: [
+            for (final id in accountIds)
+              DropdownMenuItem<String>(
+                value: id,
+                child: Text(
+                  '${labelFor(id)}  •  ${balanceFor(id)}',
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+          ],
+        ),
       ],
     );
   }
@@ -1063,9 +1116,11 @@ class _StackedCardDeck extends StatelessWidget {
           child: Stack(
             clipBehavior: Clip.none,
             children: [
-              for (var depthFromFront = visible - 1;
-                  depthFromFront >= 0;
-                  depthFromFront--)
+              for (
+                var depthFromFront = visible - 1;
+                depthFromFront >= 0;
+                depthFromFront--
+              )
                 () {
                   final index =
                       (selectedIndex - depthFromFront + cards.length) %
@@ -1173,10 +1228,7 @@ class _WalletCardPreview extends StatelessWidget {
 
 /// Bank PNGs are already card-sized (~3:2). Cover the frame so no letterbox gaps.
 class _BankCardArt extends StatelessWidget {
-  const _BankCardArt({
-    required this.assetPath,
-    this.borderRadius = 18,
-  });
+  const _BankCardArt({required this.assetPath, this.borderRadius = 18});
 
   final String assetPath;
   final double borderRadius;
@@ -1245,8 +1297,9 @@ class _BankCardPopupState extends State<_BankCardPopup> {
     final cash =
         context.read<WalletCardsProvider>().cardById(widget.cardId)?.amount ??
         0;
-    _amountController.text =
-        cash == 0 ? '' : NumberFormat('#,##0.##').format(cash);
+    _amountController.text = cash == 0
+        ? ''
+        : NumberFormat('#,##0.##').format(cash);
     setState(() => _editing = true);
     await Future<void>.delayed(const Duration(milliseconds: 40));
     if (mounted) _amountFocus.requestFocus();
@@ -1361,89 +1414,92 @@ class _BankCardPopupState extends State<_BankCardPopup> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Flexible(
-                                    child: _editing
-                                        ? TextField(
-                                            controller: _amountController,
-                                            focusNode: _amountFocus,
-                                            autofocus: true,
-                                            enabled: !_saving,
-                                            keyboardType: const TextInputType
-                                                .numberWithOptions(
-                                              decimal: true,
-                                            ),
-                                            inputFormatters: [
-                                              FilteringTextInputFormatter.allow(
-                                                RegExp(r'[0-9.,]'),
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Flexible(
+                                        child: _editing
+                                            ? TextField(
+                                                controller: _amountController,
+                                                focusNode: _amountFocus,
+                                                autofocus: true,
+                                                enabled: !_saving,
+                                                keyboardType:
+                                                    const TextInputType.numberWithOptions(
+                                                      decimal: true,
+                                                    ),
+                                                inputFormatters: [
+                                                  FilteringTextInputFormatter.allow(
+                                                    RegExp(r'[0-9.,]'),
+                                                  ),
+                                                ],
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 28,
+                                                  fontWeight: FontWeight.w800,
+                                                  height: 1,
+                                                ),
+                                                decoration: InputDecoration(
+                                                  isDense: true,
+                                                  border: InputBorder.none,
+                                                  contentPadding:
+                                                      EdgeInsets.zero,
+                                                  prefixText: currency.symbol,
+                                                  prefixStyle: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 28,
+                                                    fontWeight: FontWeight.w800,
+                                                  ),
+                                                ),
+                                                onSubmitted: (_) =>
+                                                    _saveAmount(),
+                                              )
+                                            : Text(
+                                                '${currency.symbol}$amountLabel',
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 28,
+                                                  fontWeight: FontWeight.w800,
+                                                  height: 1,
+                                                ),
                                               ),
-                                            ],
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 28,
-                                              fontWeight: FontWeight.w800,
-                                              height: 1,
-                                            ),
-                                            decoration: InputDecoration(
-                                              isDense: true,
-                                              border: InputBorder.none,
-                                              contentPadding: EdgeInsets.zero,
-                                              prefixText: currency.symbol,
-                                              prefixStyle: const TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 28,
-                                                fontWeight: FontWeight.w800,
-                                              ),
-                                            ),
-                                            onSubmitted: (_) => _saveAmount(),
-                                          )
-                                        : Text(
-                                            '${currency.symbol}$amountLabel',
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 28,
-                                              fontWeight: FontWeight.w800,
-                                              height: 1,
-                                            ),
-                                          ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      IconButton(
+                                        onPressed: _saving
+                                            ? null
+                                            : (_editing
+                                                  ? _saveAmount
+                                                  : _startEditing),
+                                        visualDensity: VisualDensity.compact,
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints(
+                                          minWidth: 28,
+                                          minHeight: 28,
+                                        ),
+                                        icon: Icon(
+                                          _editing
+                                              ? Icons.check_rounded
+                                              : Icons.edit_rounded,
+                                          size: 16,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  const SizedBox(width: 4),
-                                  IconButton(
-                                    onPressed: _saving
-                                        ? null
-                                        : (_editing
-                                            ? _saveAmount
-                                            : _startEditing),
-                                    visualDensity: VisualDensity.compact,
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(
-                                      minWidth: 28,
-                                      minHeight: 28,
-                                    ),
-                                    icon: Icon(
-                                      _editing
-                                          ? Icons.check_rounded
-                                          : Icons.edit_rounded,
-                                      size: 16,
-                                      color: Colors.white,
+                                  const SizedBox(height: 2),
+                                  const Text(
+                                    'Remaining money',
+                                    style: TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
                                     ),
                                   ),
-                                ],
-                              ),
-                              const SizedBox(height: 2),
-                              const Text(
-                                'Remaining money',
-                                style: TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
                                 ],
                               ),
                             ),
@@ -1463,10 +1519,7 @@ class _BankCardPopupState extends State<_BankCardPopup> {
 }
 
 class _WalletOpenPopup extends StatefulWidget {
-  const _WalletOpenPopup({
-    required this.reduceMotion,
-    required this.onDismiss,
-  });
+  const _WalletOpenPopup({required this.reduceMotion, required this.onDismiss});
 
   final bool reduceMotion;
   final VoidCallback onDismiss;
@@ -1532,7 +1585,9 @@ class _WalletOpenPopupState extends State<_WalletOpenPopup>
   Future<void> _startEditing() async {
     if (_saving) return;
     final cash = context.read<WalletCashProvider>().amount;
-    _amountController.text = cash == 0 ? '' : NumberFormat('#,##0.##').format(cash);
+    _amountController.text = cash == 0
+        ? ''
+        : NumberFormat('#,##0.##').format(cash);
     setState(() => _editing = true);
     await Future<void>.delayed(const Duration(milliseconds: 40));
     if (mounted) _amountFocus.requestFocus();
@@ -1640,8 +1695,7 @@ class _WalletOpenPopupState extends State<_WalletOpenPopup>
                         child: Opacity(
                           opacity: _billFade.value,
                           child: Transform.translate(
-                            offset:
-                                Offset(0, 16 * (1 - _billFade.value)),
+                            offset: Offset(0, 16 * (1 - _billFade.value)),
                             child: _CashBill(
                               symbol: currency.symbol,
                               amountLabel: amountLabel,
@@ -1723,8 +1777,9 @@ class _CashBill extends StatelessWidget {
                           focusNode: focusNode,
                           autofocus: true,
                           enabled: !saving,
-                          keyboardType:
-                              const TextInputType.numberWithOptions(decimal: true),
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
                           inputFormatters: [
                             FilteringTextInputFormatter.allow(
                               RegExp(r'[0-9.,]'),
@@ -1760,9 +1815,7 @@ class _CashBill extends StatelessWidget {
                 Align(
                   alignment: Alignment.topCenter,
                   child: IconButton(
-                    onPressed: saving
-                        ? null
-                        : (editing ? onSubmitted : onEdit),
+                    onPressed: saving ? null : (editing ? onSubmitted : onEdit),
                     visualDensity: VisualDensity.compact,
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(
@@ -1880,4 +1933,3 @@ class _Pill extends StatelessWidget {
     );
   }
 }
-

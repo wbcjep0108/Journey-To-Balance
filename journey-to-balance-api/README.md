@@ -2,7 +2,7 @@
 
 Protected finance API for the Flutter app on the **Firebase Spark** plan (no Cloud Functions / Blaze).
 
-Worker URL: `https://journey-to-balance-api.bcueva1217.workers.dev`
+Worker URL: `https://journey-to-balance-api.nu-clouds.workers.dev`
 
 ## Architecture
 

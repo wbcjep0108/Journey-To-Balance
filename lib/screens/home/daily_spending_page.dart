@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../models/financial_entry.dart';
+import '../../models/spend_category_option.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/currency_provider.dart';
 import '../../widgets/category_icon_badge.dart';
@@ -32,10 +33,7 @@ class DailySpendingPage extends StatelessWidget {
     // added-money credits (isRefund) are excluded from the total.
     final total = transactions
         .where((item) => !item.entry.isRefund)
-        .fold<double>(
-          0,
-          (sum, item) => sum + item.entry.amount,
-        );
+        .fold<double>(0, (sum, item) => sum + item.entry.amount);
     final dateLabel = DateFormat('EEEE, MMMM d, yyyy').format(target);
 
     return Scaffold(
@@ -172,8 +170,7 @@ class DailySpendingPage extends StatelessWidget {
       if (!context.mounted) return false;
       final budget = context.read<BudgetProvider>();
       if (budget.pendingRateLimit != null) return false;
-      final message =
-          budget.errorMessage ?? 'The change could not be saved.';
+      final message = budget.errorMessage ?? 'The change could not be saved.';
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(message)));
@@ -183,20 +180,32 @@ class DailySpendingPage extends StatelessWidget {
 }
 
 class _DayEntryRow extends StatelessWidget {
-  const _DayEntryRow({
-    required this.item,
-    required this.onDelete,
-  });
+  const _DayEntryRow({required this.item, required this.onDelete});
 
   final DayTransaction item;
   final Future<bool> Function() onDelete;
 
   @override
   Widget build(BuildContext context) {
+    final savedIcon = item.entry.iconAsset?.trim();
+    final iconAsset = savedIcon == null || savedIcon.isEmpty
+        ? SpendCategoryPresets.defaultIconAsset(item.category)
+        : savedIcon;
+    final savedPaymentMethod = item.entry.fundingSourceLabel?.trim();
+    final paymentMethod =
+        savedPaymentMethod == null || savedPaymentMethod.isEmpty
+        ? 'Not recorded'
+        : savedPaymentMethod;
+
     return Dismissible(
       key: ValueKey('${item.category.name}_${item.entry.id}'),
       direction: DismissDirection.endToStart,
-      confirmDismiss: (_) => onDelete(),
+      confirmDismiss: (_) async {
+        // onDelete updates the provider, which removes this row from the list.
+        // Returning true would make Dismissible try to remove it a second time.
+        await onDelete();
+        return false;
+      },
       background: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -224,15 +233,12 @@ class _DayEntryRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 10),
         child: Row(
           children: [
-            if (item.entry.iconAsset != null &&
-                item.entry.iconAsset!.isNotEmpty) ...[
-              CategoryIconBadge(
-                iconAsset: item.entry.iconAsset!,
-                size: 34,
-                showBorder: false,
-              ),
-              const SizedBox(width: 12),
-            ],
+            CategoryIconBadge(
+              iconAsset: iconAsset,
+              size: 38,
+              showBorder: false,
+            ),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -254,6 +260,17 @@ class _DayEntryRow extends StatelessWidget {
                       color: Colors.grey.shade500,
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Payment method: $paymentMethod',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Colors.grey.shade500,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ],
