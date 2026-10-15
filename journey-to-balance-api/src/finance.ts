@@ -29,8 +29,9 @@ export type Env = {
   USER_GATE: DurableObjectNamespace<UserGate>;
   FIREBASE_PROJECT_ID: string;
   FIREBASE_SERVICE_ACCOUNT_JSON: string;
-  RESEND_API_KEY?: string;
-  OTP_FROM?: string;
+  BREVO_API_KEY?: string;
+  BREVO_SENDER_EMAIL?: string;
+  BREVO_SENDER_NAME?: string;
 };
 
 function requirePositiveAmount(amount: unknown): number {

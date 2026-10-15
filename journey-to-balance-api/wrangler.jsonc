@@ -20,6 +20,9 @@
   ],
   // Set via: wrangler secret put FIREBASE_PROJECT_ID
   //           wrangler secret put FIREBASE_SERVICE_ACCOUNT_JSON
+  //           wrangler secret put BREVO_API_KEY
+  //           wrangler secret put BREVO_SENDER_EMAIL
+  //           wrangler secret put BREVO_SENDER_NAME
   "vars": {
     "FIREBASE_PROJECT_ID": "journey-to-balance"
   }

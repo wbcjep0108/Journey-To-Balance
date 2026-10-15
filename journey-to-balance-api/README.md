@@ -38,8 +38,14 @@ npx wrangler secret put FIREBASE_PROJECT_ID
 npx wrangler secret put FIREBASE_SERVICE_ACCOUNT_JSON
 # paste the full JSON file contents
 
-npx wrangler secret put RESEND_API_KEY
-# Resend API key for Forgot PIN emails
+npx wrangler secret put BREVO_API_KEY
+# Brevo Transactional Email API key for Forgot PIN emails
+
+npx wrangler secret put BREVO_SENDER_EMAIL
+# email address for a verified Brevo sender
+
+npx wrangler secret put BREVO_SENDER_NAME
+# sender name shown on Forgot PIN emails
 ```
 
 Local dev (never commit):

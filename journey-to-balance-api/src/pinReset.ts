@@ -83,32 +83,35 @@ function requireAccountEmail(user: AuthUser, typedEmail: string): string {
 }
 
 async function sendOtpEmail(env: Env, to: string, otp: string): Promise<void> {
-  const apiKey = env.RESEND_API_KEY?.trim();
-  if (!apiKey) {
+  const apiKey = env.BREVO_API_KEY?.trim();
+  const senderEmail = env.BREVO_SENDER_EMAIL?.trim();
+  const senderName = env.BREVO_SENDER_NAME?.trim();
+  if (!apiKey || !senderEmail || !senderName) {
     throw internal("PIN reset email is not configured.");
   }
 
-  const from = `Journey to Balance <onboarding@${"resend"}.dev>`;
-
-  const res = await fetch("https://api.resend.com/emails", {
+  const res = await fetch("https://api.brevo.com/v3/smtp/email", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${apiKey}`,
+      "api-key": apiKey,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      from,
-      to: [to],
+      sender: {
+        email: senderEmail,
+        name: senderName,
+      },
+      to: [{email: to}],
       subject: "Your Journey to Balance PIN reset code",
-      text:
+      textContent:
         `Your 4-digit code is ${otp}. It expires in 10 minutes.\n\n` +
         `If you didn't request this, you can ignore this email.`,
-      html: buildPinResetEmailHtml(otp),
+      htmlContent: buildPinResetEmailHtml(otp),
     }),
   });
 
   if (!res.ok) {
-    console.error("Resend failed", await res.text());
+    console.error("Brevo failed", await res.text());
     throw internal("Could not send the code. Please try again.");
   }
 }
