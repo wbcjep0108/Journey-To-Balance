@@ -26,7 +26,7 @@ class _BottomNavScreenState extends State<BottomNavScreen>
     _NavDestination('Bills', Icons.receipt_long_outlined),
     _NavDestination('Savings', Icons.savings_outlined),
     _NavDestination('Personal', Icons.person_outline),
-    _NavDestination('Account', Icons.account_circle_outlined),
+    _NavDestination('Account', Icons.settings_outlined),
   ];
 
   late final AnimationController _entranceController;

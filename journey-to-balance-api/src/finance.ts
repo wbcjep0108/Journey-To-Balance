@@ -21,6 +21,10 @@ import {
 } from "./errors";
 import {FirestoreClient} from "./firestore";
 import {RATE_LIMITS, RateBucketName} from "./rateLimit";
+import {
+  normalizeTransactionIconAsset,
+  withTransactionIcon,
+} from "./transactionIcons";
 import type {UserGate} from "./UserGate";
 
 const EPS = 0.001;
@@ -71,23 +75,13 @@ function normalizeRequestId(requestId: unknown): string | undefined {
 
 /** Optional category icon asset path from the Flutter client. */
 function normalizeIconAsset(value: unknown): string | undefined {
-  if (value == null) return undefined;
-  if (typeof value !== "string") {
-    throw badRequest("Invalid iconAsset.");
+  try {
+    return normalizeTransactionIconAsset(value);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Invalid iconAsset.";
+    console.warn("Rejected transaction icon", {value, message});
+    throw badRequest(message);
   }
-  const trimmed = value.trim();
-  if (!trimmed) return undefined;
-  if (trimmed.length > 200) {
-    throw badRequest("Invalid iconAsset.");
-  }
-  // PNG presets under assets/, or Material icon sentinels (e.g. Others).
-  if (
-    trimmed.startsWith("assets/images/icons_") ||
-    trimmed === "material:more_horiz"
-  ) {
-    return trimmed;
-  }
-  return undefined;
 }
 
 function requireFundingSource(value: unknown, label: string): string {
@@ -397,15 +391,14 @@ export async function handleFinance(
       return saveBudget(client, uid, budget, {
         category,
         entryId,
-        data: {
+        data: withTransactionIcon({
           title,
           amount,
           createdAt: new Date(createdAtMs),
           isRefund: false,
-          ...(iconAsset ? {iconAsset} : {}),
           ...(fundingSourceId ? {fundingSourceId} : {}),
           ...(fundingSourceLabel ? {fundingSourceLabel} : {}),
-        },
+        }, iconAsset),
       }).then((result) => ({...result, entryId}));
     });
   }
@@ -454,15 +447,14 @@ export async function handleFinance(
       return saveBudget(client, uid, budget, {
         category,
         entryId,
-        data: {
+        data: withTransactionIcon({
           title,
           amount,
           createdAt: previousCreatedAt,
           isRefund: false,
-          ...(nextIcon ? {iconAsset: nextIcon} : {}),
           ...(fundingSourceId ? {fundingSourceId} : {}),
           ...(fundingSourceLabel ? {fundingSourceLabel} : {}),
-        },
+        }, nextIcon),
       }).then((result) => ({...result, entryId}));
     });
   }

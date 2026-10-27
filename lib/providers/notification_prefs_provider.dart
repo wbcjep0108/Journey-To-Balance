@@ -31,6 +31,7 @@ class NotificationPrefsProvider extends ChangeNotifier {
 
   static const dailyKey = 'notif_daily_enabled';
   static const loanKey = 'notif_loan_enabled';
+  static const plannerKey = 'notif_planner_enabled';
   static const morningMinutesKey = 'notif_morning_minutes';
   static const eveningMinutesKey = 'notif_evening_minutes';
 
@@ -38,19 +39,19 @@ class NotificationPrefsProvider extends ChangeNotifier {
 
   bool _dailyEnabled = true;
   bool _loanEnabled = true;
+  bool _plannerEnabled = true;
   ReminderClock _morning = ReminderClock.morningDefault;
   ReminderClock _evening = ReminderClock.eveningDefault;
   bool _loaded = false;
 
   bool get dailyEnabled => _dailyEnabled;
   bool get loanEnabled => _loanEnabled;
+  bool get plannerEnabled => _plannerEnabled;
   ReminderClock get morning => _morning;
   ReminderClock get evening => _evening;
   bool get isLoaded => _loaded;
 
-  static Future<bool> readDailyEnabled({
-    FlutterSecureStorage? storage,
-  }) async {
+  static Future<bool> readDailyEnabled({FlutterSecureStorage? storage}) async {
     return _readBool(
       storage ?? const FlutterSecureStorage(),
       dailyKey,
@@ -58,9 +59,7 @@ class NotificationPrefsProvider extends ChangeNotifier {
     );
   }
 
-  static Future<bool> readLoanEnabled({
-    FlutterSecureStorage? storage,
-  }) async {
+  static Future<bool> readLoanEnabled({FlutterSecureStorage? storage}) async {
     return _readBool(
       storage ?? const FlutterSecureStorage(),
       loanKey,
@@ -68,9 +67,17 @@ class NotificationPrefsProvider extends ChangeNotifier {
     );
   }
 
-  static Future<ReminderClock> readMorning({
+  static Future<bool> readPlannerEnabled({
     FlutterSecureStorage? storage,
-  }) {
+  }) async {
+    return _readBool(
+      storage ?? const FlutterSecureStorage(),
+      plannerKey,
+      fallback: true,
+    );
+  }
+
+  static Future<ReminderClock> readMorning({FlutterSecureStorage? storage}) {
     return _readClock(
       storage ?? const FlutterSecureStorage(),
       morningMinutesKey,
@@ -78,9 +85,7 @@ class NotificationPrefsProvider extends ChangeNotifier {
     );
   }
 
-  static Future<ReminderClock> readEvening({
-    FlutterSecureStorage? storage,
-  }) {
+  static Future<ReminderClock> readEvening({FlutterSecureStorage? storage}) {
     return _readClock(
       storage ?? const FlutterSecureStorage(),
       eveningMinutesKey,
@@ -119,6 +124,7 @@ class NotificationPrefsProvider extends ChangeNotifier {
   Future<void> load() async {
     _dailyEnabled = await readDailyEnabled(storage: _storage);
     _loanEnabled = await readLoanEnabled(storage: _storage);
+    _plannerEnabled = await readPlannerEnabled(storage: _storage);
     _morning = await readMorning(storage: _storage);
     _evening = await readEvening(storage: _storage);
     _loaded = true;
@@ -137,6 +143,13 @@ class NotificationPrefsProvider extends ChangeNotifier {
     _loanEnabled = value;
     notifyListeners();
     await _write(loanKey, value ? '1' : '0');
+  }
+
+  Future<void> setPlannerEnabled(bool value) async {
+    if (_plannerEnabled == value) return;
+    _plannerEnabled = value;
+    notifyListeners();
+    await _write(plannerKey, value ? '1' : '0');
   }
 
   Future<void> setMorning(ReminderClock value) async {
@@ -158,4 +171,11 @@ class NotificationPrefsProvider extends ChangeNotifier {
       await _storage.write(key: key, value: value);
     } catch (_) {}
   }
+}
+
+bool plannerNotificationsAllowed({
+  required bool settingEnabled,
+  required bool permissionGranted,
+}) {
+  return settingEnabled && permissionGranted;
 }

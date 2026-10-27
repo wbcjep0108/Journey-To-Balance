@@ -3,8 +3,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/budget_plan.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/currency_provider.dart';
+import '../../providers/planner_provider.dart';
 import '../../providers/wallet_cards_provider.dart';
 import '../../providers/wallet_cash_provider.dart';
 import '../../widgets/allocation_confirm_dialog.dart';
@@ -13,9 +15,11 @@ import '../../widgets/barrier_blur.dart';
 import '../../widgets/rate_limit_dialog.dart';
 import '../../widgets/sensitive_action_auth.dart';
 import '../../widgets/foreign_exchange_card.dart';
+import '../../widgets/planner_progress_bar.dart';
 import '../../widgets/weekly_spending_card.dart';
 import '../loans/total_loan_page.dart';
 import '../savings/savings_goal_page.dart';
+import 'budget_planner_page.dart';
 import 'home_money_dialogs.dart';
 import 'monthly_spending_dashboard_page.dart';
 import 'wallet_page.dart';
@@ -97,7 +101,8 @@ class _HomePageState extends State<HomePage> {
     setState(() => _isReceivingSalary = true);
     final source = await showDialog<SalaryDepositSource>(
       context: context,
-      builder: (_) => SalaryDepositSourceDialog(hostContext: context),
+      builder: (_) =>
+          withBarrierBlur(SalaryDepositSourceDialog(hostContext: context)),
     );
     if (!mounted) return;
     if (source == null) {
@@ -285,14 +290,6 @@ class _HomePageState extends State<HomePage> {
                                               overflow: TextOverflow.ellipsis,
                                             ),
                                           ],
-                                        ),
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Icon(
-                                        Icons.chevron_right_rounded,
-                                        size: 20,
-                                        color: Colors.white.withValues(
-                                          alpha: 0.72,
                                         ),
                                       ),
                                     ],
@@ -577,6 +574,10 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
               const Padding(
+                padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
+                child: _HomePlannerCard(),
+              ),
+              const Padding(
                 padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
                 child: WeeklySpendingCard(),
               ),
@@ -596,11 +597,112 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
+class _HomePlannerCard extends StatelessWidget {
+  const _HomePlannerCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final planner = context.watch<PlannerProvider>();
+    final currency = context.watch<CurrencyProvider>();
+    final plan = planner.plan;
+    final progress = planner.progress;
+
+    return Semantics(
+      button: true,
+      label: 'Open Budget Planner',
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        child: InkWell(
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const BudgetPlannerPage(),
+              ),
+            );
+          },
+          borderRadius: BorderRadius.circular(24),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: const Color(0xFFE8EAED)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.event_note_outlined, size: 21),
+                    SizedBox(width: 9),
+                    Text(
+                      'Budget Planner',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF121212),
+                      ),
+                    ),
+                    Spacer(),
+                    Icon(Icons.chevron_right_rounded, size: 22),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                if (plan == null)
+                  const Text(
+                    'Set a budget plan',
+                    style: TextStyle(fontSize: 13, color: Color(0xFF747C89)),
+                  )
+                else ...[
+                  Text(
+                    plannerPeriodSummary(plan),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: Color(0xFF747C89),
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    DateTime.now().isBefore(plan.localStart)
+                        ? plannerStatusLabel(plan, planner.spent)
+                        : '${currency.formatAmount(planner.spent)} of '
+                              '${currency.formatAmount(plan.total)} spent',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF121212),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  PlannerProgressBar(
+                    progress: progress,
+                    height: 6,
+                    trackColor: const Color(0xFFE1E4E8),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _QuickActionsRow extends StatelessWidget {
   const _QuickActionsRow();
 
   @override
   Widget build(BuildContext context) {
+    final planner = context.watch<PlannerProvider>();
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
@@ -625,7 +727,102 @@ class _QuickActionsRow extends StatelessWidget {
             );
           },
         ),
+        _PlannerAction(
+          progress: planner.progress,
+          hasPlan: planner.hasPlan,
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const BudgetPlannerPage(),
+              ),
+            );
+          },
+        ),
       ],
+    );
+  }
+}
+
+class _PlannerAction extends StatelessWidget {
+  const _PlannerAction({
+    required this.progress,
+    required this.hasPlan,
+    required this.onTap,
+  });
+
+  final double progress;
+  final bool hasPlan;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final statusColor = progress > 1
+        ? const Color(0xFFDC2626)
+        : progress >= 0.8
+        ? const Color(0xFFF59E0B)
+        : const Color(0xFF16A34A);
+    final ringProgress = hasPlan
+        ? (progress <= 0 ? 0.001 : progress.clamp(0.0, 1.0))
+        : 0.0;
+
+    return Semantics(
+      label: 'Budget Planner',
+      button: true,
+      child: SizedBox(
+        width: 74,
+        height: 74,
+        child: InkResponse(
+          onTap: onTap,
+          radius: 37,
+          customBorder: const CircleBorder(),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              SizedBox(
+                width: 74,
+                height: 74,
+                child: CircularProgressIndicator(
+                  value: ringProgress,
+                  strokeWidth: 10.5,
+                  strokeCap: StrokeCap.round,
+                  backgroundColor: const Color(0xFF121212),
+                  color: statusColor,
+                ),
+              ),
+              const _PlannerIconCircle(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PlannerIconCircle extends StatelessWidget {
+  const _PlannerIconCircle();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 54,
+      height: 54,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(12),
+      child: const Icon(
+        Icons.event_note_outlined,
+        size: 30,
+        color: Color(0xFF121212),
+      ),
     );
   }
 }

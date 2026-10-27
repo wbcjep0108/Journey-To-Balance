@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../screens/home/daily_spending_page.dart';
+import '../screens/home/budget_planner_page.dart';
 import '../screens/loans/total_loan_page.dart';
 import 'notification_service.dart';
 
@@ -37,16 +38,20 @@ class NotificationRouter {
       final now = DateTime.now();
       nav.push(
         MaterialPageRoute<void>(
-          builder: (_) => DailySpendingPage(
-            day: DateTime(now.year, now.month, now.day),
-          ),
+          builder: (_) =>
+              DailySpendingPage(day: DateTime(now.year, now.month, now.day)),
         ),
       );
       return;
     }
     if (payload == NotificationPayloads.loan) {
+      nav.push(MaterialPageRoute<void>(builder: (_) => const TotalLoanPage()));
+      return;
+    }
+    if (payload == NotificationPayloads.planner) {
+      selectTab?.call(0);
       nav.push(
-        MaterialPageRoute<void>(builder: (_) => const TotalLoanPage()),
+        MaterialPageRoute<void>(builder: (_) => const BudgetPlannerPage()),
       );
     }
   }

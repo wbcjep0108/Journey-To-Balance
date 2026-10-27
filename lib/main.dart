@@ -12,6 +12,7 @@ import 'providers/budget_provider.dart';
 import 'providers/currency_provider.dart';
 import 'providers/loan_provider.dart';
 import 'providers/notification_prefs_provider.dart';
+import 'providers/planner_provider.dart';
 import 'providers/wallet_cards_provider.dart';
 import 'providers/wallet_cash_provider.dart';
 import 'screens/auth/login_screen.dart';
@@ -26,7 +27,9 @@ import 'services/wallet_firestore_service.dart';
 import 'services/wallet_migration_service.dart';
 import 'services/notification_router.dart';
 import 'services/notification_service.dart';
+import 'services/planner_firestore_service.dart';
 import 'widgets/app_privacy_blur.dart';
+import 'widgets/budget_exceeded_dialog.dart';
 import 'widgets/rate_limit_dialog.dart';
 
 void main() async {
@@ -42,6 +45,7 @@ void main() async {
     MultiProvider(
       providers: [
         Provider(create: (_) => FirestoreFinanceService()),
+        Provider(create: (_) => PlannerFirestoreService()),
         Provider(create: (_) => WalletFirestoreService()),
         Provider(
           create: (context) => WalletMigrationService(
@@ -64,8 +68,18 @@ void main() async {
           create: (context) =>
               CurrencyProvider(service: context.read<WalletFirestoreService>()),
         ),
-        ChangeNotifierProvider(
+        ChangeNotifierProvider<NotificationPrefsProvider>(
+          key: const ValueKey('notification-prefs-provider'),
           create: (_) => NotificationPrefsProvider()..load(),
+        ),
+        ChangeNotifierProvider<PlannerProvider>(
+          key: const ValueKey('planner-provider'),
+          create: (context) => PlannerProvider(
+            context.read<PlannerFirestoreService>(),
+            context.read<BudgetProvider>(),
+            context.read<CurrencyProvider>(),
+            context.read<NotificationPrefsProvider>(),
+          ),
         ),
         ChangeNotifierProvider(
           create: (context) => WalletCashProvider(
@@ -140,6 +154,7 @@ class _AuthGateState extends State<AuthGate> {
                 // next user doesn't briefly see the previous user's wallet.
                 context.read<LoanProvider>().clear();
                 context.read<CurrencyProvider>().clear();
+                context.read<PlannerProvider>().clear();
                 context.read<WalletCashProvider>().clear();
                 context.read<WalletCardsProvider>().clear();
                 NotificationService.instance.cancelAllReminders();
@@ -291,6 +306,8 @@ class _UserDataGateState extends State<_UserDataGate> {
       if (!mounted) return;
       await context.read<NotificationPrefsProvider>().load();
       if (!mounted) return;
+      await context.read<PlannerProvider>().loadForUser(widget.uid);
+      if (!mounted) return;
       final error = context.read<BudgetProvider>().errorMessage;
       final loans = context.read<LoanProvider>().loans;
       setState(() {
@@ -303,7 +320,8 @@ class _UserDataGateState extends State<_UserDataGate> {
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _error = 'Saved data could not be loaded. Check your connection and retry.';
+        _error =
+            'Saved data could not be loaded. Check your connection and retry.';
         _ready = false;
       });
     } finally {
@@ -314,6 +332,9 @@ class _UserDataGateState extends State<_UserDataGate> {
   Future<void> _activateReminders(List<LoanEntry> loans) async {
     try {
       await NotificationService.instance.requestPermission();
+      if (mounted) {
+        await context.read<PlannerProvider>().refreshNotificationPermission();
+      }
       await NotificationService.instance.syncAll(loans: loans);
     } catch (_) {}
   }
@@ -335,7 +356,9 @@ class _UserDataGateState extends State<_UserDataGate> {
     // Keep BottomNav mounted once ready — never swap it for Splash on reload.
     if (_ready) {
       return const RateLimitListener(
-        child: PostLoginWelcome(child: BottomNavScreen()),
+        child: PlannerAlertListener(
+          child: PostLoginWelcome(child: BottomNavScreen()),
+        ),
       );
     }
 

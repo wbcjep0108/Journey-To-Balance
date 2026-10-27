@@ -2,8 +2,72 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Assumed planner model: users/{uid}.planner is a required-key map with
+    // one active plan. Dates are timestamps, amounts are bounded numbers, and
+    // category switches determine which positive amounts form the total.
     function isOwner(userId) {
       return request.auth != null && request.auth.uid == userId;
+    }
+
+    function isValidPlannerAmount(enabled, amount) {
+      return enabled is bool &&
+        amount is number &&
+        amount >= 0 &&
+        amount <= 1000000000000 &&
+        ((enabled && amount > 0) || (!enabled && amount == 0));
+    }
+
+    function isValidPlanner(planner) {
+      let sum = planner.billsAmount +
+        planner.savingsAmount +
+        planner.personalAmount;
+      return planner is map &&
+        planner.keys().hasAll([
+          'id', 'period', 'startAt', 'endAt',
+          'billsEnabled', 'billsAmount',
+          'savingsEnabled', 'savingsAmount',
+          'personalEnabled', 'personalAmount',
+          'total', 'createdAt', 'alertEligible'
+        ]) &&
+        planner.keys().hasOnly([
+          'id', 'period', 'startAt', 'endAt',
+          'billsEnabled', 'billsAmount',
+          'savingsEnabled', 'savingsAmount',
+          'personalEnabled', 'personalAmount',
+          'total', 'createdAt', 'alertEligible'
+        ]) &&
+        planner.id is string &&
+        planner.id.size() > 0 &&
+        planner.id.size() <= 64 &&
+        planner.period is string &&
+        planner.period in ['day', 'week', 'month'] &&
+        planner.startAt is timestamp &&
+        planner.endAt is timestamp &&
+        planner.endAt > planner.startAt &&
+        planner.createdAt is timestamp &&
+        planner.createdAt > request.time - duration.value(10, 'm') &&
+        planner.createdAt < request.time + duration.value(10, 'm') &&
+        planner.alertEligible is bool &&
+        isValidPlannerAmount(
+          planner.billsEnabled,
+          planner.billsAmount
+        ) &&
+        isValidPlannerAmount(
+          planner.savingsEnabled,
+          planner.savingsAmount
+        ) &&
+        isValidPlannerAmount(
+          planner.personalEnabled,
+          planner.personalAmount
+        ) &&
+        (planner.billsEnabled ||
+          planner.savingsEnabled ||
+          planner.personalEnabled) &&
+        planner.total is number &&
+        planner.total > 0 &&
+        planner.total <= 3000000000000 &&
+        planner.total >= sum - 0.01 &&
+        planner.total <= sum + 0.01;
     }
 
     match /users/{userId} {
@@ -11,7 +75,17 @@ service cloud.firestore {
       // Realtime listeners: users/{uid}.snapshots()
       // Financial writes go through Cloudflare Worker (service account).
       allow read: if isOwner(userId);
-      allow write: if false;
+      allow create: if isOwner(userId) &&
+        request.resource.data.keys().hasOnly(['planner']) &&
+        isValidPlanner(request.resource.data.planner);
+      allow update: if isOwner(userId) &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['planner']) &&
+        (
+          (!request.resource.data.keys().hasAny(['planner'])) ||
+          isValidPlanner(request.resource.data.planner)
+        );
+      allow delete: if false;
 
       // Category entry collections — list/get for owner only.
       // Realtime listeners: users/{uid}/{bills|savings|personal}.snapshots()

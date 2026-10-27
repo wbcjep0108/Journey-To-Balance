@@ -124,6 +124,16 @@ class SpendCategoryPresets {
     };
   }
 
+  static String iconAssetOrDefault(
+    FinancialCategory category,
+    String? iconAsset,
+  ) {
+    final trimmed = iconAsset?.trim();
+    return trimmed == null || trimmed.isEmpty
+        ? defaultIconAsset(category)
+        : trimmed;
+  }
+
   static String labelForAsset(
     FinancialCategory category,
     String assetPath,

@@ -103,14 +103,17 @@ class BudgetProvider extends ChangeNotifier {
         )
         .map((entry) {
           var mergedEntry = entry;
-          // Keep a local icon if the remote doc omitted it (e.g. older API
-          // rejected material: sentinels like Others).
+          // Keep a pending local selection, then use a category default for
+          // older remote records whose icon was never persisted.
           final localIcon = previousById[entry.id]?.iconAsset?.trim();
           final remoteIcon = entry.iconAsset?.trim();
-          if ((remoteIcon == null || remoteIcon.isEmpty) &&
-              localIcon != null &&
-              localIcon.isNotEmpty) {
-            mergedEntry = mergedEntry.copyWith(iconAsset: localIcon);
+          if (remoteIcon == null || remoteIcon.isEmpty) {
+            mergedEntry = mergedEntry.copyWith(
+              iconAsset: SpendCategoryPresets.iconAssetOrDefault(
+                category,
+                localIcon,
+              ),
+            );
           }
           // Preserve the physical Wallet/Card source while older backends are
           // being upgraded to persist the new fields.

@@ -11,6 +11,7 @@ class NotificationPayloads {
   static const dailyMorning = 'daily_morning';
   static const dailyEvening = 'daily_evening';
   static const loan = 'loan';
+  static const planner = 'budget_planner';
 }
 
 class NotificationService {
@@ -35,6 +36,13 @@ class NotificationService {
     'loan_payments',
     'Loan payments',
     description: 'Upcoming and missed loan payment reminders',
+    importance: Importance.high,
+  );
+
+  static const _plannerChannel = AndroidNotificationChannel(
+    'budget_planner_alerts',
+    'Budget planner alerts',
+    description: 'Alerts when an active budget plan is exceeded',
     importance: Importance.high,
   );
 
@@ -76,6 +84,7 @@ class NotificationService {
         >();
     await androidPlugin?.createNotificationChannel(_dailyChannel);
     await androidPlugin?.createNotificationChannel(_loanChannel);
+    await androidPlugin?.createNotificationChannel(_plannerChannel);
 
     final launch = await _plugin.getNotificationAppLaunchDetails();
     if (launch?.didNotificationLaunchApp == true) {
@@ -85,22 +94,66 @@ class NotificationService {
     _initialized = true;
   }
 
-  Future<void> requestPermission() async {
-    if (!isSupported) return;
+  Future<bool> requestPermission() async {
+    if (!isSupported) return true;
     await init();
 
     final android = _plugin
         .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin
         >();
-    await android?.requestNotificationsPermission();
+    final androidResult = await android?.requestNotificationsPermission();
     await android?.requestExactAlarmsPermission();
 
     final ios = _plugin
         .resolvePlatformSpecificImplementation<
           IOSFlutterLocalNotificationsPlugin
         >();
-    await ios?.requestPermissions(alert: true, badge: true, sound: true);
+    final iosResult = await ios?.requestPermissions(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+    return androidResult ?? iosResult ?? await areNotificationsEnabled();
+  }
+
+  Future<bool> areNotificationsEnabled() async {
+    if (!isSupported) return true;
+    await init();
+    final android = _plugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
+    return await android?.areNotificationsEnabled() ?? true;
+  }
+
+  Future<void> showPlannerExceeded({
+    required String planId,
+    required String message,
+  }) async {
+    if (!isSupported) return;
+    await init();
+    await _plugin.show(
+      _stableId('planner|$planId'),
+      'Budget exceeded',
+      message,
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'budget_planner_alerts',
+          'Budget planner alerts',
+          channelDescription: 'Alerts when an active budget plan is exceeded',
+          importance: Importance.high,
+          priority: Priority.high,
+          icon: '@mipmap/ic_launcher',
+        ),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
+      ),
+      payload: NotificationPayloads.planner,
+    );
   }
 
   Future<void> syncAll({required List<LoanEntry> loans}) async {
@@ -162,8 +215,7 @@ class NotificationService {
       final next = loan.nextActionableDue;
       if (next == null) continue;
 
-      final nextIsFinal =
-          LoanEntry.dayKey(next) == LoanEntry.dayKey(finalDue);
+      final nextIsFinal = LoanEntry.dayKey(next) == LoanEntry.dayKey(finalDue);
       if (loan.installmentStatus(next) == LoanStatus.late) {
         await _scheduleMissed(loan, next, isFinal: nextIsFinal);
       }
@@ -299,7 +351,10 @@ class NotificationService {
   }
 
   int _loanId(String stage, String loanId, DateTime due) {
-    final key = '$stage|$loanId|${LoanEntry.dayKey(due)}';
+    return _stableId('$stage|$loanId|${LoanEntry.dayKey(due)}');
+  }
+
+  int _stableId(String key) {
     var hash = 0x811c9dc5;
     for (final unit in key.codeUnits) {
       hash ^= unit;
@@ -312,14 +367,7 @@ class NotificationService {
   }
 
   tz.TZDateTime _atHourOn(DateTime day, int hour, [int minute = 0]) {
-    return tz.TZDateTime(
-      tz.local,
-      day.year,
-      day.month,
-      day.day,
-      hour,
-      minute,
-    );
+    return tz.TZDateTime(tz.local, day.year, day.month, day.day, hour, minute);
   }
 
   tz.TZDateTime _nextHour(int hour, [int minute = 0]) {

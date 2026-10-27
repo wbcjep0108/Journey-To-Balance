@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/budget_plan.dart';
 import '../../models/financial_entry.dart';
 import '../../models/spend_category_option.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/currency_provider.dart';
+import '../../providers/planner_provider.dart';
 import '../../widgets/category_icon_badge.dart';
+import '../../widgets/planner_progress_bar.dart';
 import '../../widgets/rate_limit_dialog.dart';
 import '../../widgets/sensitive_action_auth.dart';
 
@@ -27,6 +30,7 @@ class DailySpendingPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final budget = context.watch<BudgetProvider>();
     final currency = context.watch<CurrencyProvider>();
+    final planner = context.watch<PlannerProvider>();
     final target = DateTime(day.year, day.month, day.day);
     final transactions = budget.entriesForDay(target);
     // Daily statistics show only money that was USED (spent). Refunds and
@@ -35,6 +39,13 @@ class DailySpendingPage extends StatelessWidget {
         .where((item) => !item.entry.isRefund)
         .fold<double>(0, (sum, item) => sum + item.entry.amount);
     final dateLabel = DateFormat('EEEE, MMMM d, yyyy').format(target);
+    final plan = planner.plan;
+    final isPlanDay =
+        plan != null &&
+        !target.isBefore(plan.localStart) &&
+        target.isBefore(plan.localEndExclusive);
+    final planSpent = planner.spent;
+    final isOverBudget = isPlanDay && planSpent > plan.total;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -93,6 +104,50 @@ class DailySpendingPage extends StatelessWidget {
                       fontWeight: FontWeight.w500,
                     ),
                   ),
+                  if (plan != null && isPlanDay) ...[
+                    const SizedBox(height: 18),
+                    Divider(color: Colors.white.withValues(alpha: 0.16)),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Text(
+                          'Budget plan of ${plannerCategorySummary(plan.enabledCategories)}',
+                          style: TextStyle(
+                            color: isOverBudget
+                                ? const Color(0xFFFCA5A5)
+                                : Colors.grey.shade300,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: FittedBox(
+                            alignment: Alignment.centerRight,
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              isOverBudget
+                                  ? 'Over by ${currency.formatAmount(planSpent - plan.total)}'
+                                  : '${currency.formatAmount(planSpent)} of ${currency.formatAmount(plan.total)}',
+                              style: TextStyle(
+                                color: isOverBudget
+                                    ? const Color(0xFFFCA5A5)
+                                    : Colors.grey.shade300,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    PlannerProgressBar(
+                      progress: planner.progress,
+                      height: 8,
+                      trackColor: Colors.white.withValues(alpha: 0.24),
+                    ),
+                  ],
                 ],
               ),
             ),

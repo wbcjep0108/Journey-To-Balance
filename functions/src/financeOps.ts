@@ -30,8 +30,22 @@ import {
   enforceRateLimits,
   idempotencyRef,
 } from "./security.js";
+import {
+  normalizeTransactionIconAsset,
+  withTransactionIcon,
+} from "./transactionIcons.js";
 
 const EPS = 0.001;
+
+function normalizeIconAsset(value: unknown): string | undefined {
+  try {
+    return normalizeTransactionIconAsset(value);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Invalid iconAsset.";
+    console.warn("Rejected transaction icon", {value, message});
+    throw invalidArgument(message);
+  }
+}
 
 function userRef(uid: string) {
   return getFirestore().collection("users").doc(uid);
@@ -266,6 +280,7 @@ export async function addTransactionOp(
   const createdAtMs = typeof data.createdAtMs === "number" ?
     data.createdAtMs :
     Date.now();
+  const iconAsset = normalizeIconAsset(data.iconAsset);
   const fundingSourceId = optionalFundingSource(
     data.fundingSourceId,
     "fundingSourceId",
@@ -296,14 +311,14 @@ export async function addTransactionOp(
       budget.availableBalance = Math.max(0, budget.availableBalance - amount);
       adjustRemaining(budget, category, -amount);
 
-      tx.set(eRef, {
+      tx.set(eRef, withTransactionIcon({
         title,
         amount,
         createdAt: Timestamp.fromMillis(createdAtMs),
         isRefund: false,
         ...(fundingSourceId ? {fundingSourceId} : {}),
         ...(fundingSourceLabel ? {fundingSourceLabel} : {}),
-      });
+      }, iconAsset));
       writeBudget(tx, uid, budget);
       return {budget: budgetToFirestore(budget), entryId};
     });
@@ -328,6 +343,7 @@ export async function updateTransactionOp(
   }
   const amount = requirePositiveAmount(data.amount);
   const requestId = data.requestId as string | undefined;
+  const iconAsset = normalizeIconAsset(data.iconAsset);
 
   return withIdempotency(uid, requestId, "updateTransaction", async () => {
     return getFirestore().runTransaction(async (tx) => {
@@ -360,12 +376,17 @@ export async function updateTransactionOp(
       );
       adjustRemaining(budget, category, -delta);
 
-      tx.set(eRef, {
+      const previousIcon = typeof previous.iconAsset === "string" ?
+        normalizeIconAsset(previous.iconAsset) :
+        undefined;
+      const nextIcon = iconAsset ?? previousIcon;
+
+      tx.set(eRef, withTransactionIcon({
         title,
         amount,
         createdAt: previous.createdAt ?? Timestamp.now(),
         isRefund: false,
-      }, {merge: true});
+      }, nextIcon), {merge: true});
       writeBudget(tx, uid, budget);
       return {budget: budgetToFirestore(budget), entryId};
     });

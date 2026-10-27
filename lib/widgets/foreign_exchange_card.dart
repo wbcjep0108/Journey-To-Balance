@@ -37,7 +37,7 @@ class _ForeignExchangeCardState extends State<ForeignExchangeCard> {
       AppCurrency.byCode('USD'),
       AppCurrency.byCode('JPY'),
     ];
-    _controllers[0].text = '10,000';
+    _controllers[0].text = '1,825';
     _loadRates();
   }
 

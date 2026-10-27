@@ -3,7 +3,9 @@ import 'package:provider/provider.dart';
 
 import '../../providers/loan_provider.dart';
 import '../../providers/notification_prefs_provider.dart';
+import '../../providers/planner_provider.dart';
 import '../../services/notification_service.dart';
+import '../../widgets/barrier_blur.dart';
 import '../../widgets/security_ui.dart';
 
 class NotificationSettingsPage extends StatelessWidget {
@@ -23,6 +25,28 @@ class NotificationSettingsPage extends StatelessWidget {
     );
   }
 
+  Future<void> _setPlanner(BuildContext context, bool value) async {
+    final prefs = context.read<NotificationPrefsProvider>();
+    if (!value) {
+      await prefs.setPlannerEnabled(false);
+      return;
+    }
+
+    final granted = await NotificationService.instance.requestPermission();
+    if (!context.mounted) return;
+    await prefs.setPlannerEnabled(granted);
+    if (!context.mounted) return;
+    await context.read<PlannerProvider>().refreshNotificationPermission();
+    if (!context.mounted || granted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text('Notifications are blocked in system settings.'),
+        ),
+      );
+  }
+
   Future<void> _pickTime({
     required BuildContext context,
     required ReminderClock current,
@@ -40,7 +64,7 @@ class NotificationSettingsPage extends StatelessWidget {
               onSurface: Colors.black,
             ),
           ),
-          child: child ?? const SizedBox.shrink(),
+          child: withBarrierBlur(child ?? const SizedBox.shrink()),
         );
       },
     );
@@ -53,6 +77,7 @@ class NotificationSettingsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final prefs = context.watch<NotificationPrefsProvider>();
+    final planner = context.watch<PlannerProvider>();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF1F2F4),
@@ -109,7 +134,9 @@ class NotificationSettingsPage extends StatelessWidget {
                   onTap: () => _pickTime(
                     context: context,
                     current: prefs.morning,
-                    onSave: context.read<NotificationPrefsProvider>().setMorning,
+                    onSave: context
+                        .read<NotificationPrefsProvider>()
+                        .setMorning,
                   ),
                 ),
                 const Divider(height: 1, color: Color(0xFFE5E7EB)),
@@ -121,7 +148,9 @@ class NotificationSettingsPage extends StatelessWidget {
                   onTap: () => _pickTime(
                     context: context,
                     current: prefs.evening,
-                    onSave: context.read<NotificationPrefsProvider>().setEvening,
+                    onSave: context
+                        .read<NotificationPrefsProvider>()
+                        .setEvening,
                   ),
                 ),
                 const Divider(height: 1, color: Color(0xFFE5E7EB)),
@@ -150,6 +179,33 @@ class NotificationSettingsPage extends StatelessWidget {
                   activeThumbColor: Colors.white,
                   activeTrackColor: Colors.black,
                   onChanged: (value) => _setLoan(context, value),
+                ),
+                const Divider(height: 1, color: Color(0xFFE5E7EB)),
+                SwitchListTile(
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 4,
+                  ),
+                  title: const Text(
+                    'Budget planner alerts',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  subtitle: const Text(
+                    'Notify me when I exceed my budget plan',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 13,
+                      color: Color(0xFF6B7280),
+                    ),
+                  ),
+                  value: planner.notificationsEnabled,
+                  activeThumbColor: Colors.white,
+                  activeTrackColor: Colors.black,
+                  onChanged: (value) => _setPlanner(context, value),
                 ),
               ],
             ),
