@@ -170,7 +170,7 @@ class _FinancialCategoryPageState extends State<FinancialCategoryPage> {
                                 ),
                                 IconButton.filledTonal(
                                   onPressed: () => _openEditor(context),
-                                  icon: const Icon(Icons.add),
+                                  icon: const Icon(Icons.remove),
                                   color: Colors.white,
                                   style: IconButton.styleFrom(
                                     backgroundColor: Colors.white.withValues(

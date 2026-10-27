@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/app_lock_provider.dart';
@@ -7,6 +8,7 @@ import '../../providers/budget_provider.dart';
 import '../../providers/currency_provider.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/barrier_blur.dart';
+import '../../widgets/journey_about_dialog.dart';
 import 'currency_settings_page.dart';
 import 'notification_settings_page.dart';
 import 'security_settings_page.dart';
@@ -96,60 +98,23 @@ class _AccountPageState extends State<AccountPage> {
     );
   }
 
-  void _openAbout() {
+  Future<void> _openAbout() async {
     final callback = widget.onAbout;
     if (callback != null) {
       callback();
       return;
     }
 
+    var version = '3.0.0';
+    try {
+      version = (await PackageInfo.fromPlatform()).version;
+    } catch (_) {}
+    if (!mounted) return;
+
     showDialog<void>(
       context: context,
-      builder: (context) => withBarrierBlur(
-        AlertDialog(
-          backgroundColor: Colors.white,
-          surfaceTintColor: Colors.transparent,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          title: const Text(
-            'About us',
-            style: TextStyle(
-              color: Color(0xFF25282D),
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          content: const SingleChildScrollView(
-            child: Text(
-              'Journey to Balance is a personal finance application designed '
-              'to help users take control of their financial well-being. It '
-              'provides simple tools to track income, manage bills, monitor '
-              'savings, and organize personal financial information in one '
-              'secure place. With cloud synchronization through Firebase, '
-              'users can securely access their financial data anytime, '
-              'anywhere, making it easier to build healthy financial habits '
-              'and achieve long-term financial stability.\n\n'
-              'This application was developed by Wilhem Bruce Cuevas, a '
-              'Bachelor of Science in Information Technology (BSIT) student '
-              'specializing in Mobile and Web Application at National '
-              'University Manila, as part of his commitment to creating '
-              'practical and user-centered digital solutions.',
-              style: TextStyle(
-                color: Color(0xFF3F444C),
-                fontSize: 14,
-                height: 1.55,
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              style: TextButton.styleFrom(
-                foregroundColor: const Color(0xFF3F444C),
-              ),
-              child: const Text('Close'),
-            ),
-          ],
-        ),
+      builder: (_) => withBarrierBlur(
+        JourneyAboutDialog(version: version),
       ),
     );
   }
@@ -193,7 +158,7 @@ class _AccountPageState extends State<AccountPage> {
                   foregroundColor: const Color(0xFF6B7280),
                   padding: const EdgeInsets.symmetric(horizontal: 4),
                 ),
-                child: const Text('About us'),
+                child: const Text('About Journey to Balance'),
               ),
             ],
           ),
@@ -202,6 +167,7 @@ class _AccountPageState extends State<AccountPage> {
     );
   }
 }
+
 
 class _AccountCard extends StatelessWidget {
   const _AccountCard({
