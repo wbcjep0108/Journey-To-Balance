@@ -11,23 +11,10 @@ import '../../widgets/security_ui.dart';
 
 const _supportEmail = 'bcueva1217@gmail.com';
 
-Future<void> _signInWithGoogle(BuildContext context) async {
-  try {
-    await AuthService().signInWithGoogle();
-  } catch (_) {
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Sign in failed. Please check your connection and try again.',
-          ),
-        ),
-      );
-    }
-  }
-}
-
-Future<void> _showSignInHelp(BuildContext context) {
+Future<void> _showSignInHelp(
+  BuildContext context, {
+  required Future<void> Function() onTryAgain,
+}) {
   return showDialog<void>(
     context: context,
     builder: (dialogContext) => withBarrierBlur(
@@ -47,66 +34,122 @@ Future<void> _showSignInHelp(BuildContext context) {
             ),
           ],
         ),
-        content: const Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'If Google sign-in is not opening or completing:',
-              style: TextStyle(fontWeight: FontWeight.w700),
-            ),
-            SizedBox(height: 12),
-            Text('• Check your internet connection.'),
-            SizedBox(height: 6),
-            Text('• Make sure a Google account is added to your device.'),
-            SizedBox(height: 6),
-            Text('• Close the account picker and try again.'),
-            SizedBox(height: 18),
-            Row(
+        content: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: 360,
+            maxHeight: MediaQuery.sizeOf(context).height * 0.75,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.mail_outline_rounded, color: Color(0xFF121212)),
-                SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Still having trouble? Send our support team a message.',
-                    style: TextStyle(fontWeight: FontWeight.w600),
+                Text(
+                  'If Google sign-in is not opening or completing:',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                SizedBox(height: 12),
+                Text('• Check your internet connection.'),
+                SizedBox(height: 6),
+                Text('• Make sure a Google account is added to your device.'),
+                SizedBox(height: 6),
+                Text('• Close the account picker and try again.'),
+                SizedBox(height: 18),
+                Row(
+                  children: [
+                    Icon(Icons.mail_outline_rounded, color: Color(0xFF121212)),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Still having trouble? Send our support team a message.',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: OutlinedButton.icon(
+                    key: const ValueKey('sign-in-help-email-support'),
+                    onPressed: () {
+                      Navigator.pop(dialogContext);
+                      _showSupportEmailComposer(context);
+                    },
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF121212),
+                      side: const BorderSide(color: Color(0xFFE5E7EB)),
+                      shape: const StadiumBorder(),
+                    ),
+                    icon: const Icon(Icons.mail_outline_rounded, size: 18),
+                    label: const Text(
+                      'Email support',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: SizedBox(
+                        height: 48,
+                        child: OutlinedButton(
+                          key: const ValueKey('sign-in-help-close'),
+                          onPressed: () => Navigator.pop(dialogContext),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF121212),
+                            side: const BorderSide(color: Color(0xFFE5E7EB)),
+                            shape: const StadiumBorder(),
+                          ),
+                          child: const Text(
+                            'Close',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: SizedBox(
+                        height: 48,
+                        child: FilledButton(
+                          key: const ValueKey('sign-in-help-try-again'),
+                          onPressed: () {
+                            Navigator.pop(dialogContext);
+                            onTryAgain();
+                          },
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFF121212),
+                            foregroundColor: Colors.white,
+                            shape: const StadiumBorder(),
+                          ),
+                          child: const Text(
+                            'Try again',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
-          ],
+          ),
         ),
-        actions: [
-          TextButton.icon(
-            onPressed: () {
-              Navigator.pop(dialogContext);
-              _showSupportEmailComposer(context);
-            },
-            style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFF121212),
-            ),
-            icon: const Icon(Icons.mail_outline_rounded, size: 18),
-            label: const Text('Email support'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFF121212),
-            ),
-            child: const Text('Close'),
-          ),
-          FilledButton(
-            onPressed: () {
-              Navigator.pop(dialogContext);
-              _signInWithGoogle(context);
-            },
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF121212),
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Try again'),
-          ),
-        ],
       ),
     ),
   );
@@ -748,7 +791,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: TextButton(
                           onPressed: _busy
                               ? null
-                              : () => _showSignInHelp(context),
+                              : () => _showSignInHelp(
+                                  context,
+                                  onTryAgain: _googleSignIn,
+                                ),
                           style: TextButton.styleFrom(
                             foregroundColor: const Color(0xFF737983),
                           ),
@@ -795,73 +841,73 @@ class _ModeToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(6),
-      height: 60,
+      key: const ValueKey('mode-toggle-track'),
+      height: 56,
+      clipBehavior: Clip.none,
       decoration: BoxDecoration(
         color: const Color(0xFFF1F2F4),
-        borderRadius: BorderRadius.circular(30),
+        borderRadius: BorderRadius.circular(28),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final optionWidth = constraints.maxWidth / 2;
+          final optionWidth = (constraints.maxWidth - 10) / 2;
           return Stack(
             clipBehavior: Clip.none,
             children: [
               AnimatedPositioned(
                 duration: duration,
-                curve: const Cubic(0.18, 1.12, 0.32, 1),
-                left: isSignUp ? optionWidth : 0,
-                top: 0,
-                bottom: 0,
+                curve: Curves.easeOutCubic,
+                left: 5 + (isSignUp ? optionWidth : 0),
+                top: 5,
+                bottom: 5,
                 width: optionWidth,
-                child: Transform.translate(
-                  offset: const Offset(0, -3),
-                  child: Transform.scale(
-                    scale: 1.05,
-                    child: DecoratedBox(
-                      key: const ValueKey('selected-mode-pill'),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF121212),
-                        borderRadius: BorderRadius.circular(30),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.22),
-                            blurRadius: 16,
-                            offset: const Offset(0, 6),
-                          ),
-                        ],
+                child: DecoratedBox(
+                  key: const ValueKey('selected-mode-pill'),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF121212),
+                    borderRadius: BorderRadius.circular(23),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.18),
+                        blurRadius: 10,
+                        offset: const Offset(0, 3),
                       ),
-                    ),
+                    ],
                   ),
                 ),
               ),
-              Row(
-                children: [
-                  Expanded(
-                    child: _ModeOption(
-                      key: const ValueKey('login-toggle'),
-                      label: 'Log in',
-                      selected: !isSignUp,
-                      enabled: enabled,
-                      duration: duration == Duration.zero
-                          ? Duration.zero
-                          : const Duration(milliseconds: 180),
-                      onTap: () => _select(false),
-                    ),
+              Positioned.fill(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 5),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _ModeOption(
+                          key: const ValueKey('login-toggle'),
+                          label: 'Log in',
+                          selected: !isSignUp,
+                          enabled: enabled,
+                          duration: duration == Duration.zero
+                              ? Duration.zero
+                              : const Duration(milliseconds: 180),
+                          onTap: () => _select(false),
+                        ),
+                      ),
+                      Expanded(
+                        child: _ModeOption(
+                          key: const ValueKey('signup-toggle'),
+                          label: 'Sign up',
+                          selected: isSignUp,
+                          enabled: enabled,
+                          duration: duration == Duration.zero
+                              ? Duration.zero
+                              : const Duration(milliseconds: 180),
+                          onTap: () => _select(true),
+                        ),
+                      ),
+                    ],
                   ),
-                  Expanded(
-                    child: _ModeOption(
-                      key: const ValueKey('signup-toggle'),
-                      label: 'Sign up',
-                      selected: isSignUp,
-                      enabled: enabled,
-                      duration: duration == Duration.zero
-                          ? Duration.zero
-                          : const Duration(milliseconds: 180),
-                      onTap: () => _select(true),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ],
           );
@@ -898,7 +944,7 @@ class _ModeOption extends StatelessWidget {
           color: Colors.transparent,
           child: InkWell(
             onTap: enabled ? onTap : null,
-            borderRadius: BorderRadius.circular(30),
+            borderRadius: BorderRadius.circular(28),
             child: Center(
               child: AnimatedSwitcher(
                 duration: duration,
@@ -911,7 +957,7 @@ class _ModeOption extends StatelessWidget {
                     fontFamily: 'Inter',
                     fontSize: 15,
                     fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-                    color: selected ? Colors.white : const Color(0xFF737983),
+                    color: selected ? Colors.white : const Color(0xFF5B6270),
                   ),
                 ),
               ),

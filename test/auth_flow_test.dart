@@ -202,6 +202,12 @@ void main() {
                 )
                 .decoration
             as BoxDecoration;
+    final trackRect = tester.getRect(
+      find.byKey(const ValueKey('mode-toggle-track')),
+    );
+    final pillRect = tester.getRect(
+      find.byKey(const ValueKey('selected-mode-pill')),
+    );
     final loginText = tester.widget<Text>(
       find.descendant(
         of: find.byKey(const ValueKey('login-toggle')),
@@ -216,10 +222,27 @@ void main() {
     );
 
     expect(decoration.color, const Color(0xFF121212));
+    expect(trackRect.height, 56);
+    expect(pillRect.height, 46);
+    expect(pillRect.left - trackRect.left, 5);
+    expect(pillRect.top - trackRect.top, 5);
+    expect(trackRect.bottom - pillRect.bottom, 5);
+    expect(pillRect.width, (trackRect.width - 10) / 2);
     expect(loginText.style?.color, Colors.white);
     expect(loginText.style?.fontWeight, FontWeight.w700);
-    expect(signupText.style?.color, const Color(0xFF737983));
+    expect(signupText.style?.color, const Color(0xFF5B6270));
     expect(signupText.style?.fontWeight, FontWeight.w600);
+
+    await tester.tap(find.byKey(const ValueKey('signup-toggle')));
+    await tester.pumpAndSettle();
+    final movedPillRect = tester.getRect(
+      find.byKey(const ValueKey('selected-mode-pill')),
+    );
+    expect(trackRect.right - movedPillRect.right, 5);
+    expect(movedPillRect.left, greaterThanOrEqualTo(trackRect.left));
+    expect(movedPillRect.top, greaterThanOrEqualTo(trackRect.top));
+    expect(movedPillRect.right, lessThanOrEqualTo(trackRect.right));
+    expect(movedPillRect.bottom, lessThanOrEqualTo(trackRect.bottom));
   });
 
   testWidgets('toggle semantics report the selected option', (tester) async {
@@ -271,6 +294,13 @@ void main() {
     );
     expect(signupText.style?.color, Colors.white);
     expect(signupText.style?.fontWeight, FontWeight.w700);
+    final trackRect = tester.getRect(
+      find.byKey(const ValueKey('mode-toggle-track')),
+    );
+    final pillRect = tester.getRect(
+      find.byKey(const ValueKey('selected-mode-pill')),
+    );
+    expect(trackRect.right - pillRect.right, 5);
     expect(
       find.byKey(const ValueKey('confirm-password-field')),
       findsOneWidget,
