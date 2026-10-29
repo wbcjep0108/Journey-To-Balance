@@ -94,7 +94,7 @@ class WalletCardsProvider extends ChangeNotifier {
   /// Loads cards for [uid] from Firestore and subscribes to realtime updates.
   Future<void> loadForUser(String? uid) async {
     if (uid == null || uid.isEmpty) {
-      clear();
+      await clear();
       return;
     }
 
@@ -180,8 +180,8 @@ class WalletCardsProvider extends ChangeNotifier {
   }
 
   /// Resets to the signed-out state and stops listening.
-  void clear() {
-    _sub?.cancel();
+  Future<void> clear() async {
+    await _sub?.cancel();
     _sub = null;
     _uid = null;
     _cards = [];

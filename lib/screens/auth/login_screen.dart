@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/barrier_blur.dart';
 import '../../widgets/security_ui.dart';
+import 'login_layout_constants.dart';
 
 const _supportEmail = 'bcueva1217@gmail.com';
 
@@ -530,10 +531,12 @@ class _LoginScreenState extends State<LoginScreen> {
         child: AutofillGroup(
           child: SingleChildScrollView(
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+            padding: const EdgeInsets.fromLTRB(
+              kLoginPaddingH, kLoginPaddingTop, kLoginPaddingH, kLoginPaddingBottom,
+            ),
             child: Center(
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 440),
+                constraints: const BoxConstraints(maxWidth: kLoginMaxWidth),
                 child: Form(
                   key: _formKey,
                   autovalidateMode: _submitted
@@ -542,8 +545,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const Center(child: BrandMark(size: 104)),
-                      const SizedBox(height: 22),
+                      const Center(child: BrandMark(size: kLoginLogoSize)),
+                      const SizedBox(height: kLoginLogoTitleGap),
                       const Text(
                         'Journey to Balance',
                         textAlign: TextAlign.center,
@@ -554,7 +557,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           color: Color(0xFF121212),
                         ),
                       ),
-                      const SizedBox(height: 7),
+                      const SizedBox(height: kLoginTitleTaglineGap),
                       const Text(
                         'Sign in to sync your money everywhere.',
                         textAlign: TextAlign.center,
@@ -565,7 +568,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           color: Color(0xFF737983),
                         ),
                       ),
-                      const SizedBox(height: 28),
+                      const SizedBox(height: kLoginTaglineToggleGap),
                       _ModeToggle(
                         isSignUp: _isSignUp,
                         enabled: !_busy,
@@ -574,7 +577,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             : const Duration(milliseconds: 260),
                         onChanged: _setMode,
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: kLoginToggleFieldGap),
                       _AuthField(
                         key: const ValueKey('email-field'),
                         label: 'Email',
@@ -589,7 +592,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ? null
                             : 'Enter a valid email address.',
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: kLoginFieldFieldGap),
                       _AuthField(
                         key: const ValueKey('password-field'),
                         label: 'Password',
@@ -718,9 +721,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               ),
                       ),
-                      const SizedBox(height: 18),
+                      const SizedBox(height: kLoginFieldButtonGap),
                       SizedBox(
-                        height: 52,
+                        height: kLoginPrimaryButtonHeight,
                         child: FilledButton(
                           key: const ValueKey('primary-auth-button'),
                           onPressed: _busy ? null : _submit,
@@ -729,7 +732,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             foregroundColor: Colors.white,
                             disabledBackgroundColor: const Color(0xFF4B4B4B),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(30),
+                              borderRadius: BorderRadius.circular(kLoginButtonRadius),
                             ),
                           ),
                           child: _busy
@@ -749,12 +752,12 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                         ),
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: kLoginButtonDividerGap),
                       const Row(
                         children: [
                           Expanded(child: Divider(color: Color(0xFFE2E4E8))),
                           Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 12),
+                            padding: EdgeInsets.symmetric(horizontal: kLoginDividerLabelPadding),
                             child: Text(
                               'or',
                               style: TextStyle(color: Color(0xFF737983)),
@@ -763,16 +766,16 @@ class _LoginScreenState extends State<LoginScreen> {
                           Expanded(child: Divider(color: Color(0xFFE2E4E8))),
                         ],
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: kLoginDividerGoogleGap),
                       SizedBox(
-                        height: 52,
+                        height: kLoginGoogleButtonHeight,
                         child: OutlinedButton.icon(
                           onPressed: _busy ? null : _googleSignIn,
                           style: OutlinedButton.styleFrom(
                             foregroundColor: const Color(0xFF121212),
                             side: const BorderSide(color: Color(0xFFCED1D6)),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(30),
+                              borderRadius: BorderRadius.circular(kLoginButtonRadius),
                             ),
                           ),
                           icon: Image.asset(
@@ -786,7 +789,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 14),
+                      const SizedBox(height: kLoginGoogleTermsGap),
                       Center(
                         child: TextButton(
                           onPressed: _busy
@@ -842,11 +845,11 @@ class _ModeToggle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       key: const ValueKey('mode-toggle-track'),
-      height: 56,
+      height: kLoginToggleHeight,
       clipBehavior: Clip.none,
       decoration: BoxDecoration(
         color: const Color(0xFFF1F2F4),
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(kLoginToggleRadius),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {

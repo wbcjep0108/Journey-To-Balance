@@ -51,7 +51,7 @@ class LoanProvider extends ChangeNotifier {
 
   Future<void> loadForUser(String? uid) async {
     if (uid == null || uid.isEmpty) {
-      clear();
+      await clear();
       return;
     }
 
@@ -161,8 +161,8 @@ class LoanProvider extends ChangeNotifier {
   }
 
   /// Resets to the signed-out state and stops listening.
-  void clear() {
-    _sub?.cancel();
+  Future<void> clear() async {
+    await _sub?.cancel();
     _sub = null;
     _uid = null;
     _loans = [];

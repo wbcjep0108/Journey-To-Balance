@@ -28,8 +28,11 @@ import 'services/wallet_migration_service.dart';
 import 'services/notification_router.dart';
 import 'services/notification_service.dart';
 import 'services/planner_firestore_service.dart';
+import 'services/logout_transition_controller.dart';
+import 'services/user_session_cleanup.dart';
 import 'widgets/app_privacy_blur.dart';
 import 'widgets/budget_exceeded_dialog.dart';
+import 'widgets/logout_skeleton.dart';
 import 'widgets/rate_limit_dialog.dart';
 
 void main() async {
@@ -91,6 +94,7 @@ void main() async {
             service: context.read<WalletFirestoreService>(),
           ),
         ),
+        ChangeNotifierProvider(create: (_) => LogoutTransitionController()),
       ],
       child: const MyApp(),
     ),
@@ -130,12 +134,52 @@ class AuthGate extends StatefulWidget {
 
 class _AuthGateState extends State<AuthGate> {
   String? _boundUid;
+  bool _loginPreparationStarted = false;
+
+  void _prepareLogin(LogoutTransitionController transition) {
+    if (_loginPreparationStarted) return;
+    _loginPreparationStarted = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        await precacheImage(
+          const AssetImage('assets/images/logo.png'),
+          context,
+        );
+      } catch (_) {
+        // The login screen has its own asset fallback.
+      } finally {
+        if (mounted) transition.markLoginReady();
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
+    final transition = context.watch<LogoutTransitionController>();
+    if (transition.active) {
+      _prepareLogin(transition);
+    } else {
+      _loginPreparationStarted = false;
+    }
+
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
+        if (transition.active) {
+          if (snapshot.connectionState != ConnectionState.waiting &&
+              snapshot.data == null) {
+            _boundUid = null;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) transition.markSignedOut();
+            });
+          }
+          return LogoutTransitionView(
+            showLogin: transition.showLogin,
+            loginScreen: const LoginScreen(),
+            onFinished: transition.finish,
+          );
+        }
+
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const SplashScreen();
         }
@@ -149,15 +193,7 @@ class _AuthGateState extends State<AuthGate> {
               if (!mounted) return;
               // Only clear if we are still signed out.
               if (_boundUid == null && previousUid != null) {
-                context.read<AppLockProvider>().clearUser();
-                // Stop wallet realtime listeners and reset synced state so the
-                // next user doesn't briefly see the previous user's wallet.
-                context.read<LoanProvider>().clear();
-                context.read<CurrencyProvider>().clear();
-                context.read<PlannerProvider>().clear();
-                context.read<WalletCashProvider>().clear();
-                context.read<WalletCardsProvider>().clear();
-                NotificationService.instance.cancelAllReminders();
+                unawaited(clearUserSession(context));
                 PostLoginWelcome.resetSession();
               }
             });

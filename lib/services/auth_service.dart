@@ -115,14 +115,32 @@ class FirebaseAuthService implements AuthService {
 
   @override
   Future<void> signOut() async {
+    await signOutWithGoogleCleanup(
+      usesGoogleProvider: usesGoogleProvider,
+      googleSignOut: () async {
+        await _googleSignIn.signOut();
+      },
+      firebaseSignOut: _auth.signOut,
+    );
+  }
+}
+
+Future<void> signOutWithGoogleCleanup({
+  required bool usesGoogleProvider,
+  required Future<void> Function() googleSignOut,
+  required Future<void> Function() firebaseSignOut,
+  Duration googleTimeout = const Duration(seconds: 2),
+}) async {
+  try {
     if (usesGoogleProvider) {
       try {
-        await _googleSignIn.signOut();
+        await googleSignOut().timeout(googleTimeout);
       } catch (_) {
         // Firebase remains the source of truth for the signed-in session.
       }
     }
-    await _auth.signOut();
+  } finally {
+    await firebaseSignOut();
   }
 }
 

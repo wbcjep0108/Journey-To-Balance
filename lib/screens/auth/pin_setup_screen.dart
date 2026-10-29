@@ -32,7 +32,7 @@ class _PinSetupScreenState extends State<PinSetupScreen> {
     final lock = context.read<AppLockProvider>();
     try {
       await AuthService().signOut();
-      budget.reset();
+      await budget.reset();
       lock.clearUser();
     } catch (_) {
       if (!mounted) return;

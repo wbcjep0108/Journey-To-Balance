@@ -215,8 +215,8 @@ class PlannerProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void clear() {
-    _subscription?.cancel();
+  Future<void> clear() async {
+    await _subscription?.cancel();
     _subscription = null;
     _uid = null;
     _plan = null;

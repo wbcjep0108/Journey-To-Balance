@@ -3,10 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 
-import '../../providers/app_lock_provider.dart';
-import '../../providers/budget_provider.dart';
 import '../../providers/currency_provider.dart';
+import '../../screens/splash/welcome_transition.dart';
 import '../../services/auth_service.dart';
+import '../../services/logout_transition_controller.dart';
+import '../../services/user_session_cleanup.dart';
 import '../../widgets/barrier_blur.dart';
 import '../../widgets/journey_about_dialog.dart';
 import '../../widgets/journey_help_dialog.dart';
@@ -31,20 +32,26 @@ class _AccountPageState extends State<AccountPage> {
   Future<void> _signOut() async {
     if (_isSigningOut) return;
 
+    final transition = context.read<LogoutTransitionController>();
+    final messenger = ScaffoldMessenger.of(context);
     setState(() => _isSigningOut = true);
-    final budget = context.read<BudgetProvider>();
-    final lock = context.read<AppLockProvider>();
+    transition.begin();
 
     try {
+      try {
+        await clearUserSession(context);
+      } catch (_) {
+        // Session termination must continue even if local cleanup fails.
+      }
+      PostLoginWelcome.resetSession();
       await AuthService().signOut();
-      budget.reset();
-      lock.clearUser();
+      transition.markLogoutComplete();
     } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      transition.abort();
+      messenger.showSnackBar(
         const SnackBar(content: Text('Sign out failed. Please try again.')),
       );
-      setState(() => _isSigningOut = false);
+      if (mounted) setState(() => _isSigningOut = false);
     }
   }
 

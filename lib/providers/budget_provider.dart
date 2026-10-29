@@ -393,7 +393,7 @@ class BudgetProvider extends ChangeNotifier {
   }
 
   Future<void> _loadForUserBody(String uid) async {
-    _cancelRealtimeSync();
+    await _cancelRealtimeSync();
     _uid = uid;
     _setDefaults();
     isLoading = true;
@@ -1132,8 +1132,8 @@ class BudgetProvider extends ChangeNotifier {
     }());
   }
 
-  void reset() {
-    _cancelRealtimeSync();
+  Future<void> reset() async {
+    await _cancelRealtimeSync();
     _uid = null;
     isLoading = false;
     isRefreshing = false;
@@ -1432,16 +1432,19 @@ class BudgetProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _cancelRealtimeSync() {
-    for (final subscription in _realtimeSubscriptions) {
-      subscription.cancel();
-    }
+  Future<void> _cancelRealtimeSync() async {
+    final subscriptions = List<StreamSubscription<Object?>>.of(
+      _realtimeSubscriptions,
+    );
     _realtimeSubscriptions.clear();
+    await Future.wait(
+      subscriptions.map((subscription) => subscription.cancel()),
+    );
   }
 
   @override
   void dispose() {
-    _cancelRealtimeSync();
+    unawaited(_cancelRealtimeSync());
     super.dispose();
   }
 }

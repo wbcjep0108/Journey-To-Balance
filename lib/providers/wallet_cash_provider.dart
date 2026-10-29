@@ -24,7 +24,7 @@ class WalletCashProvider extends ChangeNotifier {
   /// updates so changes made on another device appear here automatically.
   Future<void> loadForUser(String? uid) async {
     if (uid == null || uid.isEmpty) {
-      clear();
+      await clear();
       return;
     }
 
@@ -75,8 +75,8 @@ class WalletCashProvider extends ChangeNotifier {
   }
 
   /// Resets to the signed-out state and stops listening.
-  void clear() {
-    _sub?.cancel();
+  Future<void> clear() async {
+    await _sub?.cancel();
     _sub = null;
     _uid = null;
     _amount = 0;
