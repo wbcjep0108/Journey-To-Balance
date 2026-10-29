@@ -32,11 +32,7 @@ Other notable packages include `intl` for formatting, `crypto` for security-rela
 
 ```text
 .
-├── .agents/                         Repository-local agent resources
-├── .codex/                          Codex workspace configuration
-├── .cursor/                         Cursor workspace configuration
 ├── .dart_tool/                      Generated Dart/Flutter tool state
-├── .idea/                           IDE project settings
 ├── .wrangler/                       Wrangler local state
 ├── android/                         Flutter Android host project
 ├── assets/                          Bundled fonts and images

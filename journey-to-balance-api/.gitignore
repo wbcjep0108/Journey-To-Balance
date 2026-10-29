@@ -17,3 +17,11 @@ dist/
 .env
 .env.*
 !.env.example
+
+# Editor and AI agent files
+.agents/
+.cursor/
+.codex/
+.idea/
+*.iml
+skills-lock.json
