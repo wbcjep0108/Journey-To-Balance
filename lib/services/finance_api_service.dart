@@ -47,7 +47,7 @@ class FinanceApiService implements PasswordResetApi {
     return '${now}_$salt';
   }
 
-  Future<String> _idToken() async {
+  Future<String> _idToken({bool forceRefresh = false}) async {
     final user = _auth.currentUser;
     if (user == null) {
       throw const FinanceApiException(
@@ -55,7 +55,7 @@ class FinanceApiService implements PasswordResetApi {
         message: 'Please sign in again to continue.',
       );
     }
-    final token = await user.getIdToken();
+    final token = await user.getIdToken(forceRefresh);
     if (token == null || token.isEmpty) {
       throw const FinanceApiException(
         code: 'unauthenticated',
@@ -67,10 +67,11 @@ class FinanceApiService implements PasswordResetApi {
 
   Future<Map<String, dynamic>> _post(
     String path,
-    Map<String, dynamic> data,
-  ) async {
+    Map<String, dynamic> data, {
+    bool forceRefresh = false,
+  }) async {
     try {
-      final token = await _idToken();
+      final token = await _idToken(forceRefresh: forceRefresh);
       final uri = Uri.parse('$_baseUrl$path');
       final response = await _http.post(
         uri,
@@ -344,6 +345,14 @@ class FinanceApiService implements PasswordResetApi {
       'resetToken': resetToken,
       'newPassword': newPassword,
     });
+  }
+
+  Future<void> deleteAccount({required String confirmationEmail}) async {
+    await _post(
+      '/api/auth/delete-account',
+      {'confirmationEmail': confirmationEmail},
+      forceRefresh: true,
+    );
   }
 }
 

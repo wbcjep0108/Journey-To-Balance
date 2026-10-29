@@ -264,4 +264,12 @@ export class UserGate extends DurableObject {
     };
     await this.ctx.storage.put(key, record);
   }
+
+  /**
+   * Completely purges all stored state (rate-limits, locks, idempotency records)
+   * for this user's Durable Object instance upon account deletion.
+   */
+  async purgeUserData(): Promise<void> {
+    await this.ctx.storage.deleteAll();
+  }
 }

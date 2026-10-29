@@ -77,7 +77,7 @@ export async function getGoogleAccessToken(
 
   if (!res.ok) {
     console.error("Google token exchange failed", await res.text());
-    throw internal("Could not authenticate to Firestore.");
+    throw internal("Could not authenticate to Google services.");
   }
 
   const data = (await res.json()) as {
@@ -85,7 +85,7 @@ export async function getGoogleAccessToken(
     expires_in?: number;
   };
   if (!data.access_token) {
-    throw internal("Could not authenticate to Firestore.");
+    throw internal("Could not authenticate to Google services.");
   }
 
   tokenCache.set(scope, {
@@ -93,6 +93,39 @@ export async function getGoogleAccessToken(
     expiresAt: now + (data.expires_in ?? 3600) * 1000,
   });
   return data.access_token;
+}
+
+/**
+ * Permanently deletes a user identity from Firebase Authentication
+ * via Google Identity Toolkit REST API using Service Account OAuth token.
+ */
+export async function deleteFirebaseAuthUser(
+  projectId: string,
+  serviceAccountJson: string,
+  uid: string,
+): Promise<void> {
+  const token = await getGoogleAccessToken(serviceAccountJson, [
+    "https://www.googleapis.com/auth/identitytoolkit",
+  ]);
+  const res = await fetch(
+    "https://identitytoolkit.googleapis.com/v1/accounts:delete",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        localId: uid,
+        targetProjectId: projectId,
+      }),
+    },
+  );
+  if (!res.ok && res.status !== 404) {
+    const text = await res.text();
+    console.error("Firebase Auth delete user failed", text);
+    throw internal("Could not delete user account identity.");
+  }
 }
 
 type FirestoreValue =
@@ -256,6 +289,97 @@ export class FirestoreClient {
       console.error("Firestore delete subdoc failed", await res.text());
       throw internal("Could not update security data.");
     }
+  }
+
+  private async listSubcollectionIds(docPath: string): Promise<string[]> {
+    const url = `https://firestore.googleapis.com/v1/${docPath}:listCollectionIds`;
+    const res = await this.authedFetch(url, {
+      method: "POST",
+      body: JSON.stringify({pageSize: 100}),
+    });
+    if (res.status === 404) return [];
+    if (!res.ok) {
+      console.error("Firestore listCollectionIds failed", await res.text());
+      return [];
+    }
+    const data = (await res.json()) as {collectionIds?: string[]};
+    return data.collectionIds ?? [];
+  }
+
+  private async listDocumentsInCollection(
+    parentPath: string,
+    collectionId: string,
+  ): Promise<string[]> {
+    const docPaths: string[] = [];
+    let pageToken: string | undefined;
+    do {
+      const query = new URLSearchParams({
+        pageSize: "300",
+        showMissing: "true",
+      });
+      if (pageToken) query.set("pageToken", pageToken);
+      const url = `https://firestore.googleapis.com/v1/${parentPath}/${collectionId}?${query.toString()}`;
+      const res = await this.authedFetch(url);
+      if (res.status === 404) break;
+      if (!res.ok) {
+        console.error("Firestore list documents failed", await res.text());
+        break;
+      }
+      const data = (await res.json()) as {
+        documents?: Array<{name: string}>;
+        nextPageToken?: string;
+      };
+      if (data.documents) {
+        for (const doc of data.documents) {
+          if (doc.name) docPaths.push(doc.name);
+        }
+      }
+      pageToken = data.nextPageToken;
+    } while (pageToken);
+    return docPaths;
+  }
+
+  /**
+   * Recursively deletes a document and all nested subcollections under it.
+   */
+  async recursivelyDeleteDocument(
+    docPath: string,
+    initialCollectionIds: string[] = [],
+  ): Promise<void> {
+    const discovered = await this.listSubcollectionIds(docPath);
+    const allCollections = Array.from(
+      new Set([...initialCollectionIds, ...discovered]),
+    );
+
+    for (const colId of allCollections) {
+      const docNames = await this.listDocumentsInCollection(docPath, colId);
+      for (const childDocName of docNames) {
+        await this.recursivelyDeleteDocument(childDocName);
+      }
+    }
+
+    const url = `https://firestore.googleapis.com/v1/${docPath}`;
+    const res = await this.authedFetch(url, {method: "DELETE"});
+    if (!res.ok && res.status !== 404) {
+      console.error("Firestore delete doc failed", await res.text());
+    }
+  }
+
+  /**
+   * Purges the entire Firestore user document tree for the given UID,
+   * including known subcollections and any dynamically discovered subcollections.
+   */
+  async purgeUserTree(uid: string): Promise<void> {
+    const rootDocPath = this.docPath(uid);
+    await this.recursivelyDeleteDocument(rootDocPath, [
+      "bills",
+      "savings",
+      "personal",
+      "wallet",
+      "legal",
+      "security",
+      "pinReset",
+    ]);
   }
 
   /**

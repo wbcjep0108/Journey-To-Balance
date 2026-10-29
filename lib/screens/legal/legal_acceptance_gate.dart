@@ -158,6 +158,9 @@ class _LegalAcceptanceGateState extends State<LegalAcceptanceGate> {
                   const SizedBox(height: 12),
                   TextButton(
                     onPressed: _saving ? null : () => AuthService().signOut(),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF121212),
+                    ),  
                     child: const Text('Sign out'),
                   ),
                 ],

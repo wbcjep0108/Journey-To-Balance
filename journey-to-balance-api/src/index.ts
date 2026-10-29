@@ -1,5 +1,9 @@
 import {verifyFirebaseIdToken} from "./auth";
 import {
+  createDeleteAccountDependencies,
+  handleDeleteAccount,
+} from "./deleteAccount";
+import {
   badRequest,
   corsHeaders,
   jsonError,
@@ -165,6 +169,30 @@ export default {
           body = parsed as Record<string, unknown>;
         }
         const result = await handlePinReset(env, user, route, body);
+        return jsonOk(result);
+      }
+
+      // Permanent account deletion endpoint:
+      // Requires fresh reauthentication + confirmation of registered email.
+      if (
+        request.method === "POST" &&
+        (url.pathname === "/api/auth/delete-account" ||
+          url.pathname === "/api/auth/delete-account/" ||
+          url.pathname === "/api/account/delete" ||
+          url.pathname === "/api/account/delete/")
+      ) {
+        const user = await verifyFirebaseIdToken(request, projectId);
+        let body: Record<string, unknown> = {};
+        const text = await request.text();
+        if (text.trim()) {
+          const parsed: unknown = JSON.parse(text);
+          if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+            return jsonError(badRequest("Invalid JSON body"));
+          }
+          body = parsed as Record<string, unknown>;
+        }
+        const deps = createDeleteAccountDependencies(env);
+        const result = await handleDeleteAccount(deps, user, body);
         return jsonOk(result);
       }
 

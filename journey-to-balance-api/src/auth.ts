@@ -11,6 +11,7 @@ const JWKS = createRemoteJWKSet(
 export interface AuthUser {
   uid: string;
   email?: string;
+  authTime?: number;
 }
 
 /**
@@ -46,6 +47,8 @@ export async function verifyFirebaseIdToken(
     return {
       uid,
       email: typeof payload.email === "string" ? payload.email : undefined,
+      authTime:
+        typeof payload.auth_time === "number" ? payload.auth_time : undefined,
     };
   } catch (error) {
     if (error instanceof Error && error.name === "ApiError") throw error;
