@@ -13,7 +13,7 @@ interface TokenCache {
   expiresAt: number;
 }
 
-let tokenCache: TokenCache | null = null;
+const tokenCache = new Map<string, TokenCache>();
 
 function parseServiceAccount(raw: string): ServiceAccount {
   const trimmed = raw.trim();
@@ -42,16 +42,21 @@ function parseServiceAccount(raw: string): ServiceAccount {
   }
 }
 
-async function getAccessToken(serviceAccountJson: string): Promise<string> {
+export async function getGoogleAccessToken(
+  serviceAccountJson: string,
+  scopes = ["https://www.googleapis.com/auth/datastore"],
+): Promise<string> {
   const now = Date.now();
-  if (tokenCache && tokenCache.expiresAt > now + 60_000) {
-    return tokenCache.accessToken;
+  const scope = [...scopes].sort().join(" ");
+  const cached = tokenCache.get(scope);
+  if (cached && cached.expiresAt > now + 60_000) {
+    return cached.accessToken;
   }
 
   const sa = parseServiceAccount(serviceAccountJson);
   const key = await importPKCS8(sa.private_key, "RS256");
   const assertion = await new SignJWT({
-    scope: "https://www.googleapis.com/auth/datastore",
+    scope,
   })
     .setProtectedHeader({alg: "RS256", typ: "JWT"})
     .setIssuer(sa.client_email)
@@ -83,10 +88,10 @@ async function getAccessToken(serviceAccountJson: string): Promise<string> {
     throw internal("Could not authenticate to Firestore.");
   }
 
-  tokenCache = {
+  tokenCache.set(scope, {
     accessToken: data.access_token,
     expiresAt: now + (data.expires_in ?? 3600) * 1000,
-  };
+  });
   return data.access_token;
 }
 
@@ -157,7 +162,7 @@ export class FirestoreClient {
   }
 
   private async authedFetch(url: string, init?: RequestInit): Promise<Response> {
-    const token = await getAccessToken(this.serviceAccountJson);
+    const token = await getGoogleAccessToken(this.serviceAccountJson);
     return fetch(url, {
       ...init,
       headers: {

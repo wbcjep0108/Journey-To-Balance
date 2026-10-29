@@ -6,7 +6,8 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/rateLimit.test.ts src/pinResetEmail.test.ts src/transactionIcons.test.ts",
+    "test": "tsx --test src/rateLimit.test.ts src/pinResetEmail.test.ts src/passwordResetEmail.test.ts src/passwordReset.test.ts src/transactionIcons.test.ts",
+    "preview:email": "tsx scripts/previewEmail.ts",
     "cf-typegen": "wrangler types"
   },
   "devDependencies": {

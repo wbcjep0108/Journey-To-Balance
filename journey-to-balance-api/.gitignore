@@ -4,6 +4,7 @@ node_modules/
 .dev.vars.*
 !.dev.vars.example
 dist/
+preview/
 *.log
 .DS_Store
 

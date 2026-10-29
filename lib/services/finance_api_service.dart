@@ -9,7 +9,20 @@ import 'package:http/http.dart' as http;
 ///
 /// Sends the Firebase ID token in `Authorization: Bearer …`.
 /// The Worker verifies the token and derives the UID — never trust a body UID.
-class FinanceApiService {
+abstract class PasswordResetApi {
+  Future<void> requestPasswordReset({required String email});
+  Future<String> verifyPasswordResetCode({
+    required String email,
+    required String code,
+  });
+  Future<void> confirmPasswordReset({
+    required String email,
+    required String resetToken,
+    required String newPassword,
+  });
+}
+
+class FinanceApiService implements PasswordResetApi {
   FinanceApiService({
     http.Client? httpClient,
     FirebaseAuth? auth,
@@ -100,6 +113,39 @@ class FinanceApiService {
         code: 'unavailable',
         message:
             'Could not reach the budget server. Check your connection and try again.',
+      );
+    }
+  }
+
+  Future<Map<String, dynamic>> _postPublic(
+    String path,
+    Map<String, dynamic> data,
+  ) async {
+    try {
+      final response = await _http.post(
+        Uri.parse('$_baseUrl$path'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(data),
+      );
+      Map<String, dynamic> payload = const {};
+      if (response.body.isNotEmpty) {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map) payload = Map<String, dynamic>.from(decoded);
+      }
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return payload;
+      }
+      throw FinanceApiException.fromHttp(
+        response.statusCode,
+        payload,
+        headers: response.headers,
+      );
+    } on FinanceApiException {
+      rethrow;
+    } catch (_) {
+      throw const FinanceApiException(
+        code: 'unavailable',
+        message: 'No internet connection.',
       );
     }
   }
@@ -260,9 +306,43 @@ class FinanceApiService {
     required String email,
     required String otp,
   }) {
-    return _post('/api/auth/forgot-pin/verify', {
+    return _post('/api/auth/forgot-pin/verify', {'email': email, 'otp': otp});
+  }
+
+  @override
+  Future<void> requestPasswordReset({required String email}) async {
+    await _postPublic('/auth/password-reset/request', {'email': email});
+  }
+
+  @override
+  Future<String> verifyPasswordResetCode({
+    required String email,
+    required String code,
+  }) async {
+    final result = await _postPublic('/auth/password-reset/verify', {
       'email': email,
-      'otp': otp,
+      'code': code,
+    });
+    final token = result['resetToken'];
+    if (token is! String || token.isEmpty) {
+      throw const FinanceApiException(
+        code: 'invalid_code',
+        message: 'Wrong or expired code',
+      );
+    }
+    return token;
+  }
+
+  @override
+  Future<void> confirmPasswordReset({
+    required String email,
+    required String resetToken,
+    required String newPassword,
+  }) async {
+    await _postPublic('/auth/password-reset/confirm', {
+      'email': email,
+      'resetToken': resetToken,
+      'newPassword': newPassword,
     });
   }
 }
@@ -304,7 +384,9 @@ class FinanceApiException implements Exception {
     final error = payload['error'];
     String code = 'internal';
     String? message;
-    if (error is Map) {
+    if (error is String) {
+      code = error;
+    } else if (error is Map) {
       code = error['code']?.toString() ?? code;
       message = error['message']?.toString();
     }
@@ -342,7 +424,7 @@ class FinanceApiException implements Exception {
     }
     if (status == 400 || code == 'invalid-argument') {
       return FinanceApiException(
-        code: 'invalid-argument',
+        code: code,
         message: (message != null && message.isNotEmpty)
             ? message
             : 'That request was invalid. Please check your input and try again.',

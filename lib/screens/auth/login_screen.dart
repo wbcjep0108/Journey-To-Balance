@@ -1,14 +1,13 @@
-import 'dart:async';
-
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/auth_service.dart';
+import '../../services/finance_api_service.dart';
 import '../../widgets/barrier_blur.dart';
 import '../../widgets/security_ui.dart';
 import 'login_layout_constants.dart';
+import 'password_reset_screen.dart';
 
 const _supportEmail = 'bcueva1217@gmail.com';
 
@@ -406,9 +405,10 @@ bool isValidAuthEmail(String value) {
 }
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key, this.authService});
+  const LoginScreen({super.key, this.authService, this.passwordResetApi});
 
   final AuthService? authService;
+  final PasswordResetApi? passwordResetApi;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -506,12 +506,11 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _forgotPassword() async {
-    await showDialog<void>(
-      context: context,
-      builder: (context) => withBarrierBlur(
-        _ForgotPasswordDialog(
-          authService: _auth,
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => PasswordResetScreen(
           initialEmail: _emailController.text.trim(),
+          api: widget.passwordResetApi,
         ),
       ),
     );
@@ -532,7 +531,10 @@ class _LoginScreenState extends State<LoginScreen> {
           child: SingleChildScrollView(
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             padding: const EdgeInsets.fromLTRB(
-              kLoginPaddingH, kLoginPaddingTop, kLoginPaddingH, kLoginPaddingBottom,
+              kLoginPaddingH,
+              kLoginPaddingTop,
+              kLoginPaddingH,
+              kLoginPaddingBottom,
             ),
             child: Center(
               child: ConstrainedBox(
@@ -732,7 +734,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             foregroundColor: Colors.white,
                             disabledBackgroundColor: const Color(0xFF4B4B4B),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(kLoginButtonRadius),
+                              borderRadius: BorderRadius.circular(
+                                kLoginButtonRadius,
+                              ),
                             ),
                           ),
                           child: _busy
@@ -757,7 +761,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         children: [
                           Expanded(child: Divider(color: Color(0xFFE2E4E8))),
                           Padding(
-                            padding: EdgeInsets.symmetric(horizontal: kLoginDividerLabelPadding),
+                            padding: EdgeInsets.symmetric(
+                              horizontal: kLoginDividerLabelPadding,
+                            ),
                             child: Text(
                               'or',
                               style: TextStyle(color: Color(0xFF737983)),
@@ -775,7 +781,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             foregroundColor: const Color(0xFF121212),
                             side: const BorderSide(color: Color(0xFFCED1D6)),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(kLoginButtonRadius),
+                              borderRadius: BorderRadius.circular(
+                                kLoginButtonRadius,
+                              ),
                             ),
                           ),
                           icon: Image.asset(
@@ -1048,460 +1056,6 @@ class _AuthField extends StatelessWidget {
           vertical: 17,
         ),
       ),
-    );
-  }
-}
-
-class _ForgotPasswordDialog extends StatefulWidget {
-  const _ForgotPasswordDialog({
-    required this.authService,
-    required this.initialEmail,
-  });
-
-  final AuthService authService;
-  final String initialEmail;
-
-  @override
-  State<_ForgotPasswordDialog> createState() => _ForgotPasswordDialogState();
-}
-
-class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
-  final _formKey = GlobalKey<FormState>();
-  final _emailFocus = FocusNode();
-  late final TextEditingController _emailController;
-  Timer? _resendTimer;
-  bool _busy = false;
-  bool _sent = false;
-  int _resendSeconds = 0;
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _emailController = TextEditingController(text: widget.initialEmail);
-  }
-
-  @override
-  void dispose() {
-    _resendTimer?.cancel();
-    _emailController.dispose();
-    _emailFocus.dispose();
-    super.dispose();
-  }
-
-  Future<void> _send() async {
-    if (!_formKey.currentState!.validate() || _busy) return;
-    await _requestReset();
-  }
-
-  Future<void> _resend() async {
-    if (_busy || _resendSeconds > 0) return;
-    await _requestReset();
-  }
-
-  Future<void> _requestReset() async {
-    setState(() => _busy = true);
-    try {
-      await widget.authService.sendPasswordResetEmail(
-        _emailController.text.trim(),
-      );
-    } catch (error) {
-      final message = _resetErrorMessage(error);
-      if (message != null) {
-        if (!mounted) return;
-        setState(() {
-          _busy = false;
-          _sent = false;
-          _error = message;
-        });
-        return;
-      }
-    }
-    if (!mounted) return;
-    _showSuccess();
-  }
-
-  String? _resetErrorMessage(Object error) {
-    if (error is! FirebaseAuthException) return null;
-    switch (error.code) {
-      case 'too-many-requests':
-        return 'Too many attempts. Please try again later.';
-      case 'network-request-failed':
-      case 'network-error':
-        return 'No internet connection.';
-      default:
-        return null;
-    }
-  }
-
-  void _showSuccess() {
-    _resendTimer?.cancel();
-    setState(() {
-      _busy = false;
-      _sent = true;
-      _error = null;
-      _resendSeconds = 30;
-    });
-    _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-      if (_resendSeconds <= 1) {
-        timer.cancel();
-        setState(() => _resendSeconds = 0);
-      } else {
-        setState(() => _resendSeconds--);
-      }
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final dialog = Semantics(
-      label: 'Reset password',
-      child: PopScope(
-        canPop: !_busy,
-        child: Dialog(
-          insetPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 24,
-          ),
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: 360,
-              maxHeight: MediaQuery.sizeOf(context).height * 0.88,
-            ),
-            child: Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.12),
-                    blurRadius: 24,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Flexible(
-                    child: SingleChildScrollView(
-                      child: _sent ? _successContent() : _formContent(),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  _sent ? _doneButton() : _formButtons(),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-
-    if (MediaQuery.disableAnimationsOf(context)) return dialog;
-    return TweenAnimationBuilder<double>(
-      duration: const Duration(milliseconds: 180),
-      curve: Curves.easeOut,
-      tween: Tween(begin: 0.96, end: 1),
-      builder: (context, value, child) => Opacity(
-        opacity: ((value - 0.96) / 0.04).clamp(0.0, 1.0),
-        child: Transform.scale(scale: value, child: child),
-      ),
-      child: dialog,
-    );
-  }
-
-  Widget _formContent() {
-    return Form(
-      key: _formKey,
-      child: Column(
-        children: [
-          _resetIcon(
-            backgroundColor: Colors.white,
-            borderColor: const Color(0xFFE5E7EB),
-            icon: Icons.lock_reset_outlined,
-            iconColor: const Color(0xFF121212),
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'Reset password',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF121212),
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Enter your email and we\'ll send you a link to reset your password.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              height: 1.5,
-              color: Color(0xFF25282D),
-            ),
-          ),
-          const SizedBox(height: 20),
-          TextFormField(
-            key: const ValueKey('reset-email-field'),
-            controller: _emailController,
-            focusNode: _emailFocus,
-            enabled: !_busy,
-            autofocus: true,
-            keyboardType: TextInputType.emailAddress,
-            textInputAction: TextInputAction.done,
-            autofillHints: const [AutofillHints.email],
-            autocorrect: false,
-            onChanged: (_) {
-              if (_error != null) setState(() => _error = null);
-            },
-            onFieldSubmitted: (_) => _send(),
-            validator: (value) => isValidAuthEmail(value ?? '')
-                ? null
-                : 'Enter a valid email address.',
-            style: const TextStyle(
-              fontFamily: 'Inter',
-              color: Color(0xFF121212),
-              fontWeight: FontWeight.w600,
-            ),
-            decoration: InputDecoration(
-              labelText: 'Email',
-              labelStyle: const TextStyle(color: Color(0xFF737983)),
-              filled: true,
-              fillColor: Colors.white,
-              errorStyle: const TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: Color(0xFFDC2626),
-              ),
-              border: _resetFieldBorder(const Color(0xFFE2E4E8)),
-              enabledBorder: _resetFieldBorder(const Color(0xFFE2E4E8)),
-              disabledBorder: _resetFieldBorder(const Color(0xFFE2E4E8)),
-              focusedBorder: _resetFieldBorder(
-                const Color(0xFF25282D),
-                width: 1.2,
-              ),
-              errorBorder: _resetFieldBorder(const Color(0xFFDC2626)),
-              focusedErrorBorder: _resetFieldBorder(
-                const Color(0xFFDC2626),
-                width: 1.2,
-              ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 20,
-                vertical: 17,
-              ),
-            ),
-          ),
-          if (_error != null) ...[
-            const SizedBox(height: 7),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Padding(
-                padding: const EdgeInsets.only(left: 14),
-                child: Text(
-                  _error!,
-                  key: const ValueKey('reset-request-error'),
-                  style: const TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: Color(0xFFDC2626),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _successContent() {
-    final resendLabel = _resendSeconds > 0
-        ? 'Resend in ${_resendSeconds}s'
-        : 'Resend link';
-    return Column(
-      children: [
-        _resetIcon(
-          backgroundColor: const Color(0xFFF1F2F4),
-          icon: Icons.check_rounded,
-          iconColor: const Color(0xFF121212),
-        ),
-        const SizedBox(height: 16),
-        const Text(
-          'Check your inbox',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontFamily: 'Inter',
-            fontSize: 20,
-            fontWeight: FontWeight.w800,
-            color: Color(0xFF121212),
-          ),
-        ),
-        const SizedBox(height: 8),
-        const Text(
-          'If an account exists for that email, a reset link is on its way.',
-          key: ValueKey('reset-success-message'),
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontFamily: 'Inter',
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            height: 1.5,
-            color: Color(0xFF25282D),
-          ),
-        ),
-        const SizedBox(height: 14),
-        const Text(
-          'Can\'t find it? Check your spam folder.',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontFamily: 'Inter',
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-            color: Color(0xFF737983),
-          ),
-        ),
-        const SizedBox(height: 8),
-        TextButton(
-          key: const ValueKey('reset-resend-button'),
-          onPressed: _busy || _resendSeconds > 0 ? null : _resend,
-          style: TextButton.styleFrom(
-            foregroundColor: const Color(0xFF121212),
-            minimumSize: const Size(48, 48),
-          ),
-          child: Text(
-            resendLabel,
-            style: const TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _formButtons() {
-    const textStyle = TextStyle(
-      fontFamily: 'Inter',
-      fontSize: 15,
-      fontWeight: FontWeight.w700,
-    );
-    return Row(
-      children: [
-        Expanded(
-          child: SizedBox(
-            height: 48,
-            child: OutlinedButton(
-              key: const ValueKey('reset-cancel-button'),
-              onPressed: _busy ? null : () => Navigator.pop(context),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF121212),
-                side: const BorderSide(color: Color(0xFFE5E7EB)),
-                shape: const StadiumBorder(),
-                padding: EdgeInsets.zero,
-              ),
-              child: const Text('Cancel', style: textStyle),
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: SizedBox(
-            height: 48,
-            child: FilledButton(
-              key: const ValueKey('reset-send-button'),
-              onPressed: _busy ? null : _send,
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF121212),
-                foregroundColor: Colors.white,
-                shape: const StadiumBorder(),
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-              ),
-              child: _busy
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        'Send reset link',
-                        maxLines: 1,
-                        style: textStyle,
-                      ),
-                    ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _doneButton() {
-    return SizedBox(
-      width: double.infinity,
-      height: 52,
-      child: FilledButton(
-        key: const ValueKey('reset-done-button'),
-        onPressed: _busy ? null : () => Navigator.pop(context),
-        style: FilledButton.styleFrom(
-          backgroundColor: const Color(0xFF121212),
-          foregroundColor: Colors.white,
-          shape: const StadiumBorder(),
-        ),
-        child: const Text(
-          'Done',
-          style: TextStyle(
-            fontFamily: 'Inter',
-            fontSize: 15,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _resetIcon({
-    required Color backgroundColor,
-    required IconData icon,
-    required Color iconColor,
-    Color? borderColor,
-  }) {
-    return Container(
-      width: 56,
-      height: 56,
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        shape: BoxShape.circle,
-        border: borderColor == null ? null : Border.all(color: borderColor),
-      ),
-      child: Icon(icon, size: 28, color: iconColor),
-    );
-  }
-
-  OutlineInputBorder _resetFieldBorder(Color color, {double width = 1}) {
-    return OutlineInputBorder(
-      borderRadius: const BorderRadius.all(Radius.circular(30)),
-      borderSide: BorderSide(color: color, width: width),
     );
   }
 }

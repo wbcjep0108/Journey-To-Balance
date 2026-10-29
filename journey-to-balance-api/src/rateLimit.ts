@@ -31,6 +31,22 @@ export interface RateBucketState {
   windowStart: number;
 }
 
+export function consumeFixedWindow(
+  current: RateBucketState | undefined,
+  limit: number,
+  windowMs: number,
+  now: number,
+): {allowed: boolean; state: RateBucketState} {
+  if (!current || now - current.windowStart >= windowMs) {
+    return {allowed: true, state: {count: 1, windowStart: now}};
+  }
+  if (current.count >= limit) return {allowed: false, state: current};
+  return {
+    allowed: true,
+    state: {count: current.count + 1, windowStart: current.windowStart},
+  };
+}
+
 /**
  * Fixed one-minute window counter. Pure helper — no I/O.
  * Throws ApiError(429) when the limit is exceeded.

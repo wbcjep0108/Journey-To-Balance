@@ -2,6 +2,7 @@ import {DurableObject} from "cloudflare:workers";
 
 import {ApiError, badRequest} from "./errors";
 import {
+  consumeFixedWindow,
   nextRateBucket,
   RATE_LIMITS,
   RateBucketName,
@@ -41,6 +42,37 @@ export type IsolatedRateLimitOutcome =
   };
 
 export class UserGate extends DurableObject {
+  /** Serializes a short public security operation for this object identity. */
+  async acquirePublicLock(ttlMs: number): Promise<boolean> {
+    if (!Number.isInteger(ttlMs) || ttlMs < 1) {
+      throw badRequest("Invalid public lock configuration.");
+    }
+    const key = "lock:public";
+    const now = Date.now();
+    const expiresAt = await this.ctx.storage.get<number>(key);
+    if (expiresAt && expiresAt > now) return false;
+    await this.ctx.storage.put(key, now + ttlMs);
+    return true;
+  }
+
+  async releasePublicLock(): Promise<void> {
+    await this.ctx.storage.delete("lock:public");
+  }
+
+  /** Fixed-window limiter used by unauthenticated password-reset routes. */
+  async consumePublicRateLimit(limit: number, windowMs: number): Promise<boolean> {
+    if (!Number.isInteger(limit) || limit < 1 || !Number.isInteger(windowMs) || windowMs < 1) {
+      throw badRequest("Invalid public rate-limit configuration.");
+    }
+    const key = "rate:public";
+    const now = Date.now();
+    const current = await this.ctx.storage.get<RateBucketState>(key);
+    const outcome = consumeFixedWindow(current, limit, windowMs, now);
+    if (!outcome.allowed) return false;
+    await this.ctx.storage.put(key, outcome.state);
+    return true;
+  }
+
   /**
    * Production finance rate-limit path: increments op bucket + general.
    * Throws ApiError(429) when either limit is exceeded.

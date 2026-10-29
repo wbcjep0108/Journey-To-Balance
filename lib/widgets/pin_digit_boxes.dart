@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-/// Reusable 4-digit PIN input with masked dots, auto-advance, and backspace.
+/// Reusable numeric code input with auto-advance, paste, and backspace.
 class PinDigitBoxes extends StatefulWidget {
   const PinDigitBoxes({
     super.key,
@@ -12,6 +12,10 @@ class PinDigitBoxes extends StatefulWidget {
     this.autoFocus = true,
     this.clearTrigger,
     this.obscureText = true,
+    this.length = 4,
+    this.boxSize = 56,
+    this.spacing = 12,
+    this.autofillHints,
   });
 
   final ValueChanged<String> onCompleted;
@@ -20,6 +24,10 @@ class PinDigitBoxes extends StatefulWidget {
   final bool hasError;
   final bool autoFocus;
   final bool obscureText;
+  final int length;
+  final double boxSize;
+  final double spacing;
+  final Iterable<String>? autofillHints;
 
   /// Increment to clear all digits from outside.
   final int? clearTrigger;
@@ -29,18 +37,16 @@ class PinDigitBoxes extends StatefulWidget {
 }
 
 class PinDigitBoxesState extends State<PinDigitBoxes> {
-  static const int _length = 4;
-
-  final List<TextEditingController> _controllers = List.generate(
-    _length,
-    (_) => TextEditingController(),
-  );
-  final List<FocusNode> _focusNodes = List.generate(_length, (_) => FocusNode());
+  late final List<TextEditingController> _controllers;
+  late final List<FocusNode> _focusNodes;
   int? _lastClearTrigger;
 
   @override
   void initState() {
     super.initState();
+    assert(widget.length > 0);
+    _controllers = List.generate(widget.length, (_) => TextEditingController());
+    _focusNodes = List.generate(widget.length, (_) => FocusNode());
     _lastClearTrigger = widget.clearTrigger;
     for (final node in _focusNodes) {
       node.addListener(_onFocusChange);
@@ -96,7 +102,7 @@ class PinDigitBoxesState extends State<PinDigitBoxes> {
   void _notify() {
     final value = pin;
     widget.onChanged?.call(value);
-    if (value.length == _length) {
+    if (value.length == widget.length) {
       widget.onCompleted(value);
     }
   }
@@ -104,12 +110,12 @@ class PinDigitBoxesState extends State<PinDigitBoxes> {
   void _onChanged(int index, String value) {
     if (value.length > 1) {
       final digits = value.replaceAll(RegExp(r'\D'), '');
-      for (var i = 0; i < _length; i++) {
+      for (var i = 0; i < widget.length; i++) {
         _controllers[i].text = i < digits.length ? digits[i] : '';
       }
-      final focusIndex = (digits.length.clamp(1, _length) - 1).clamp(
+      final focusIndex = (digits.length.clamp(1, widget.length) - 1).clamp(
         0,
-        _length - 1,
+        widget.length - 1,
       );
       _focusNodes[focusIndex].requestFocus();
       setState(() {});
@@ -119,7 +125,7 @@ class PinDigitBoxesState extends State<PinDigitBoxes> {
 
     setState(() {});
 
-    if (value.isNotEmpty && index < _length - 1) {
+    if (value.isNotEmpty && index < widget.length - 1) {
       _focusNodes[index + 1].requestFocus();
     }
     _notify();
@@ -143,17 +149,19 @@ class PinDigitBoxesState extends State<PinDigitBoxes> {
   Widget build(BuildContext context) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(_length, (index) {
+      children: List.generate(widget.length, (index) {
         final hasFocus = _focusNodes[index].hasFocus;
         final filled = _controllers[index].text.isNotEmpty;
 
         return Padding(
-          padding: EdgeInsets.only(right: index == _length - 1 ? 0 : 12),
+          padding: EdgeInsets.only(
+            right: index == widget.length - 1 ? 0 : widget.spacing,
+          ),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
             curve: Curves.easeOutCubic,
-            width: 56,
-            height: 56,
+            width: widget.boxSize,
+            height: widget.boxSize,
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(14),
@@ -186,9 +194,12 @@ class PinDigitBoxesState extends State<PinDigitBoxes> {
                 enabled: widget.enabled,
                 textAlign: TextAlign.center,
                 keyboardType: TextInputType.number,
+                autofillHints: widget.autofillHints,
                 obscureText: widget.obscureText,
                 obscuringCharacter: '•',
-                maxLength: 1,
+                // Allow a complete code to reach _onChanged so paste and
+                // platform one-time-code autofill can distribute the digits.
+                maxLength: widget.length,
                 style: const TextStyle(
                   fontFamily: 'Inter',
                   fontSize: 22,

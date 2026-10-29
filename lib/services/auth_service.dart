@@ -11,7 +11,6 @@ abstract class AuthService {
   Future<User?> signInWithGoogle();
   Future<UserCredential> signInWithEmail(String email, String password);
   Future<UserCredential> createAccount(String email, String password);
-  Future<void> sendPasswordResetEmail(String email);
   Future<void> resendVerificationEmail();
   Future<void> reauthenticateWithPassword(String password);
   Future<void> reauthenticateWithGoogle();
@@ -73,11 +72,6 @@ class FirebaseAuthService implements AuthService {
     );
     await credential.user?.sendEmailVerification();
     return credential;
-  }
-
-  @override
-  Future<void> sendPasswordResetEmail(String email) {
-    return _auth.sendPasswordResetEmail(email: email);
   }
 
   @override

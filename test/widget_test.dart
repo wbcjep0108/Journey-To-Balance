@@ -25,8 +25,6 @@ class _WidgetTestAuthService implements AuthService {
   @override
   Future<void> resendVerificationEmail() async {}
   @override
-  Future<void> sendPasswordResetEmail(String email) async {}
-  @override
   Future<UserCredential> signInWithEmail(String email, String password) =>
       throw UnimplementedError();
   @override

@@ -28,7 +28,10 @@ Uses **SQLite-backed Durable Objects** (available on Cloudflare Workers Free).
 
 1. Firebase Console → Project settings → Service accounts → Generate new private key
 2. Grant the service account access to Firestore (Editor or Cloud Datastore User)
-3. Set secrets:
+3. Grant the same service account **Firebase Authentication Admin** so the
+   password-reset endpoints can look up users, update passwords, and revoke
+   refresh tokens through Identity Toolkit.
+4. Set secrets:
 
 ```bash
 cd journey-to-balance-api
@@ -65,6 +68,19 @@ npx wrangler deploy
 ```
 
 ## Endpoints
+
+Public password-reset routes do not require a Firebase ID token. Request
+responses are intentionally neutral to prevent account enumeration.
+
+| Path | Purpose |
+|------|---------|
+| `POST /auth/password-reset/request` | Request a six-digit email code |
+| `POST /auth/password-reset/verify` | Exchange a valid code for a short-lived reset token |
+| `POST /auth/password-reset/confirm` | Set the new password and revoke refresh tokens |
+
+They reuse `USER_GATE`, `FIREBASE_PROJECT_ID`,
+`FIREBASE_SERVICE_ACCOUNT_JSON`, and the existing Brevo secrets. No additional
+binding or secret is required.
 
 All finance routes: `POST` + `Authorization: Bearer <Firebase ID token>`
 

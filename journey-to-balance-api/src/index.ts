@@ -9,6 +9,13 @@ import {
 } from "./errors";
 import {Env, handleFinance} from "./finance";
 import {handlePinReset} from "./pinReset";
+import {
+  confirmPasswordReset,
+  createPasswordResetDependencies,
+  PasswordResetPublicError,
+  requestPasswordReset,
+  verifyPasswordResetCode,
+} from "./passwordReset";
 import {IsolatedRateLimitOutcome, UserGate} from "./UserGate";
 
 export {UserGate};
@@ -84,6 +91,61 @@ export default {
       }
 
       const projectId = env.FIREBASE_PROJECT_ID || "journey-to-balance";
+
+      if (
+        request.method === "POST" &&
+        url.pathname.startsWith("/auth/password-reset/")
+      ) {
+        const route = url.pathname
+          .slice("/auth/password-reset/".length)
+          .replace(/\/$/, "");
+        let body: Record<string, unknown> = {};
+        try {
+          const text = await request.text();
+          const parsed: unknown = text.trim() ? JSON.parse(text) : {};
+          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+            body = parsed as Record<string, unknown>;
+          }
+        } catch (_) {
+          // Public reset routes map malformed input to their generic response.
+        }
+
+        try {
+          const deps = createPasswordResetDependencies(env);
+          if (route === "request") {
+            const result = await requestPasswordReset(
+              deps,
+              body.email,
+              request.headers.get("CF-Connecting-IP") ?? "",
+            );
+            return jsonOk(result);
+          }
+          if (route === "verify") {
+            return jsonOk(await verifyPasswordResetCode(deps, body.email, body.code));
+          }
+          if (route === "confirm") {
+            return jsonOk(await confirmPasswordReset(
+              deps,
+              body.email,
+              body.resetToken,
+              body.newPassword,
+            ));
+          }
+          throw notFound("Not found.");
+        } catch (error) {
+          if (route === "request") return jsonOk({ok: true});
+          if (error instanceof PasswordResetPublicError) {
+            return Response.json(
+              {error: error.code},
+              {status: error.status, headers: corsHeaders()},
+            );
+          }
+          return Response.json(
+            {error: "unavailable"},
+            {status: 503, headers: corsHeaders()},
+          );
+        }
+      }
 
       if (
         request.method === "POST" &&

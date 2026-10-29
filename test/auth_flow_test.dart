@@ -5,16 +5,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_budget/screens/auth/login_screen.dart';
 import 'package:just_budget/services/auth_service.dart';
+import 'package:just_budget/services/finance_api_service.dart';
 import 'package:just_budget/widgets/sensitive_action_auth.dart';
 
 class _FakeAuthService implements AuthService {
-  _FakeAuthService({this.passwordProvider = true, this.passwordResetError});
+  _FakeAuthService({this.passwordProvider = true});
 
   final bool passwordProvider;
-  final Object? passwordResetError;
   String? reauthenticatedPassword;
   bool googleReauthenticated = false;
-  int passwordResetCalls = 0;
 
   @override
   User? get currentUser => null;
@@ -38,13 +37,6 @@ class _FakeAuthService implements AuthService {
   @override
   Future<void> resendVerificationEmail() async {}
   @override
-  Future<void> sendPasswordResetEmail(String email) async {
-    passwordResetCalls++;
-    final error = passwordResetError;
-    if (error != null) throw error;
-  }
-
-  @override
   Future<UserCredential> signInWithEmail(String email, String password) =>
       throw UnimplementedError();
   @override
@@ -53,8 +45,44 @@ class _FakeAuthService implements AuthService {
   Future<void> signOut() async {}
 }
 
+class _FakePasswordResetApi implements PasswordResetApi {
+  _FakePasswordResetApi({this.requestError, this.verifyError});
+
+  final Object? requestError;
+  final Object? verifyError;
+  int requestCalls = 0;
+  int verifyCalls = 0;
+  int confirmCalls = 0;
+
+  @override
+  Future<void> requestPasswordReset({required String email}) async {
+    requestCalls++;
+    if (requestError != null) throw requestError!;
+  }
+
+  @override
+  Future<String> verifyPasswordResetCode({
+    required String email,
+    required String code,
+  }) async {
+    verifyCalls++;
+    if (verifyError != null) throw verifyError!;
+    return 'reset-token';
+  }
+
+  @override
+  Future<void> confirmPasswordReset({
+    required String email,
+    required String resetToken,
+    required String newPassword,
+  }) async {
+    confirmCalls++;
+  }
+}
+
 Widget _loginApp(
   AuthService service, {
+  PasswordResetApi? passwordResetApi,
   double textScale = 1,
   bool disableAnimations = false,
 }) {
@@ -66,17 +94,24 @@ Widget _loginApp(
       ),
       child: child!,
     ),
-    home: LoginScreen(authService: service),
+    home: LoginScreen(authService: service, passwordResetApi: passwordResetApi),
   );
 }
 
 Future<void> _openResetDialog(
   WidgetTester tester,
   _FakeAuthService service, {
+  PasswordResetApi? passwordResetApi,
   String email = 'person@example.com',
   double textScale = 1,
 }) async {
-  await tester.pumpWidget(_loginApp(service, textScale: textScale));
+  await tester.pumpWidget(
+    _loginApp(
+      service,
+      textScale: textScale,
+      passwordResetApi: passwordResetApi ?? _FakePasswordResetApi(),
+    ),
+  );
   await tester.enterText(find.widgetWithText(TextFormField, 'Email'), email);
   final forgotPassword = find.text('Forgot password?');
   await tester.ensureVisible(forgotPassword);
@@ -307,145 +342,155 @@ void main() {
     );
   });
 
-  group('reset password dialog', () {
-    testWidgets('shows the styled form with the prefilled email', (
+  group('password reset OTP flow', () {
+    testWidgets('renders the email step with the prefilled email', (
       tester,
     ) async {
       await _openResetDialog(tester, _FakeAuthService());
 
-      expect(find.byIcon(Icons.lock_reset_outlined), findsOneWidget);
       expect(find.text('Reset password'), findsOneWidget);
       expect(
         find.text(
-          'Enter your email and we\'ll send you a link to reset your password.',
+          'Enter your email address and we\'ll send you a 6-digit code.',
         ),
         findsOneWidget,
       );
-      final emailField = tester.widget<TextFormField>(
+      final field = tester.widget<TextFormField>(
         find.byKey(const ValueKey('reset-email-field')),
       );
-      expect(emailField.controller?.text, 'person@example.com');
-      expect(find.text('Cancel'), findsOneWidget);
-      expect(find.text('Send reset link'), findsOneWidget);
+      expect(field.controller?.text, 'person@example.com');
+      expect(find.text('Send code'), findsOneWidget);
     });
 
-    testWidgets('invalid email stays inline and does not call the service', (
-      tester,
-    ) async {
-      final service = _FakeAuthService();
-      await _openResetDialog(tester, service, email: 'invalid');
-      final send = find.byKey(const ValueKey('reset-send-button'));
-      await tester.ensureVisible(send);
-      await tester.tap(send);
+    testWidgets('invalid email blocks the request', (tester) async {
+      final api = _FakePasswordResetApi();
+      await _openResetDialog(
+        tester,
+        _FakeAuthService(),
+        email: 'invalid',
+        passwordResetApi: api,
+      );
+      await tester.tap(find.byKey(const ValueKey('reset-send-button')));
       await tester.pump();
 
       expect(find.text('Enter a valid email address.'), findsOneWidget);
-      expect(service.passwordResetCalls, 0);
+      expect(api.requestCalls, 0);
     });
 
-    testWidgets('valid email shows the neutral success view', (tester) async {
-      final service = _FakeAuthService();
-      await _openResetDialog(tester, service);
-      final send = find.byKey(const ValueKey('reset-send-button'));
-      await tester.ensureVisible(send);
-      await tester.tap(send);
-      await tester.pumpAndSettle();
-
-      expect(service.passwordResetCalls, 1);
-      expect(find.text('Check your inbox'), findsOneWidget);
-      expect(
-        find.text(
-          'If an account exists for that email, a reset link is on its way.',
-        ),
-        findsOneWidget,
-      );
-    });
-
-    testWidgets('user-not-found shows the same neutral success view', (
+    testWidgets('request advances to the code step and starts cooldown', (
       tester,
     ) async {
-      final service = _FakeAuthService(
-        passwordResetError: FirebaseAuthException(code: 'user-not-found'),
-      );
-      await _openResetDialog(tester, service);
-      final send = find.byKey(const ValueKey('reset-send-button'));
-      await tester.ensureVisible(send);
-      await tester.tap(send);
+      final api = _FakePasswordResetApi();
+      await _openResetDialog(tester, _FakeAuthService(), passwordResetApi: api);
+      await tester.tap(find.byKey(const ValueKey('reset-send-button')));
       await tester.pumpAndSettle();
 
+      expect(api.requestCalls, 1);
+      expect(find.text('Enter the code'), findsOneWidget);
       expect(
-        find.text(
-          'If an account exists for that email, a reset link is on its way.',
-        ),
+        find.text('If an account exists for that email, a code is on its way.'),
         findsOneWidget,
       );
-      expect(find.textContaining('user'), findsNothing);
-    });
-
-    testWidgets('rate-limit failure stays inline', (tester) async {
-      final service = _FakeAuthService(
-        passwordResetError: FirebaseAuthException(code: 'too-many-requests'),
-      );
-      await _openResetDialog(tester, service);
-      final send = find.byKey(const ValueKey('reset-send-button'));
-      await tester.ensureVisible(send);
-      await tester.tap(send);
-      await tester.pumpAndSettle();
-
-      expect(
-        find.text('Too many attempts. Please try again later.'),
-        findsOneWidget,
-      );
-    });
-
-    testWidgets('network failure stays inline', (tester) async {
-      final service = _FakeAuthService(
-        passwordResetError: FirebaseAuthException(
-          code: 'network-request-failed',
-        ),
-      );
-      await _openResetDialog(tester, service);
-      final send = find.byKey(const ValueKey('reset-send-button'));
-      await tester.ensureVisible(send);
-      await tester.tap(send);
-      await tester.pumpAndSettle();
-
-      expect(find.text('No internet connection.'), findsOneWidget);
-    });
-
-    testWidgets('resend is disabled during cooldown and then re-enabled', (
-      tester,
-    ) async {
-      await _openResetDialog(tester, _FakeAuthService());
-      final send = find.byKey(const ValueKey('reset-send-button'));
-      await tester.ensureVisible(send);
-      await tester.tap(send);
-      await tester.pump();
-
       var resend = tester.widget<TextButton>(
         find.byKey(const ValueKey('reset-resend-button')),
       );
       expect(resend.onPressed, isNull);
-      expect(find.text('Resend in 30s'), findsOneWidget);
+      expect(find.text('Resend code in 30s'), findsOneWidget);
 
       await tester.pump(const Duration(seconds: 30));
       resend = tester.widget<TextButton>(
         find.byKey(const ValueKey('reset-resend-button')),
       );
       expect(resend.onPressed, isNotNull);
-      expect(find.text('Resend link'), findsOneWidget);
+      expect(find.text('Resend code'), findsOneWidget);
     });
 
-    testWidgets('Done closes the success view', (tester) async {
-      await _openResetDialog(tester, _FakeAuthService());
-      final send = find.byKey(const ValueKey('reset-send-button'));
-      await tester.ensureVisible(send);
-      await tester.tap(send);
-      await tester.pump();
-      await tester.tap(find.byKey(const ValueKey('reset-done-button')));
+    testWidgets('network failure still advances with a safe error', (
+      tester,
+    ) async {
+      final api = _FakePasswordResetApi(
+        requestError: const FinanceApiException(
+          code: 'unavailable',
+          message: 'hidden',
+        ),
+      );
+      await _openResetDialog(tester, _FakeAuthService(), passwordResetApi: api);
+      await tester.tap(find.byKey(const ValueKey('reset-send-button')));
       await tester.pumpAndSettle();
 
-      expect(find.text('Check your inbox'), findsNothing);
+      expect(find.text('Enter the code'), findsOneWidget);
+      expect(find.text('No internet connection.'), findsOneWidget);
+    });
+
+    testWidgets('wrong code shows the generic error', (tester) async {
+      final api = _FakePasswordResetApi(
+        verifyError: const FinanceApiException(
+          code: 'invalid_code',
+          message: 'hidden',
+        ),
+      );
+      await _openResetDialog(tester, _FakeAuthService(), passwordResetApi: api);
+      await tester.tap(find.byKey(const ValueKey('reset-send-button')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find
+            .descendant(
+              of: find.byKey(const ValueKey('reset-code-field')),
+              matching: find.byType(TextField),
+            )
+            .first,
+        '123456',
+      );
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(api.verifyCalls, 1);
+      expect(find.text('Wrong or expired code'), findsOneWidget);
+    });
+
+    testWidgets('mismatched passwords are blocked and success renders', (
+      tester,
+    ) async {
+      final api = _FakePasswordResetApi();
+      await _openResetDialog(tester, _FakeAuthService(), passwordResetApi: api);
+      await tester.tap(find.byKey(const ValueKey('reset-send-button')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find
+            .descendant(
+              of: find.byKey(const ValueKey('reset-code-field')),
+              matching: find.byType(TextField),
+            )
+            .first,
+        '123456',
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Create a new password'), findsOneWidget);
+
+      await tester.enterText(
+        find.byKey(const ValueKey('reset-new-password-field')),
+        'password-one',
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('reset-confirm-password-field')),
+        'password-two',
+      );
+      await tester.tap(find.byKey(const ValueKey('reset-update-button')));
+      await tester.pump();
+      expect(find.text('Passwords do not match.'), findsOneWidget);
+      expect(api.confirmCalls, 0);
+
+      await tester.enterText(
+        find.byKey(const ValueKey('reset-confirm-password-field')),
+        'password-one',
+      );
+      await tester.tap(find.byKey(const ValueKey('reset-update-button')));
+      await tester.pumpAndSettle();
+      expect(api.confirmCalls, 1);
+      expect(find.text('Password updated'), findsOneWidget);
+      expect(
+        find.text('You can now log in with your new password.'),
+        findsOneWidget,
+      );
     });
 
     testWidgets('does not overflow at 360px and 1.3x text scale', (

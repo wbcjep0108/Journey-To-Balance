@@ -58,7 +58,8 @@ class _ForgotPinEmailScreenState extends State<ForgotPinEmailScreen> {
   Widget build(BuildContext context) {
     return _ForgotPinScaffold(
       title: 'Forgot PIN',
-      subtitle: 'Enter the Gmail you use to sign in. We’ll send a 4-digit code.',
+      subtitle:
+          'Enter the email address you use to sign in. We’ll send a 4-digit code.',
       error: _error,
       child: Column(
         children: [
@@ -77,7 +78,7 @@ class _ForgotPinEmailScreenState extends State<ForgotPinEmailScreen> {
               fontWeight: FontWeight.w600,
             ),
             decoration: InputDecoration(
-              hintText: 'Gmail address',
+              hintText: 'Email address',
               hintStyle: const TextStyle(
                 fontFamily: 'Inter',
                 fontWeight: FontWeight.w500,
@@ -100,7 +101,9 @@ class _ForgotPinEmailScreenState extends State<ForgotPinEmailScreen> {
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
                 borderSide: BorderSide(
-                  color: _error != null ? const Color(0xFFE11D48) : Colors.black,
+                  color: _error != null
+                      ? const Color(0xFFE11D48)
+                      : Colors.black,
                   width: 1.5,
                 ),
               ),
@@ -286,8 +289,7 @@ class _ForgotPinNewPinScreenState extends State<ForgotPinNewPinScreen> {
   bool _busy = false;
   int _clearConfirm = 0;
 
-  bool get _canContinue =>
-      _pin.length == 4 && _confirm.length == 4 && !_busy;
+  bool get _canContinue => _pin.length == 4 && _confirm.length == 4 && !_busy;
 
   Future<void> _save() async {
     if (!_canContinue) return;

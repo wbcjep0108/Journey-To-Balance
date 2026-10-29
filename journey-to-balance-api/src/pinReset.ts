@@ -71,10 +71,10 @@ async function enforceLimit(env: Env, uid: string, bucket: RateBucketName) {
 function requireAccountEmail(user: AuthUser, typedEmail: string): string {
   const account = normalizeEmail(user.email);
   if (!account) {
-    throw badRequest("Your Google account has no email to send a code to.");
+    throw badRequest("Your account has no email address to send a code to.");
   }
   if (!typedEmail) {
-    throw badRequest("Enter the Gmail you use to sign in.");
+    throw badRequest("Enter the email address you use to sign in.");
   }
   if (typedEmail !== account) {
     throw badRequest("This email doesn't match the signed-in account.");
