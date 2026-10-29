@@ -9,6 +9,7 @@ import '../../providers/currency_provider.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/barrier_blur.dart';
 import '../../widgets/journey_about_dialog.dart';
+import '../../widgets/journey_help_dialog.dart';
 import 'currency_settings_page.dart';
 import 'notification_settings_page.dart';
 import 'security_settings_page.dart';
@@ -76,24 +77,7 @@ class _AccountPageState extends State<AccountPage> {
     showDialog<void>(
       context: context,
       builder: (context) => withBarrierBlur(
-        AlertDialog(
-          backgroundColor: Colors.white,
-          surfaceTintColor: Colors.transparent,
-          title: const Text('Help & Support'),
-          content: const Text(
-            'For help with Journey to Balance, contact the application support (bcueva1217@gmail.com) '
-            'team for the latest support information.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text(
-                'Close',
-                style: TextStyle(color: Color(0xFF6B7280)),
-              ),
-            ),
-          ],
-        ),
+        const JourneyHelpDialog(),
       ),
     );
   }

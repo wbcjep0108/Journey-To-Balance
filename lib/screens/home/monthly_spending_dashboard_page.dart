@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../models/monthly_spending_stats.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/currency_provider.dart';
+import '../../widgets/app_date_picker.dart';
 import '../../widgets/barrier_blur.dart';
 import '../../widgets/category_icon_badge.dart';
 import 'daily_spending_page.dart';
@@ -50,7 +51,7 @@ class _MonthlySpendingDashboardPageState
       lastDate: DateTime(now.year + 1, 12, 31),
       helpText: 'Select month',
       initialDatePickerMode: DatePickerMode.year,
-      builder: (context, child) => withBarrierBlur(child!),
+      builder: appDatePickerBuilder,
     );
     if (picked == null || !mounted) return;
     setState(() {

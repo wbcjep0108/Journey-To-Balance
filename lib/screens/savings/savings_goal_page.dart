@@ -9,6 +9,7 @@ import '../../providers/budget_provider.dart';
 import '../../providers/currency_provider.dart';
 import '../../providers/wallet_cards_provider.dart';
 import '../../providers/wallet_cash_provider.dart';
+import '../../widgets/app_date_picker.dart';
 import '../../widgets/barrier_blur.dart';
 import '../../widgets/category_icon_badge.dart';
 import '../../widgets/rate_limit_dialog.dart';
@@ -296,28 +297,7 @@ class _SavingsGoalPageState extends State<SavingsGoalPage> {
       firstDate: DateTime(DateTime.now().year, DateTime.now().month, 1),
       lastDate: DateTime(DateTime.now().year + 30),
       helpText: 'Select target date',
-      builder: (context, child) {
-        return withBarrierBlur(
-          Theme(
-            data: Theme.of(context).copyWith(
-              colorScheme: const ColorScheme.light(
-                primary: Color(0xFF121212),
-                onPrimary: Colors.white,
-                surface: Colors.white,
-                onSurface: Color(0xFF121212),
-              ),
-              dialogTheme: const DialogThemeData(backgroundColor: Colors.white),
-              datePickerTheme: const DatePickerThemeData(
-                backgroundColor: Colors.white,
-                surfaceTintColor: Colors.transparent,
-                headerBackgroundColor: Colors.white,
-                headerForegroundColor: Color(0xFF121212),
-              ),
-            ),
-            child: child!,
-          ),
-        );
-      },
+      builder: appDatePickerBuilder,
     );
     if (picked == null || !context.mounted) return;
 

@@ -11,6 +11,7 @@ import '../providers/wallet_cash_provider.dart';
 import 'app_refresh_indicator.dart';
 import 'budget_modal.dart';
 import 'entry_title_with_icon.dart';
+import 'financial_hero_card.dart';
 import 'rate_limit_dialog.dart';
 import 'sensitive_action_auth.dart';
 
@@ -78,21 +79,23 @@ class _FinancialCategoryPageState extends State<FinancialCategoryPage> {
     };
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    // Keep today + yesterday visible; hide anything 2+ days old until "View more".
-    final recentCutoff = today.subtract(const Duration(days: 1));
+    final yesterday = today.subtract(const Duration(days: 1));
+    // Show entries from today and yesterday (by local calendar date).
+    // Older entries are collapsed behind the "View more" button.
     final recentEntries = <FinancialEntry>[];
     final olderEntries = <FinancialEntry>[];
     for (final entry in entries) {
       final local = entry.createdAt.toLocal();
       final day = DateTime(local.year, local.month, local.day);
-      if (day.isBefore(recentCutoff)) {
-        olderEntries.add(entry);
-      } else {
+      if (day == today || day == yesterday) {
         recentEntries.add(entry);
+      } else {
+        olderEntries.add(entry);
       }
     }
-    final visibleEntries =
-        _showOlderEntries ? [...recentEntries, ...olderEntries] : recentEntries;
+    final visibleEntries = _showOlderEntries
+        ? [...recentEntries, ...olderEntries]
+        : recentEntries;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -103,85 +106,52 @@ class _FinancialCategoryPageState extends State<FinancialCategoryPage> {
             padding: const EdgeInsets.fromLTRB(16, 20, 16, 108),
             child: Column(
               children: [
-                Container(
+                FinancialHeroCard(
                   height: 220,
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(28),
-                    gradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [Color(0xFF1A1A1A), Color(0xFF4A4A4A)],
-                    ),
-                  ),
-                  child: Stack(
-                    children: [
-                      Positioned(
-                        right: 20,
-                        top: 20,
-                        child: Opacity(
-                          opacity: 0.25,
-                          child: Icon(
-                            icon,
-                            size: 140,
-                            color: Colors.white,
-                          ),
-                        ),
+                  background: [
+                    Positioned(
+                      right: 20,
+                      top: 20,
+                      child: Opacity(
+                        opacity: 0.25,
+                        child: Icon(icon, size: 140, color: Colors.white),
                       ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(28, 24, 28, 24),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              title.toUpperCase(),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 26,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 2,
-                              ),
-                            ),
-                            const Spacer(),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    ),
+                  ],
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      FinancialHeroLabel(title.toUpperCase()),
+                      const Spacer(),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      currency.formatAmount(allocatedBalance),
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 40,
-                                        fontWeight: FontWeight.w800,
-                                        height: 1,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      '${percentage.toStringAsFixed(0)}% of Available Balance',
-                                      style: TextStyle(
-                                        color: Colors.grey.shade500,
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                  ],
+                                FinancialHeroAmount(
+                                  currency.formatAmount(allocatedBalance),
                                 ),
-                                IconButton.filledTonal(
-                                  onPressed: () => _openEditor(context),
-                                  icon: const Icon(Icons.remove),
-                                  color: Colors.white,
-                                  style: IconButton.styleFrom(
-                                    backgroundColor: Colors.white.withValues(
-                                      alpha: 0.12,
-                                    ),
-                                  ),
+                                const SizedBox(height: 8),
+                                FinancialHeroSubtitle(
+                                  '${percentage.toStringAsFixed(0)}% of Available Balance',
                                 ),
                               ],
                             ),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(width: 4),
+                          IconButton.filledTonal(
+                            onPressed: () => _openEditor(context),
+                            icon: const Icon(Icons.remove),
+                            color: Colors.white,
+                            style: IconButton.styleFrom(
+                              backgroundColor: Colors.white.withValues(
+                                alpha: 0.12,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                        ],
                       ),
                     ],
                   ),
@@ -553,9 +523,7 @@ class _EntryRowState extends State<_EntryRow> {
                       color: _refundColor,
                       icon: Icons.replay_rounded,
                       label: 'Refund',
-                      onTap: _busy
-                          ? null
-                          : () => _runAction(widget.onRefund!),
+                      onTap: _busy ? null : () => _runAction(widget.onRefund!),
                     ),
                   _SlideAction(
                     width: _actionsWidth / 2,
@@ -608,7 +576,8 @@ class _EntryRowState extends State<_EntryRow> {
                           Expanded(
                             child: EntryTitleWithIcon(
                               title: widget.entry.title,
-                              iconAsset: widget.entry.iconAsset ??
+                              iconAsset:
+                                  widget.entry.iconAsset ??
                                   SpendCategoryPresets.defaultIconAsset(
                                     widget.category,
                                   ),

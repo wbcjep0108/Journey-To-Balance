@@ -12,6 +12,7 @@ import '../../providers/budget_provider.dart';
 import '../../providers/currency_provider.dart';
 import '../../providers/loan_provider.dart';
 import '../../services/finance_api_service.dart';
+import '../../widgets/app_date_picker.dart';
 import '../../widgets/barrier_blur.dart';
 import '../../widgets/sensitive_action_auth.dart';
 import 'paid_loan_transactions_page.dart';
@@ -404,55 +405,7 @@ class _AddLoanDialogState extends State<_AddLoanDialog> {
       initialDate: existing ?? firstDate ?? DateTime.now(),
       firstDate: firstDate ?? DateTime(2020),
       lastDate: DateTime(2100),
-      builder: (context, child) {
-        return withBarrierBlur(
-          Theme(
-            data: ThemeData(
-              useMaterial3: true,
-              colorScheme: const ColorScheme.light(
-                primary: Color(0xFF121212),
-                onPrimary: Colors.white,
-                surface: Colors.white,
-                onSurface: Colors.black,
-                secondary: Color(0xFF121212),
-                onSecondary: Colors.white,
-              ),
-              datePickerTheme: DatePickerThemeData(
-                backgroundColor: Colors.white,
-                headerBackgroundColor: const Color(0xFF121212),
-                headerForegroundColor: Colors.white,
-                dayForegroundColor: WidgetStateProperty.resolveWith((states) {
-                  if (states.contains(WidgetState.selected)) {
-                    return Colors.white;
-                  }
-                  if (states.contains(WidgetState.disabled)) {
-                    return Colors.black38;
-                  }
-                  return Colors.black;
-                }),
-                dayBackgroundColor: WidgetStateProperty.resolveWith((states) {
-                  if (states.contains(WidgetState.selected)) {
-                    return const Color(0xFF121212);
-                  }
-                  return Colors.transparent;
-                }),
-                todayForegroundColor: const WidgetStatePropertyAll(Colors.black),
-                todayBackgroundColor: const WidgetStatePropertyAll(
-                  Colors.transparent,
-                ),
-                todayBorder: const BorderSide(color: Color(0xFF121212)),
-                confirmButtonStyle: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFF121212),
-                ),
-                cancelButtonStyle: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFF6B7280),
-                ),
-              ),
-            ),
-            child: child!,
-          ),
-        );
-      },
+      builder: appDatePickerBuilder,
     );
     if (picked == null || !mounted) return;
     setState(() {
@@ -1311,4 +1264,3 @@ class _InstallmentCard extends StatelessWidget {
     );
   }
 }
-

@@ -9,8 +9,10 @@ import '../../models/spend_category_option.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/currency_provider.dart';
 import '../../providers/planner_provider.dart';
+import '../../widgets/app_date_picker.dart';
 import '../../widgets/barrier_blur.dart';
 import '../../widgets/category_icon_badge.dart';
+import '../../widgets/financial_hero_card.dart';
 import '../../widgets/planner_progress_bar.dart';
 
 class BudgetPlannerPage extends StatefulWidget {
@@ -116,56 +118,7 @@ class _BudgetPlannerPageState extends State<BudgetPlannerPage> {
       firstDate: today,
       lastDate: DateTime(today.year + 10, 12, 31),
       helpText: 'Choose plan start date',
-      builder: (context, child) {
-        return withBarrierBlur(
-          Theme(
-            data: Theme.of(context).copyWith(
-              colorScheme: const ColorScheme.light(
-                primary: Color(0xFF121212),
-                onPrimary: Colors.white,
-                surface: Colors.white,
-                onSurface: Color(0xFF121212),
-              ),
-              dialogTheme: const DialogThemeData(backgroundColor: Colors.white),
-              datePickerTheme: DatePickerThemeData(
-                backgroundColor: Colors.white,
-                surfaceTintColor: Colors.transparent,
-                headerBackgroundColor: const Color(0xFF121212),
-                headerForegroundColor: Colors.white,
-                dayForegroundColor: WidgetStateProperty.resolveWith((states) {
-                  if (states.contains(WidgetState.selected)) {
-                    return Colors.white;
-                  }
-                  if (states.contains(WidgetState.disabled)) {
-                    return Colors.black38;
-                  }
-                  return const Color(0xFF121212);
-                }),
-                dayBackgroundColor: WidgetStateProperty.resolveWith((states) {
-                  if (states.contains(WidgetState.selected)) {
-                    return const Color(0xFF121212);
-                  }
-                  return Colors.transparent;
-                }),
-                todayForegroundColor: const WidgetStatePropertyAll(
-                  Color(0xFF121212),
-                ),
-                todayBackgroundColor: const WidgetStatePropertyAll(
-                  Colors.transparent,
-                ),
-                todayBorder: const BorderSide(color: Color(0xFF121212)),
-                confirmButtonStyle: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFF121212),
-                ),
-                cancelButtonStyle: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFF121212),
-                ),
-              ),
-            ),
-            child: child!,
-          ),
-        );
-      },
+      builder: appDatePickerBuilder,
     );
     if (picked != null && mounted) {
       setState(() => _start = DateUtils.dateOnly(picked));
@@ -580,46 +533,13 @@ class _HeroCard extends StatelessWidget {
         ? 'BUDGET FOR TODAY'
         : 'BUDGET PLAN';
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(24, 28, 24, 26),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF333333), Color(0xFF000000)],
-        ),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.14),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
+    return FinancialHeroCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            heading,
-            style: const TextStyle(
-              color: Color(0xFFD7DCE5),
-              fontSize: 13,
-              letterSpacing: 0.8,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
+          FinancialHeroLabel(heading),
           const SizedBox(height: 8),
-          Text(
-            totalLabel,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 42,
-              height: 1.05,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
+          FinancialHeroAmount(totalLabel),
           const SizedBox(height: 8),
           if (isPreview) ...[
             const Text(
@@ -633,10 +553,7 @@ class _HeroCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
           ],
-          Text(
-            status,
-            style: const TextStyle(color: Color(0xFFE2E6EC), fontSize: 16),
-          ),
+          FinancialHeroSubtitle(status),
           const SizedBox(height: 24),
           Row(
             children: [

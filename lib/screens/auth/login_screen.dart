@@ -278,9 +278,13 @@ class _SupportEmailDialogState extends State<_SupportEmailDialog> {
                   minLines: 5,
                   maxLines: 8,
                   textCapitalization: TextCapitalization.sentences,
+                  style: const TextStyle(color: Color(0xFF121212)),
                   decoration: const InputDecoration(
                     labelText: 'Message',
+                    labelStyle: TextStyle(color: Color(0xFF121212)),
+                    floatingLabelStyle: TextStyle(color: Color(0xFF121212)),
                     alignLabelWithHint: true,
+                    hintStyle: TextStyle(color: Color(0xFF121212)),
                     hintText:
                         'Tell us what happened when you tried to sign in…',
                     filled: true,
