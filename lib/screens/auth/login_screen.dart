@@ -1,4 +1,8 @@
+import 'dart:async';
+
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/auth_service.dart';
@@ -353,75 +357,1102 @@ class _SupportEmailDialogState extends State<_SupportEmailDialog> {
   }
 }
 
-class LoginScreen extends StatelessWidget {
-  const LoginScreen({super.key});
+bool isValidAuthEmail(String value) {
+  return RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(value.trim());
+}
+
+class LoginScreen extends StatefulWidget {
+  const LoginScreen({super.key, this.authService});
+
+  final AuthService? authService;
+
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _confirmController = TextEditingController();
+  final _emailFocus = FocusNode();
+  final _passwordFocus = FocusNode();
+  final _confirmFocus = FocusNode();
+  late final AuthService _auth;
+  bool _isSignUp = false;
+  bool _busy = false;
+  bool _showPassword = false;
+  bool _showConfirm = false;
+  bool _submitted = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _auth = widget.authService ?? AuthService();
+    _passwordController.addListener(_refresh);
+    _confirmController.addListener(_refresh);
+  }
+
+  void _refresh() {
+    if (mounted) setState(() => _error = null);
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController
+      ..removeListener(_refresh)
+      ..dispose();
+    _confirmController
+      ..removeListener(_refresh)
+      ..dispose();
+    _emailFocus.dispose();
+    _passwordFocus.dispose();
+    _confirmFocus.dispose();
+    super.dispose();
+  }
+
+  void _setMode(bool signUp) {
+    if (_busy || signUp == _isSignUp) return;
+    setState(() {
+      _isSignUp = signUp;
+      _submitted = false;
+      _error = null;
+      _confirmController.clear();
+    });
+  }
+
+  Future<void> _submit() async {
+    setState(() {
+      _submitted = true;
+      _error = null;
+    });
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _busy = true);
+    try {
+      final email = _emailController.text.trim();
+      final password = _passwordController.text;
+      if (_isSignUp) {
+        await _auth.createAccount(email, password);
+      } else {
+        await _auth.signInWithEmail(email, password);
+      }
+    } catch (error) {
+      if (mounted) setState(() => _error = friendlyAuthError(error));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _googleSignIn() async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await _auth.signInWithGoogle();
+    } catch (error) {
+      if (mounted) setState(() => _error = friendlyAuthError(error));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _forgotPassword() async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) => withBarrierBlur(
+        _ForgotPasswordDialog(
+          authService: _auth,
+          initialEmail: _emailController.text.trim(),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    final animationDuration = reduceMotion
+        ? Duration.zero
+        : const Duration(milliseconds: 180);
+
     return Scaffold(
-      backgroundColor: const Color.fromARGB(255, 255, 255, 255),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const BrandMark(size: 150),
-
-              const SizedBox(height: 40),
-
-              const Text(
-                "Journey to Balance",
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF000000),
-                  decoration: TextDecoration.none,
-                  decorationColor: Colors.transparent,
+      backgroundColor: Colors.white,
+      resizeToAvoidBottomInset: true,
+      body: SafeArea(
+        child: AutofillGroup(
+          child: SingleChildScrollView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 440),
+                child: Form(
+                  key: _formKey,
+                  autovalidateMode: _submitted
+                      ? AutovalidateMode.onUserInteraction
+                      : AutovalidateMode.disabled,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Center(child: BrandMark(size: 104)),
+                      const SizedBox(height: 22),
+                      const Text(
+                        'Journey to Balance',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 28,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF121212),
+                        ),
+                      ),
+                      const SizedBox(height: 7),
+                      const Text(
+                        'Sign in to sync your money everywhere.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF737983),
+                        ),
+                      ),
+                      const SizedBox(height: 28),
+                      _ModeToggle(
+                        isSignUp: _isSignUp,
+                        enabled: !_busy,
+                        duration: reduceMotion
+                            ? Duration.zero
+                            : const Duration(milliseconds: 260),
+                        onChanged: _setMode,
+                      ),
+                      const SizedBox(height: 24),
+                      _AuthField(
+                        key: const ValueKey('email-field'),
+                        label: 'Email',
+                        controller: _emailController,
+                        focusNode: _emailFocus,
+                        enabled: !_busy,
+                        keyboardType: TextInputType.emailAddress,
+                        textInputAction: TextInputAction.next,
+                        autofillHints: const [AutofillHints.email],
+                        onSubmitted: (_) => _passwordFocus.requestFocus(),
+                        validator: (value) => isValidAuthEmail(value ?? '')
+                            ? null
+                            : 'Enter a valid email address.',
+                      ),
+                      const SizedBox(height: 16),
+                      _AuthField(
+                        key: const ValueKey('password-field'),
+                        label: 'Password',
+                        controller: _passwordController,
+                        focusNode: _passwordFocus,
+                        enabled: !_busy,
+                        obscureText: !_showPassword,
+                        textInputAction: _isSignUp
+                            ? TextInputAction.next
+                            : TextInputAction.done,
+                        autofillHints: [
+                          _isSignUp
+                              ? AutofillHints.newPassword
+                              : AutofillHints.password,
+                        ],
+                        suffixIcon: IconButton(
+                          tooltip: _showPassword
+                              ? 'Hide password'
+                              : 'Show password',
+                          onPressed: _busy
+                              ? null
+                              : () => setState(
+                                  () => _showPassword = !_showPassword,
+                                ),
+                          icon: Icon(
+                            _showPassword
+                                ? Icons.visibility_off_outlined
+                                : Icons.visibility_outlined,
+                          ),
+                        ),
+                        onSubmitted: (_) => _isSignUp
+                            ? _confirmFocus.requestFocus()
+                            : _submit(),
+                        validator: (value) => (value ?? '').length >= 8
+                            ? null
+                            : 'Password must be at least 8 characters.',
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 7, left: 14),
+                        child: Text(
+                          'Use at least 8 characters.',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: _passwordController.text.length >= 8
+                                ? const Color(0xFF16803A)
+                                : const Color(0xFF737983),
+                          ),
+                        ),
+                      ),
+                      AnimatedSwitcher(
+                        duration: animationDuration,
+                        transitionBuilder: (child, animation) => FadeTransition(
+                          opacity: animation,
+                          child: SizeTransition(
+                            sizeFactor: animation,
+                            alignment: Alignment.topLeft,
+                            child: child,
+                          ),
+                        ),
+                        child: _isSignUp
+                            ? Padding(
+                                key: const ValueKey('confirm-password-field'),
+                                padding: const EdgeInsets.only(top: 16),
+                                child: _AuthField(
+                                  label: 'Confirm password',
+                                  controller: _confirmController,
+                                  focusNode: _confirmFocus,
+                                  enabled: !_busy,
+                                  obscureText: !_showConfirm,
+                                  textInputAction: TextInputAction.done,
+                                  autofillHints: const [
+                                    AutofillHints.newPassword,
+                                  ],
+                                  suffixIcon: IconButton(
+                                    tooltip: _showConfirm
+                                        ? 'Hide password'
+                                        : 'Show password',
+                                    onPressed: _busy
+                                        ? null
+                                        : () => setState(
+                                            () => _showConfirm = !_showConfirm,
+                                          ),
+                                    icon: Icon(
+                                      _showConfirm
+                                          ? Icons.visibility_off_outlined
+                                          : Icons.visibility_outlined,
+                                    ),
+                                  ),
+                                  onSubmitted: (_) => _submit(),
+                                  validator: (value) =>
+                                      value == _passwordController.text
+                                      ? null
+                                      : 'Passwords do not match.',
+                                ),
+                              )
+                            : Align(
+                                key: const ValueKey('forgot-password-link'),
+                                alignment: Alignment.centerRight,
+                                child: TextButton(
+                                  onPressed: _busy ? null : _forgotPassword,
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: const Color(0xFF25282D),
+                                  ),
+                                  child: const Text('Forgot password?'),
+                                ),
+                              ),
+                      ),
+                      AnimatedSwitcher(
+                        duration: animationDuration,
+                        child: _error == null
+                            ? const SizedBox.shrink()
+                            : Padding(
+                                key: ValueKey(_error),
+                                padding: const EdgeInsets.only(top: 12),
+                                child: Text(
+                                  _error!,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                    color: Color(0xFFDC2626),
+                                  ),
+                                ),
+                              ),
+                      ),
+                      const SizedBox(height: 18),
+                      SizedBox(
+                        height: 52,
+                        child: FilledButton(
+                          key: const ValueKey('primary-auth-button'),
+                          onPressed: _busy ? null : _submit,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFF121212),
+                            foregroundColor: Colors.white,
+                            disabledBackgroundColor: const Color(0xFF4B4B4B),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(30),
+                            ),
+                          ),
+                          child: _busy
+                              ? const SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : Text(
+                                  _isSignUp ? 'Create account' : 'Log in',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      const Row(
+                        children: [
+                          Expanded(child: Divider(color: Color(0xFFE2E4E8))),
+                          Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 12),
+                            child: Text(
+                              'or',
+                              style: TextStyle(color: Color(0xFF737983)),
+                            ),
+                          ),
+                          Expanded(child: Divider(color: Color(0xFFE2E4E8))),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        height: 52,
+                        child: OutlinedButton.icon(
+                          onPressed: _busy ? null : _googleSignIn,
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF121212),
+                            side: const BorderSide(color: Color(0xFFCED1D6)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(30),
+                            ),
+                          ),
+                          icon: Image.asset(
+                            'assets/images/google.png',
+                            width: 22,
+                            height: 22,
+                          ),
+                          label: const Text(
+                            'Continue with Google',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Center(
+                        child: TextButton(
+                          onPressed: _busy
+                              ? null
+                              : () => _showSignInHelp(context),
+                          style: TextButton.styleFrom(
+                            foregroundColor: const Color(0xFF737983),
+                          ),
+                          child: const Text(
+                            'Having trouble signing in?',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-
-              const SizedBox(height: 50),
-
-              SizedBox(
-                width: double.infinity,
-                height: 55,
-                child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    foregroundColor: const Color(0xFF121212),
-                    backgroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  icon: Image.asset('assets/images/google.png', width: 24),
-                  label: const Text(
-                    "Continue with Google",
-                    style: TextStyle(fontSize: 16, color: Colors.black),
-                  ),
-                  onPressed: () => _signInWithGoogle(context),
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextButton(
-                onPressed: () => _showSignInHelp(context),
-                style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFF6B7280),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                ),
-                child: const Text(
-                  'Having trouble signing in?',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ModeToggle extends StatelessWidget {
+  const _ModeToggle({
+    required this.isSignUp,
+    required this.enabled,
+    required this.duration,
+    required this.onChanged,
+  });
+
+  final bool isSignUp;
+  final bool enabled;
+  final Duration duration;
+  final ValueChanged<bool> onChanged;
+
+  void _select(bool signUp) {
+    if (!enabled || signUp == isSignUp) return;
+    HapticFeedback.selectionClick();
+    onChanged(signUp);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(6),
+      height: 60,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F2F4),
+        borderRadius: BorderRadius.circular(30),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final optionWidth = constraints.maxWidth / 2;
+          return Stack(
+            clipBehavior: Clip.none,
+            children: [
+              AnimatedPositioned(
+                duration: duration,
+                curve: const Cubic(0.18, 1.12, 0.32, 1),
+                left: isSignUp ? optionWidth : 0,
+                top: 0,
+                bottom: 0,
+                width: optionWidth,
+                child: Transform.translate(
+                  offset: const Offset(0, -3),
+                  child: Transform.scale(
+                    scale: 1.05,
+                    child: DecoratedBox(
+                      key: const ValueKey('selected-mode-pill'),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF121212),
+                        borderRadius: BorderRadius.circular(30),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.22),
+                            blurRadius: 16,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Row(
+                children: [
+                  Expanded(
+                    child: _ModeOption(
+                      key: const ValueKey('login-toggle'),
+                      label: 'Log in',
+                      selected: !isSignUp,
+                      enabled: enabled,
+                      duration: duration == Duration.zero
+                          ? Duration.zero
+                          : const Duration(milliseconds: 180),
+                      onTap: () => _select(false),
+                    ),
+                  ),
+                  Expanded(
+                    child: _ModeOption(
+                      key: const ValueKey('signup-toggle'),
+                      label: 'Sign up',
+                      selected: isSignUp,
+                      enabled: enabled,
+                      duration: duration == Duration.zero
+                          ? Duration.zero
+                          : const Duration(milliseconds: 180),
+                      onTap: () => _select(true),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ModeOption extends StatelessWidget {
+  const _ModeOption({
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.enabled,
+    required this.duration,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final bool enabled;
+  final Duration duration;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: label,
+      child: ExcludeSemantics(
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: enabled ? onTap : null,
+            borderRadius: BorderRadius.circular(30),
+            child: Center(
+              child: AnimatedSwitcher(
+                duration: duration,
+                transitionBuilder: (child, animation) =>
+                    FadeTransition(opacity: animation, child: child),
+                child: Text(
+                  label,
+                  key: ValueKey(selected),
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 15,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                    color: selected ? Colors.white : const Color(0xFF737983),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AuthField extends StatelessWidget {
+  const _AuthField({
+    super.key,
+    required this.label,
+    required this.controller,
+    required this.focusNode,
+    required this.enabled,
+    required this.textInputAction,
+    required this.autofillHints,
+    required this.validator,
+    this.keyboardType,
+    this.obscureText = false,
+    this.suffixIcon,
+    this.onSubmitted,
+  });
+
+  final String label;
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final bool enabled;
+  final TextInputType? keyboardType;
+  final bool obscureText;
+  final TextInputAction textInputAction;
+  final List<String> autofillHints;
+  final Widget? suffixIcon;
+  final ValueChanged<String>? onSubmitted;
+  final FormFieldValidator<String> validator;
+
+  @override
+  Widget build(BuildContext context) {
+    const border = OutlineInputBorder(
+      borderRadius: BorderRadius.all(Radius.circular(30)),
+      borderSide: BorderSide(color: Color(0xFFE2E4E8)),
+    );
+    return TextFormField(
+      controller: controller,
+      focusNode: focusNode,
+      enabled: enabled,
+      keyboardType: keyboardType,
+      obscureText: obscureText,
+      textInputAction: textInputAction,
+      autofillHints: autofillHints,
+      autocorrect: false,
+      enableSuggestions: !obscureText,
+      onFieldSubmitted: onSubmitted,
+      validator: validator,
+      style: const TextStyle(
+        color: Color(0xFF121212),
+        fontWeight: FontWeight.w600,
+      ),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: const TextStyle(color: Color(0xFF737983)),
+        filled: true,
+        fillColor: Colors.white,
+        suffixIcon: suffixIcon,
+        border: border,
+        enabledBorder: border,
+        disabledBorder: border,
+        focusedBorder: const OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(30)),
+          borderSide: BorderSide(color: Color(0xFF25282D), width: 1.2),
+        ),
+        errorBorder: const OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(30)),
+          borderSide: BorderSide(color: Color(0xFFDC2626)),
+        ),
+        focusedErrorBorder: const OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(30)),
+          borderSide: BorderSide(color: Color(0xFFDC2626), width: 1.2),
+        ),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 20,
+          vertical: 17,
+        ),
+      ),
+    );
+  }
+}
+
+class _ForgotPasswordDialog extends StatefulWidget {
+  const _ForgotPasswordDialog({
+    required this.authService,
+    required this.initialEmail,
+  });
+
+  final AuthService authService;
+  final String initialEmail;
+
+  @override
+  State<_ForgotPasswordDialog> createState() => _ForgotPasswordDialogState();
+}
+
+class _ForgotPasswordDialogState extends State<_ForgotPasswordDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _emailFocus = FocusNode();
+  late final TextEditingController _emailController;
+  Timer? _resendTimer;
+  bool _busy = false;
+  bool _sent = false;
+  int _resendSeconds = 0;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _emailController = TextEditingController(text: widget.initialEmail);
+  }
+
+  @override
+  void dispose() {
+    _resendTimer?.cancel();
+    _emailController.dispose();
+    _emailFocus.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    if (!_formKey.currentState!.validate() || _busy) return;
+    await _requestReset();
+  }
+
+  Future<void> _resend() async {
+    if (_busy || _resendSeconds > 0) return;
+    await _requestReset();
+  }
+
+  Future<void> _requestReset() async {
+    setState(() => _busy = true);
+    try {
+      await widget.authService.sendPasswordResetEmail(
+        _emailController.text.trim(),
+      );
+    } catch (error) {
+      final message = _resetErrorMessage(error);
+      if (message != null) {
+        if (!mounted) return;
+        setState(() {
+          _busy = false;
+          _sent = false;
+          _error = message;
+        });
+        return;
+      }
+    }
+    if (!mounted) return;
+    _showSuccess();
+  }
+
+  String? _resetErrorMessage(Object error) {
+    if (error is! FirebaseAuthException) return null;
+    switch (error.code) {
+      case 'too-many-requests':
+        return 'Too many attempts. Please try again later.';
+      case 'network-request-failed':
+      case 'network-error':
+        return 'No internet connection.';
+      default:
+        return null;
+    }
+  }
+
+  void _showSuccess() {
+    _resendTimer?.cancel();
+    setState(() {
+      _busy = false;
+      _sent = true;
+      _error = null;
+      _resendSeconds = 30;
+    });
+    _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_resendSeconds <= 1) {
+        timer.cancel();
+        setState(() => _resendSeconds = 0);
+      } else {
+        setState(() => _resendSeconds--);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dialog = Semantics(
+      label: 'Reset password',
+      child: PopScope(
+        canPop: !_busy,
+        child: Dialog(
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 24,
+          ),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: 360,
+              maxHeight: MediaQuery.sizeOf(context).height * 0.88,
+            ),
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.12),
+                    blurRadius: 24,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: SingleChildScrollView(
+                      child: _sent ? _successContent() : _formContent(),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  _sent ? _doneButton() : _formButtons(),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (MediaQuery.disableAnimationsOf(context)) return dialog;
+    return TweenAnimationBuilder<double>(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
+      tween: Tween(begin: 0.96, end: 1),
+      builder: (context, value, child) => Opacity(
+        opacity: ((value - 0.96) / 0.04).clamp(0.0, 1.0),
+        child: Transform.scale(scale: value, child: child),
+      ),
+      child: dialog,
+    );
+  }
+
+  Widget _formContent() {
+    return Form(
+      key: _formKey,
+      child: Column(
+        children: [
+          _resetIcon(
+            backgroundColor: Colors.white,
+            borderColor: const Color(0xFFE5E7EB),
+            icon: Icons.lock_reset_outlined,
+            iconColor: const Color(0xFF121212),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Reset password',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF121212),
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Enter your email and we\'ll send you a link to reset your password.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              height: 1.5,
+              color: Color(0xFF25282D),
+            ),
+          ),
+          const SizedBox(height: 20),
+          TextFormField(
+            key: const ValueKey('reset-email-field'),
+            controller: _emailController,
+            focusNode: _emailFocus,
+            enabled: !_busy,
+            autofocus: true,
+            keyboardType: TextInputType.emailAddress,
+            textInputAction: TextInputAction.done,
+            autofillHints: const [AutofillHints.email],
+            autocorrect: false,
+            onChanged: (_) {
+              if (_error != null) setState(() => _error = null);
+            },
+            onFieldSubmitted: (_) => _send(),
+            validator: (value) => isValidAuthEmail(value ?? '')
+                ? null
+                : 'Enter a valid email address.',
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              color: Color(0xFF121212),
+              fontWeight: FontWeight.w600,
+            ),
+            decoration: InputDecoration(
+              labelText: 'Email',
+              labelStyle: const TextStyle(color: Color(0xFF737983)),
+              filled: true,
+              fillColor: Colors.white,
+              errorStyle: const TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFFDC2626),
+              ),
+              border: _resetFieldBorder(const Color(0xFFE2E4E8)),
+              enabledBorder: _resetFieldBorder(const Color(0xFFE2E4E8)),
+              disabledBorder: _resetFieldBorder(const Color(0xFFE2E4E8)),
+              focusedBorder: _resetFieldBorder(
+                const Color(0xFF25282D),
+                width: 1.2,
+              ),
+              errorBorder: _resetFieldBorder(const Color(0xFFDC2626)),
+              focusedErrorBorder: _resetFieldBorder(
+                const Color(0xFFDC2626),
+                width: 1.2,
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 20,
+                vertical: 17,
+              ),
+            ),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 7),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.only(left: 14),
+                child: Text(
+                  _error!,
+                  key: const ValueKey('reset-request-error'),
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFFDC2626),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _successContent() {
+    final resendLabel = _resendSeconds > 0
+        ? 'Resend in ${_resendSeconds}s'
+        : 'Resend link';
+    return Column(
+      children: [
+        _resetIcon(
+          backgroundColor: const Color(0xFFF1F2F4),
+          icon: Icons.check_rounded,
+          iconColor: const Color(0xFF121212),
+        ),
+        const SizedBox(height: 16),
+        const Text(
+          'Check your inbox',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 20,
+            fontWeight: FontWeight.w800,
+            color: Color(0xFF121212),
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'If an account exists for that email, a reset link is on its way.',
+          key: ValueKey('reset-success-message'),
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            height: 1.5,
+            color: Color(0xFF25282D),
+          ),
+        ),
+        const SizedBox(height: 14),
+        const Text(
+          'Can\'t find it? Check your spam folder.',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: Color(0xFF737983),
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextButton(
+          key: const ValueKey('reset-resend-button'),
+          onPressed: _busy || _resendSeconds > 0 ? null : _resend,
+          style: TextButton.styleFrom(
+            foregroundColor: const Color(0xFF121212),
+            minimumSize: const Size(48, 48),
+          ),
+          child: Text(
+            resendLabel,
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _formButtons() {
+    const textStyle = TextStyle(
+      fontFamily: 'Inter',
+      fontSize: 15,
+      fontWeight: FontWeight.w700,
+    );
+    return Row(
+      children: [
+        Expanded(
+          child: SizedBox(
+            height: 48,
+            child: OutlinedButton(
+              key: const ValueKey('reset-cancel-button'),
+              onPressed: _busy ? null : () => Navigator.pop(context),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF121212),
+                side: const BorderSide(color: Color(0xFFE5E7EB)),
+                shape: const StadiumBorder(),
+                padding: EdgeInsets.zero,
+              ),
+              child: const Text('Cancel', style: textStyle),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: SizedBox(
+            height: 48,
+            child: FilledButton(
+              key: const ValueKey('reset-send-button'),
+              onPressed: _busy ? null : _send,
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF121212),
+                foregroundColor: Colors.white,
+                shape: const StadiumBorder(),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+              ),
+              child: _busy
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        'Send reset link',
+                        maxLines: 1,
+                        style: textStyle,
+                      ),
+                    ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _doneButton() {
+    return SizedBox(
+      width: double.infinity,
+      height: 52,
+      child: FilledButton(
+        key: const ValueKey('reset-done-button'),
+        onPressed: _busy ? null : () => Navigator.pop(context),
+        style: FilledButton.styleFrom(
+          backgroundColor: const Color(0xFF121212),
+          foregroundColor: Colors.white,
+          shape: const StadiumBorder(),
+        ),
+        child: const Text(
+          'Done',
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _resetIcon({
+    required Color backgroundColor,
+    required IconData icon,
+    required Color iconColor,
+    Color? borderColor,
+  }) {
+    return Container(
+      width: 56,
+      height: 56,
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        shape: BoxShape.circle,
+        border: borderColor == null ? null : Border.all(color: borderColor),
+      ),
+      child: Icon(icon, size: 28, color: iconColor),
+    );
+  }
+
+  OutlineInputBorder _resetFieldBorder(Color color, {double width = 1}) {
+    return OutlineInputBorder(
+      borderRadius: const BorderRadius.all(Radius.circular(30)),
+      borderSide: BorderSide(color: color, width: width),
     );
   }
 }

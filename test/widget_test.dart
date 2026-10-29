@@ -3,6 +3,35 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:just_budget/models/financial_entry.dart';
 import 'package:just_budget/models/spend_category_option.dart';
 import 'package:just_budget/screens/auth/login_screen.dart';
+import 'package:just_budget/services/auth_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
+class _WidgetTestAuthService implements AuthService {
+  @override
+  User? get currentUser => null;
+  @override
+  bool get usesGoogleProvider => false;
+  @override
+  bool get usesPasswordProvider => true;
+  @override
+  Future<UserCredential> createAccount(String email, String password) =>
+      throw UnimplementedError();
+  @override
+  Future<void> reauthenticateWithGoogle() async {}
+  @override
+  Future<void> reauthenticateWithPassword(String password) async {}
+  @override
+  Future<void> resendVerificationEmail() async {}
+  @override
+  Future<void> sendPasswordResetEmail(String email) async {}
+  @override
+  Future<UserCredential> signInWithEmail(String email, String password) =>
+      throw UnimplementedError();
+  @override
+  Future<User?> signInWithGoogle() async => null;
+  @override
+  Future<void> signOut() async {}
+}
 
 void main() {
   test('financial entry copy preserves identity and creation time', () {
@@ -55,9 +84,13 @@ void main() {
   testWidgets('sign-in help button opens troubleshooting dialog', (
     tester,
   ) async {
-    await tester.pumpWidget(const MaterialApp(home: LoginScreen()));
+    await tester.pumpWidget(
+      MaterialApp(home: LoginScreen(authService: _WidgetTestAuthService())),
+    );
 
-    await tester.tap(find.text('Having trouble signing in?'));
+    final helpLink = find.text('Having trouble signing in?');
+    await tester.ensureVisible(helpLink);
+    await tester.tap(helpLink);
     await tester.pumpAndSettle();
 
     expect(find.text('Sign-in help'), findsOneWidget);

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/app_lock_provider.dart';
+import '../services/auth_service.dart';
 import 'barrier_blur.dart';
 import 'pin_digit_boxes.dart';
 import 'security_ui.dart';
@@ -26,6 +27,174 @@ Future<bool> showSensitiveActionAuth({
     ),
   );
   return result == true;
+}
+
+/// Performs Firebase recent-login confirmation for destructive account
+/// operations. Password accounts enter their password; Google-only accounts
+/// keep using the Google account picker.
+Future<bool> showFirebaseReauthentication({
+  required BuildContext context,
+  AuthService? authService,
+}) async {
+  final service = authService ?? AuthService();
+  final result = await showDialog<bool>(
+    context: context,
+    builder: (context) =>
+        withBarrierBlur(_FirebaseReauthenticationDialog(authService: service)),
+  );
+  return result == true;
+}
+
+class _FirebaseReauthenticationDialog extends StatefulWidget {
+  const _FirebaseReauthenticationDialog({required this.authService});
+
+  final AuthService authService;
+
+  @override
+  State<_FirebaseReauthenticationDialog> createState() =>
+      _FirebaseReauthenticationDialogState();
+}
+
+class _FirebaseReauthenticationDialogState
+    extends State<_FirebaseReauthenticationDialog> {
+  final _passwordController = TextEditingController();
+  bool _busy = false;
+  bool _showPassword = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _confirm() async {
+    if (_busy) return;
+    if (widget.authService.usesPasswordProvider &&
+        _passwordController.text.isEmpty) {
+      setState(() => _error = 'Enter your password.');
+      return;
+    }
+
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      if (widget.authService.usesPasswordProvider) {
+        await widget.authService.reauthenticateWithPassword(
+          _passwordController.text,
+        );
+      } else {
+        await widget.authService.reauthenticateWithGoogle();
+      }
+      if (mounted) Navigator.pop(context, true);
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _error = friendlyAuthError(error);
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final usePassword = widget.authService.usesPasswordProvider;
+    return AlertDialog(
+      backgroundColor: Colors.white,
+      surfaceTintColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      title: const Text(
+        'Confirm it is you',
+        style: TextStyle(fontWeight: FontWeight.w800),
+      ),
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 400),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              usePassword
+                  ? 'Enter your password to continue.'
+                  : 'Continue with Google to confirm your identity.',
+              style: const TextStyle(color: Color(0xFF737983)),
+            ),
+            if (usePassword) ...[
+              const SizedBox(height: 16),
+              TextField(
+                key: const ValueKey('reauth-password-field'),
+                controller: _passwordController,
+                enabled: !_busy,
+                obscureText: !_showPassword,
+                autofillHints: const [AutofillHints.password],
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _confirm(),
+                decoration: InputDecoration(
+                  labelText: 'Password',
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                  suffixIcon: IconButton(
+                    onPressed: _busy
+                        ? null
+                        : () => setState(() => _showPassword = !_showPassword),
+                    icon: Icon(
+                      _showPassword
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+            if (_error != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                _error!,
+                style: const TextStyle(
+                  color: Color(0xFFDC2626),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _busy ? null : () => Navigator.pop(context, false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const ValueKey('reauth-confirm-button'),
+          onPressed: _busy ? null : _confirm,
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xFF121212),
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(30),
+            ),
+          ),
+          child: _busy
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : Text(usePassword ? 'Confirm' : 'Continue with Google'),
+        ),
+      ],
+    );
+  }
 }
 
 class _SensitiveActionAuthSheet extends StatefulWidget {

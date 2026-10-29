@@ -26,6 +26,7 @@ class AccountPage extends StatefulWidget {
 
 class _AccountPageState extends State<AccountPage> {
   bool _isSigningOut = false;
+  bool _isResendingVerification = false;
 
   Future<void> _signOut() async {
     if (_isSigningOut) return;
@@ -44,6 +45,27 @@ class _AccountPageState extends State<AccountPage> {
         const SnackBar(content: Text('Sign out failed. Please try again.')),
       );
       setState(() => _isSigningOut = false);
+    }
+  }
+
+  Future<void> _resendVerification() async {
+    if (_isResendingVerification) return;
+    setState(() => _isResendingVerification = true);
+    try {
+      await AuthService().resendVerificationEmail();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Verification email sent.')));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not send the email. Please try again.'),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isResendingVerification = false);
     }
   }
 
@@ -115,6 +137,13 @@ class _AccountPageState extends State<AccountPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (user != null && !user.emailVerified) ...[
+                _VerificationBanner(
+                  isSending: _isResendingVerification,
+                  onResend: _resendVerification,
+                ),
+                const SizedBox(height: 12),
+              ],
               Expanded(
                 child: Center(
                   child: SingleChildScrollView(
@@ -152,6 +181,49 @@ class _AccountPageState extends State<AccountPage> {
   }
 }
 
+class _VerificationBanner extends StatelessWidget {
+  const _VerificationBanner({required this.isSending, required this.onResend});
+
+  final bool isSending;
+  final VoidCallback onResend;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 10, 8, 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF7ED),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFFED7AA)),
+      ),
+      child: Row(
+        children: [
+          const Expanded(
+            child: Text(
+              'Verify your email',
+              style: TextStyle(
+                color: Color(0xFF25282D),
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: isSending ? null : onResend,
+            child: isSending
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('Resend'),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _AccountCard extends StatelessWidget {
   const _AccountCard({
