@@ -1,11 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/auth_service.dart';
 import '../../services/finance_api_service.dart';
+import '../../services/legal_acceptance_service.dart';
 import '../../widgets/barrier_blur.dart';
 import '../../widgets/security_ui.dart';
+import '../legal/legal_agreement_text.dart';
 import 'login_layout_constants.dart';
 import 'password_reset_screen.dart';
 
@@ -405,10 +409,16 @@ bool isValidAuthEmail(String value) {
 }
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key, this.authService, this.passwordResetApi});
+  const LoginScreen({
+    super.key,
+    this.authService,
+    this.passwordResetApi,
+    this.legalAcceptanceService,
+  });
 
   final AuthService? authService;
   final PasswordResetApi? passwordResetApi;
+  final LegalAcceptanceService? legalAcceptanceService;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -423,11 +433,16 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordFocus = FocusNode();
   final _confirmFocus = FocusNode();
   late final AuthService _auth;
+  LegalAcceptanceService? _createdLegalAcceptance;
   bool _isSignUp = false;
   bool _busy = false;
   bool _showPassword = false;
   bool _showConfirm = false;
   bool _submitted = false;
+  bool _termsAgreed = false;
+  bool _termsError = false;
+  bool _termsHighlighted = false;
+  Timer? _termsHighlightTimer;
   String? _error;
 
   @override
@@ -438,12 +453,18 @@ class _LoginScreenState extends State<LoginScreen> {
     _confirmController.addListener(_refresh);
   }
 
+  LegalAcceptanceService get _legalAcceptance {
+    return widget.legalAcceptanceService ??
+        (_createdLegalAcceptance ??= LegalAcceptanceService());
+  }
+
   void _refresh() {
     if (mounted) setState(() => _error = null);
   }
 
   @override
   void dispose() {
+    _termsHighlightTimer?.cancel();
     _emailController.dispose();
     _passwordController
       ..removeListener(_refresh)
@@ -463,11 +484,41 @@ class _LoginScreenState extends State<LoginScreen> {
       _isSignUp = signUp;
       _submitted = false;
       _error = null;
+      _termsAgreed = false;
+      _termsError = false;
+      _termsHighlighted = false;
       _confirmController.clear();
     });
   }
 
+  void _setTermsAgreed(bool value) {
+    setState(() {
+      _termsAgreed = value;
+      if (value) _termsError = false;
+    });
+  }
+
+  void _showTermsRequired() {
+    if (!_isSignUp || _termsAgreed) return;
+    _termsHighlightTimer?.cancel();
+    setState(() {
+      _termsError = true;
+      _termsHighlighted = true;
+    });
+    if (MediaQuery.disableAnimationsOf(context)) {
+      setState(() => _termsHighlighted = false);
+      return;
+    }
+    _termsHighlightTimer = Timer(const Duration(milliseconds: 180), () {
+      if (mounted) setState(() => _termsHighlighted = false);
+    });
+  }
+
   Future<void> _submit() async {
+    if (_isSignUp && !_termsAgreed) {
+      _showTermsRequired();
+      return;
+    }
     setState(() {
       _submitted = true;
       _error = null;
@@ -479,7 +530,11 @@ class _LoginScreenState extends State<LoginScreen> {
       final email = _emailController.text.trim();
       final password = _passwordController.text;
       if (_isSignUp) {
-        await _auth.createAccount(email, password);
+        final credential = await _auth.createAccount(email, password);
+        final user = credential.user;
+        if (user != null) {
+          unawaited(_legalAcceptance.acceptCurrentVersion(user.uid));
+        }
       } else {
         await _auth.signInWithEmail(email, password);
       }
@@ -492,12 +547,20 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _googleSignIn() async {
     if (_busy) return;
+    if (_isSignUp && !_termsAgreed) {
+      _showTermsRequired();
+      return;
+    }
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      await _auth.signInWithGoogle();
+      final credential = await _auth.signInWithGoogle();
+      final user = credential?.user;
+      if (_isSignUp && user != null) {
+        unawaited(_legalAcceptance.acceptCurrentVersion(user.uid));
+      }
     } catch (error) {
       if (mounted) setState(() => _error = friendlyAuthError(error));
     } finally {
@@ -706,6 +769,29 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       AnimatedSwitcher(
                         duration: animationDuration,
+                        transitionBuilder: (child, animation) => FadeTransition(
+                          opacity: animation,
+                          child: SizeTransition(
+                            sizeFactor: animation,
+                            alignment: Alignment.topLeft,
+                            child: child,
+                          ),
+                        ),
+                        child: _isSignUp
+                            ? Padding(
+                                key: const ValueKey('terms-consent-row'),
+                                padding: const EdgeInsets.only(top: 12),
+                                child: _TermsConsentRow(
+                                  agreed: _termsAgreed,
+                                  highlighted: _termsHighlighted,
+                                  showError: _termsError,
+                                  onChanged: _setTermsAgreed,
+                                ),
+                              )
+                            : const SizedBox.shrink(),
+                      ),
+                      AnimatedSwitcher(
+                        duration: animationDuration,
                         child: _error == null
                             ? const SizedBox.shrink()
                             : Padding(
@@ -724,36 +810,39 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                       ),
                       const SizedBox(height: kLoginFieldButtonGap),
-                      SizedBox(
-                        height: kLoginPrimaryButtonHeight,
-                        child: FilledButton(
-                          key: const ValueKey('primary-auth-button'),
-                          onPressed: _busy ? null : _submit,
-                          style: FilledButton.styleFrom(
-                            backgroundColor: const Color(0xFF121212),
-                            foregroundColor: Colors.white,
-                            disabledBackgroundColor: const Color(0xFF4B4B4B),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(
-                                kLoginButtonRadius,
+                      Opacity(
+                        opacity: _isSignUp && !_termsAgreed ? 0.5 : 1,
+                        child: SizedBox(
+                          height: kLoginPrimaryButtonHeight,
+                          child: FilledButton(
+                            key: const ValueKey('primary-auth-button'),
+                            onPressed: _busy ? null : _submit,
+                            style: FilledButton.styleFrom(
+                              backgroundColor: const Color(0xFF121212),
+                              foregroundColor: Colors.white,
+                              disabledBackgroundColor: const Color(0xFF4B4B4B),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(
+                                  kLoginButtonRadius,
+                                ),
                               ),
                             ),
+                            child: _busy
+                                ? const SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : Text(
+                                    _isSignUp ? 'Create account' : 'Log in',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
                           ),
-                          child: _busy
-                              ? const SizedBox(
-                                  width: 22,
-                                  height: 22,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2.2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : Text(
-                                  _isSignUp ? 'Create account' : 'Log in',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
                         ),
                       ),
                       const SizedBox(height: kLoginButtonDividerGap),
@@ -773,31 +862,43 @@ class _LoginScreenState extends State<LoginScreen> {
                         ],
                       ),
                       const SizedBox(height: kLoginDividerGoogleGap),
-                      SizedBox(
-                        height: kLoginGoogleButtonHeight,
-                        child: OutlinedButton.icon(
-                          onPressed: _busy ? null : _googleSignIn,
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF121212),
-                            side: const BorderSide(color: Color(0xFFCED1D6)),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(
-                                kLoginButtonRadius,
+                      Opacity(
+                        opacity: _isSignUp && !_termsAgreed ? 0.5 : 1,
+                        child: SizedBox(
+                          height: kLoginGoogleButtonHeight,
+                          child: OutlinedButton.icon(
+                            onPressed: _busy ? null : _googleSignIn,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF121212),
+                              side: const BorderSide(color: Color(0xFFCED1D6)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(
+                                  kLoginButtonRadius,
+                                ),
                               ),
                             ),
-                          ),
-                          icon: Image.asset(
-                            'assets/images/google.png',
-                            width: 22,
-                            height: 22,
-                          ),
-                          label: const Text(
-                            'Continue with Google',
-                            style: TextStyle(fontWeight: FontWeight.w600),
+                            icon: Image.asset(
+                              'assets/images/google.png',
+                              width: 22,
+                              height: 22,
+                            ),
+                            label: const Text(
+                              'Continue with Google',
+                              style: TextStyle(fontWeight: FontWeight.w600),
+                            ),
                           ),
                         ),
                       ),
                       const SizedBox(height: kLoginGoogleTermsGap),
+                      if (!_isSignUp)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 6),
+                          child: LegalAgreementText(
+                            signUp: false,
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      if (!_isSignUp) const SizedBox(height: 4),
                       Center(
                         child: TextButton(
                           onPressed: _busy
@@ -825,6 +926,81 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _TermsConsentRow extends StatelessWidget {
+  const _TermsConsentRow({
+    required this.agreed,
+    required this.highlighted,
+    required this.showError,
+    required this.onChanged,
+  });
+
+  final bool agreed;
+  final bool highlighted;
+  final bool showError;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : const Duration(milliseconds: 180),
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      decoration: BoxDecoration(
+        color: highlighted ? const Color(0xFFFFF1F2) : Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Checkbox(
+                  value: agreed,
+                  onChanged: (value) => onChanged(value ?? false),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  side: const BorderSide(color: Color(0xFFC9CDD2)),
+                  fillColor: WidgetStateProperty.resolveWith(
+                    (states) => states.contains(WidgetState.selected)
+                        ? const Color(0xFF121212)
+                        : Colors.transparent,
+                  ),
+                  checkColor: Colors.white,
+                ),
+                const SizedBox(width: 4),
+                const Expanded(
+                  child: LegalAgreementText(
+                    signUp: true,
+                    textAlign: TextAlign.left,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (showError)
+            const Padding(
+              padding: EdgeInsets.only(left: 52, top: 3),
+              child: Text(
+                'Please agree to the Terms and Privacy Policy to continue.',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: Color(0xFFDC2626),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

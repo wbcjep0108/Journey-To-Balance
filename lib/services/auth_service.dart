@@ -8,7 +8,7 @@ abstract class AuthService {
   bool get usesPasswordProvider;
   bool get usesGoogleProvider;
 
-  Future<User?> signInWithGoogle();
+  Future<UserCredential?> signInWithGoogle();
   Future<UserCredential> signInWithEmail(String email, String password);
   Future<UserCredential> createAccount(String email, String password);
   Future<void> resendVerificationEmail();
@@ -53,10 +53,10 @@ class FirebaseAuthService implements AuthService {
   }
 
   @override
-  Future<User?> signInWithGoogle() async {
+  Future<UserCredential?> signInWithGoogle() async {
     final credential = await _googleCredential();
     if (credential == null) return null;
-    return (await _auth.signInWithCredential(credential)).user;
+    return _auth.signInWithCredential(credential);
   }
 
   @override

@@ -70,6 +70,24 @@ service cloud.firestore {
         planner.total <= sum + 0.01;
     }
 
+    function isValidLegalAcceptance(docId, acceptance) {
+      return docId.matches('^acceptance_.+$') &&
+        acceptance.keys().hasAll([
+          'termsAcceptedAt', 'termsVersion', 'privacyVersion'
+        ]) &&
+        acceptance.keys().hasOnly([
+          'termsAcceptedAt', 'termsVersion', 'privacyVersion'
+        ]) &&
+        acceptance.termsAcceptedAt is timestamp &&
+        acceptance.termsAcceptedAt == request.time &&
+        acceptance.termsVersion is string &&
+        acceptance.termsVersion.size() >= 1 &&
+        acceptance.termsVersion.size() <= 32 &&
+        acceptance.privacyVersion is string &&
+        acceptance.privacyVersion.size() >= 1 &&
+        acceptance.privacyVersion.size() <= 32;
+    }
+
     match /users/{userId} {
       // Own user doc (budget map includes savings goal fields).
       // Realtime listeners: users/{uid}.snapshots()
@@ -111,6 +129,15 @@ service cloud.firestore {
       // Realtime listeners: users/{uid}/wallet/data.snapshots()
       match /wallet/{docId} {
         allow read, write: if isOwner(userId);
+      }
+
+      // Owner-only, immutable consent receipts. Exact keys and request.time
+      // make client-created records auditable without granting update access.
+      match /legal/{docId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) &&
+          isValidLegalAcceptance(docId, request.resource.data);
+        allow update, delete: if false;
       }
 
       // Rate limits / idempotency (legacy or future) — never client-accessible.

@@ -14,6 +14,7 @@ class _FakeAuthService implements AuthService {
   final bool passwordProvider;
   String? reauthenticatedPassword;
   bool googleReauthenticated = false;
+  int googleSignInCalls = 0;
 
   @override
   User? get currentUser => null;
@@ -40,7 +41,11 @@ class _FakeAuthService implements AuthService {
   Future<UserCredential> signInWithEmail(String email, String password) =>
       throw UnimplementedError();
   @override
-  Future<User?> signInWithGoogle() async => null;
+  Future<UserCredential?> signInWithGoogle() async {
+    googleSignInCalls++;
+    return null;
+  }
+
   @override
   Future<void> signOut() async {}
 }
@@ -159,6 +164,10 @@ void main() {
         find.widgetWithText(TextFormField, 'Confirm password'),
         'password2',
       );
+      final agreement = find.byType(Checkbox);
+      await tester.ensureVisible(agreement);
+      await tester.tap(agreement);
+      await tester.pump();
       final submit = find.byKey(const ValueKey('primary-auth-button'));
       await tester.ensureVisible(submit);
       await tester.tap(submit);
@@ -222,6 +231,85 @@ void main() {
     );
     expect(find.text('Forgot password?'), findsNothing);
     expect(find.text('Create account'), findsOneWidget);
+    expect(find.byKey(const ValueKey('terms-consent-row')), findsOneWidget);
+    final agreement = tester.widget<RichText>(
+      find.byKey(const ValueKey('signup-legal-agreement')),
+    );
+    expect(
+      agreement.text.toPlainText(),
+      'I agree to the Terms of Service and Privacy Policy.',
+    );
+  });
+
+  testWidgets('sign-up agreement blocks both actions until checked', (
+    tester,
+  ) async {
+    final service = _FakeAuthService();
+    await tester.pumpWidget(_loginApp(service));
+    await tester.tap(find.byKey(const ValueKey('signup-toggle')));
+    await tester.pumpAndSettle();
+
+    final primary = find.byKey(const ValueKey('primary-auth-button'));
+    await tester.ensureVisible(primary);
+    await tester.tap(primary);
+    await tester.pump();
+    expect(
+      find.text('Please agree to the Terms and Privacy Policy to continue.'),
+      findsOneWidget,
+    );
+
+    final google = find.text('Continue with Google');
+    await tester.ensureVisible(google);
+    await tester.tap(google);
+    await tester.pump();
+    expect(service.googleSignInCalls, 0);
+
+    final checkbox = find.byType(Checkbox);
+    await tester.ensureVisible(checkbox);
+    await tester.tap(checkbox);
+    await tester.pump();
+    expect(
+      find.text('Please agree to the Terms and Privacy Policy to continue.'),
+      findsNothing,
+    );
+    expect((tester.widget<Checkbox>(find.byType(Checkbox)).value), isTrue);
+  });
+
+  testWidgets('login shows only the plain legal agreement line', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_loginApp(_FakeAuthService()));
+    expect(find.byKey(const ValueKey('terms-consent-row')), findsNothing);
+    final agreement = tester.widget<RichText>(
+      find.byKey(const ValueKey('login-legal-agreement')),
+    );
+    expect(
+      agreement.text.toPlainText(),
+      'By continuing, you agree to our Terms of Service and Privacy Policy.',
+    );
+  });
+
+  testWidgets('switching modes resets the sign-up agreement', (tester) async {
+    await tester.pumpWidget(_loginApp(_FakeAuthService()));
+    await tester.tap(find.byKey(const ValueKey('signup-toggle')));
+    await tester.pumpAndSettle();
+    final checkbox = find.byType(Checkbox);
+    await tester.ensureVisible(checkbox);
+    await tester.tap(checkbox);
+    await tester.pump();
+    expect(tester.widget<Checkbox>(checkbox).value, isTrue);
+
+    final loginToggle = find.byKey(const ValueKey('login-toggle'));
+    await tester.ensureVisible(loginToggle);
+    await tester.tap(loginToggle);
+    await tester.pumpAndSettle();
+    final signupToggle = find.byKey(const ValueKey('signup-toggle'));
+    await tester.ensureVisible(signupToggle);
+    await tester.tap(signupToggle);
+    await tester.pumpAndSettle();
+    final resetCheckbox = find.byType(Checkbox);
+    await tester.ensureVisible(resetCheckbox);
+    expect(tester.widget<Checkbox>(resetCheckbox).value, isFalse);
   });
 
   testWidgets('toggle uses prominent selected and muted unselected styles', (

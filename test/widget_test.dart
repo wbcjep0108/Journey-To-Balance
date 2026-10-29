@@ -28,7 +28,7 @@ class _WidgetTestAuthService implements AuthService {
   Future<UserCredential> signInWithEmail(String email, String password) =>
       throw UnimplementedError();
   @override
-  Future<User?> signInWithGoogle() async {
+  Future<UserCredential?> signInWithGoogle() async {
     googleSignInCalls++;
     return null;
   }

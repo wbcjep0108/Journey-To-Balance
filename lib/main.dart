@@ -18,6 +18,7 @@ import 'providers/wallet_cash_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/pin_setup_screen.dart';
 import 'screens/auth/pin_unlock_screen.dart';
+import 'screens/legal/legal_acceptance_gate.dart';
 import 'screens/navigation/bottom_nav_screen.dart';
 import 'screens/splash/splash_screen.dart';
 import 'screens/splash/welcome_transition.dart';
@@ -255,7 +256,11 @@ class _SecurityGateState extends State<_SecurityGate> {
       case AppLockStatus.locked:
         return const PinUnlockScreen();
       case AppLockStatus.unlocked:
-        return _UserDataGate(key: ValueKey(widget.uid), uid: widget.uid);
+        return LegalAcceptanceGate(
+          key: ValueKey('legal_${widget.uid}'),
+          userId: widget.uid,
+          child: _UserDataGate(key: ValueKey(widget.uid), uid: widget.uid),
+        );
     }
   }
 }
