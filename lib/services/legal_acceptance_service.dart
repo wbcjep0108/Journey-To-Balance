@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// The current consent revision. Bump this when either legal document changes.
-const currentLegalVersion = '2026-10-29-v3';
+const currentLegalVersion = '2026-10-30-v4';
 
 String legalVersionDateLabel([String version = currentLegalVersion]) {
   final date = DateTime.tryParse(

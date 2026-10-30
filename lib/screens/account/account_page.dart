@@ -167,8 +167,6 @@ class _AccountPageState extends State<AccountPage> {
                         onCurrency: _openCurrency,
                         onSecurity: _openSecurity,
                         onNotifications: _openNotifications,
-                        onTermsOfService: _openTermsOfService,
-                        onPrivacyPolicy: _openPrivacyPolicy,
                         onHelp: _openHelp,
                         onSignOut: _signOut,
                       ),
@@ -177,13 +175,25 @@ class _AccountPageState extends State<AccountPage> {
                 ),
               ),
               const SizedBox(height: 14),
-              TextButton(
-                onPressed: _openAbout,
-                style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFF6B7280),
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                ),
-                child: const Text('About Journey to Balance'),
+              Row(
+                children: [
+                  _AboutLink(label: 'About Journey to Balance', onPressed: _openAbout),
+                  const Spacer(),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _AboutLink(
+                        label: 'Terms of Service',
+                        onPressed: _openTermsOfService,
+                      ),
+                      const SizedBox(width: 4),
+                      _AboutLink(
+                        label: 'Privacy Policy',
+                        onPressed: _openPrivacyPolicy,
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ],
           ),
@@ -246,8 +256,6 @@ class _AccountCard extends StatelessWidget {
     required this.onCurrency,
     required this.onSecurity,
     required this.onNotifications,
-    required this.onTermsOfService,
-    required this.onPrivacyPolicy,
     required this.onHelp,
     required this.onSignOut,
   });
@@ -259,8 +267,6 @@ class _AccountCard extends StatelessWidget {
   final VoidCallback onCurrency;
   final VoidCallback onSecurity;
   final VoidCallback onNotifications;
-  final VoidCallback onTermsOfService;
-  final VoidCallback onPrivacyPolicy;
   final VoidCallback onHelp;
   final VoidCallback onSignOut;
 
@@ -347,18 +353,6 @@ class _AccountCard extends StatelessWidget {
           ),
           const Divider(height: 1, color: Color(0xFFE5E7EB)),
           _AccountLinkTile(
-            icon: Icons.description_outlined,
-            label: 'Terms of Service',
-            onTap: onTermsOfService,
-          ),
-          const Divider(height: 1, color: Color(0xFFE5E7EB)),
-          _AccountLinkTile(
-            icon: Icons.privacy_tip_outlined,
-            label: 'Privacy Policy',
-            onTap: onPrivacyPolicy,
-          ),
-          const Divider(height: 1, color: Color(0xFFE5E7EB)),
-          _AccountLinkTile(
             icon: Icons.help_outline,
             label: 'Help & Support',
             onTap: onHelp,
@@ -383,6 +377,26 @@ class _AccountCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _AboutLink extends StatelessWidget {
+  const _AboutLink({required this.label, required this.onPressed});
+
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        foregroundColor: const Color(0xFF6B7280),
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        visualDensity: VisualDensity.compact,
+      ),
+      child: Text(label),
     );
   }
 }

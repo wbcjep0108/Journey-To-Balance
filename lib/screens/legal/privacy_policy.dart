@@ -32,9 +32,14 @@ const privacyPolicySections = <LegalSection>[
         'The app stores a hash of your four-digit PIN, whether biometric unlock is enabled, your auto-lock choice, notification settings, reminder times, and local alert flags in device storage. Your fingerprint or face template is controlled by the device operating system and is not received or stored by Journey to Balance. Older versions may also leave local wallet, card-label, currency, and loan data on the device after it is copied to Firestore.',
   ),
   LegalSection(
-    heading: 'How long we keep information and deletion requests',
+    heading: 'How long we keep information',
     body:
-        'The app code does not set one general deletion period for account and financial data. Signing out does not delete your Firebase account, cloud records, local security choices, notification settings, or legacy wallet data. The app currently has no account-deletion button. To ask about access or deletion, use the support email below.\n\nPIN reset codes and password reset codes are valid for ten minutes. Only a hash of each code is stored. Reset records are removed after successful use and when an expired or over-attempt record is checked. Cloudflare idempotency records are treated as expired after 24 hours when they are next read.',
+        'The app code does not set one general retention period for account and financial data. Your information is generally kept while your account remains active so the app can provide its budgeting and synchronization features. Signing out does not delete your Firebase account, cloud records, local security choices, notification settings, or legacy wallet data.\n\nPIN reset codes and password reset codes are valid for ten minutes. Only a hash of each code is stored. Reset records are removed after successful use and when an expired or over-attempt record is checked. Cloudflare idempotency records are treated as expired after 24 hours when they are next read.',
+  ),
+  LegalSection(
+    heading: 'Deleting your account and data',
+    body:
+        "You can request permanent account deletion from Security settings by selecting Delete Account. To protect your account, you must enter your registered email address and complete a fresh password or Google reauthentication before the request is accepted.\n\nWhen account deletion succeeds, Journey to Balance permanently deletes your Firebase Authentication account, your user document and associated financial records in Cloud Firestore, and temporary rate-limit and idempotency state associated with your account in Cloudflare. The app also clears its local session and security data for that account from the device. This action cannot be undone.\n\nDeleting your Journey to Balance account does not delete your Google account. Copies outside the app's direct control, such as email messages already delivered by an email provider, device or cloud backups, and limited service-provider security logs, may remain according to the relevant provider's retention practices or applicable legal requirements. If you cannot use the in-app deletion option, contact the support email below to request assistance.",
   ),
   LegalSection(
     heading: 'Security',
