@@ -99,10 +99,15 @@ class _HomePageState extends State<HomePage> {
     final salary = budget.monthlySalary;
 
     setState(() => _isReceivingSalary = true);
-    final source = await showDialog<SalaryDepositSource>(
+    final source = await showDialog<MoneyDepositSource>(
       context: context,
-      builder: (_) =>
-          withBarrierBlur(SalaryDepositSourceDialog(hostContext: context)),
+      builder: (_) => withBarrierBlur(
+        MoneyDepositSourceDialog(
+          hostContext: context,
+          title: 'Where did the salary go?',
+          description: 'Choose the wallet or card that received your salary.',
+        ),
+      ),
     );
     if (!mounted) return;
     if (source == null) {

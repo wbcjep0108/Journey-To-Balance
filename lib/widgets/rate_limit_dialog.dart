@@ -13,10 +13,34 @@ import 'barrier_blur.dart';
 bool isFinanceRateLimitError(Object error) =>
     FinanceApiException.isRateLimitError(error);
 
-Future<void> showRateLimitDialog(
-  BuildContext context,
-  RateLimitInfo info,
-) {
+String rateLimitDialogMessage(RateLimitInfo info) {
+  String? message;
+  if (info.code == 'daily-rate-limit-exceeded') {
+    message = 'You\'ve reached today\'s limit. Try again tomorrow.';
+  } else if (info.code == 'temporarily-busy' || info.statusCode == 503) {
+    message = 'The service is busy. Please try again later.';
+  }
+  if (message == null) return info.dialogMessage;
+
+  final seconds = info.retryAfterSeconds;
+  if (seconds == null || seconds <= 0) return message;
+  final int value;
+  final String unit;
+  if (seconds < 60) {
+    value = seconds;
+    unit = 'second';
+  } else if (seconds < 3600) {
+    value = (seconds / 60).ceil();
+    unit = 'minute';
+  } else {
+    value = (seconds / 3600).ceil();
+    unit = 'hour';
+  }
+  final retry = '$value $unit${value == 1 ? '' : 's'}';
+  return '$message Retry in $retry.';
+}
+
+Future<void> showRateLimitDialog(BuildContext context, RateLimitInfo info) {
   return showDialog<void>(
     context: context,
     barrierDismissible: false,
@@ -24,7 +48,9 @@ Future<void> showRateLimitDialog(
       return withBarrierBlur(
         Dialog(
           backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(32),
+          ),
           child: Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
@@ -41,7 +67,7 @@ Future<void> showRateLimitDialog(
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  info.dialogMessage,
+                  rateLimitDialogMessage(info),
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     fontSize: 14,

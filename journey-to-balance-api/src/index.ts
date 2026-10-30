@@ -13,6 +13,7 @@ import {
 } from "./errors";
 import {Env, handleFinance} from "./finance";
 import {handlePinReset} from "./pinReset";
+import {enforceGlobalProtectedLimit} from "./protection";
 import {
   confirmPasswordReset,
   createPasswordResetDependencies,
@@ -182,6 +183,7 @@ export default {
           url.pathname === "/api/account/delete/")
       ) {
         const user = await verifyFirebaseIdToken(request, projectId);
+        await enforceGlobalProtectedLimit(env);
         let body: Record<string, unknown> = {};
         const text = await request.text();
         if (text.trim()) {
@@ -203,6 +205,7 @@ export default {
         (url.pathname === "/api/auth/me" || url.pathname === "/api/auth/me/")
       ) {
         const user = await verifyFirebaseIdToken(request, projectId);
+        await enforceGlobalProtectedLimit(env);
         return jsonOk({
           authenticated: true,
           uid: user.uid,
@@ -219,6 +222,7 @@ export default {
         const user = await verifyFirebaseIdToken(request, projectId);
         const gate = env.USER_GATE.get(env.USER_GATE.idFromName(user.uid));
         const outcome = await gate.enforceIsolatedTestRateLimit();
+        if (outcome.ok) await enforceGlobalProtectedLimit(env);
         return rateLimitProbeResponse(outcome, "Rate limit test passed");
       }
 
@@ -232,6 +236,7 @@ export default {
         const user = await verifyFirebaseIdToken(request, projectId);
         const gate = env.USER_GATE.get(env.USER_GATE.idFromName(user.uid));
         const outcome = await gate.enforceRateLimitsOutcome("addMoney");
+        if (outcome.ok) await enforceGlobalProtectedLimit(env);
         return rateLimitProbeResponse(
           outcome,
           "addMoney rate limit probe (non-mutating)",

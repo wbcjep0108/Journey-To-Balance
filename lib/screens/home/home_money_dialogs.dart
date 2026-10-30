@@ -6,16 +6,17 @@ import '../../providers/currency_provider.dart';
 import '../../providers/wallet_cards_provider.dart';
 import '../../providers/wallet_cash_provider.dart';
 import '../../widgets/allocation_confirm_dialog.dart';
+import '../../widgets/barrier_blur.dart';
 import '../../widgets/rate_limit_dialog.dart';
 import '../../widgets/sensitive_action_auth.dart';
 
-class SalaryDepositSource {
-  const SalaryDepositSource.wallet()
+class MoneyDepositSource {
+  const MoneyDepositSource.wallet()
     : isWallet = true,
       cardId = null,
       label = 'Wallet';
 
-  const SalaryDepositSource.card({required this.cardId, required this.label})
+  const MoneyDepositSource.card({required this.cardId, required this.label})
     : isWallet = false;
 
   final bool isWallet;
@@ -24,7 +25,7 @@ class SalaryDepositSource {
 
   @override
   bool operator ==(Object other) =>
-      other is SalaryDepositSource &&
+      other is MoneyDepositSource &&
       isWallet == other.isWallet &&
       cardId == other.cardId;
 
@@ -32,19 +33,26 @@ class SalaryDepositSource {
   int get hashCode => Object.hash(isWallet, cardId);
 }
 
-class SalaryDepositSourceDialog extends StatefulWidget {
-  const SalaryDepositSourceDialog({super.key, required this.hostContext});
+class MoneyDepositSourceDialog extends StatefulWidget {
+  const MoneyDepositSourceDialog({
+    super.key,
+    required this.hostContext,
+    required this.title,
+    required this.description,
+  });
 
   final BuildContext hostContext;
+  final String title;
+  final String description;
 
   @override
-  State<SalaryDepositSourceDialog> createState() =>
-      _SalaryDepositSourceDialogState();
+  State<MoneyDepositSourceDialog> createState() =>
+      _MoneyDepositSourceDialogState();
 }
 
-class _SalaryDepositSourceDialogState extends State<SalaryDepositSourceDialog> {
+class _MoneyDepositSourceDialogState extends State<MoneyDepositSourceDialog> {
   late final List<WalletCardModel> _cards;
-  SalaryDepositSource _selected = const SalaryDepositSource.wallet();
+  MoneyDepositSource _selected = const MoneyDepositSource.wallet();
 
   @override
   void initState() {
@@ -68,19 +76,17 @@ class _SalaryDepositSourceDialogState extends State<SalaryDepositSourceDialog> {
         fontSize: 15,
         fontWeight: FontWeight.w500,
       ),
-      title: const Text('Where did the salary go?'),
+      title: Text(widget.title),
       content: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 360),
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
-                'Choose the wallet or card that received your salary.',
-              ),
+              Text(widget.description),
               const SizedBox(height: 12),
-              RadioListTile<SalaryDepositSource>(
-                value: const SalaryDepositSource.wallet(),
+              RadioListTile<MoneyDepositSource>(
+                value: const MoneyDepositSource.wallet(),
                 groupValue: _selected,
                 activeColor: const Color(0xFF121212),
                 fillColor: WidgetStateProperty.resolveWith(
@@ -93,8 +99,8 @@ class _SalaryDepositSourceDialogState extends State<SalaryDepositSourceDialog> {
                 onChanged: (value) => setState(() => _selected = value!),
               ),
               for (final card in _cards)
-                RadioListTile<SalaryDepositSource>(
-                  value: SalaryDepositSource.card(
+                RadioListTile<MoneyDepositSource>(
+                  value: MoneyDepositSource.card(
                     cardId: card.id,
                     label: card.bankLabel,
                   ),
@@ -122,9 +128,7 @@ class _SalaryDepositSourceDialogState extends State<SalaryDepositSourceDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          style: TextButton.styleFrom(
-            foregroundColor: const Color(0xFF121212),
-          ),
+          style: TextButton.styleFrom(foregroundColor: const Color(0xFF121212)),
           child: const Text('Cancel'),
         ),
         FilledButton(
@@ -756,6 +760,27 @@ class _AddMoneyDialogState extends State<AddMoneyDialog> {
                             return;
                           }
 
+                          final wallet = widget.hostContext
+                              .read<WalletCashProvider>();
+                          final cards = widget.hostContext
+                              .read<WalletCardsProvider>();
+
+                          final source = await showDialog<MoneyDepositSource>(
+                            context: widget.hostContext,
+                            builder: (_) => withBarrierBlur(
+                              MoneyDepositSourceDialog(
+                                hostContext: widget.hostContext,
+                                title: 'Where should the money go?',
+                                description:
+                                    'Choose the wallet or card that will '
+                                    'receive this money.',
+                              ),
+                            ),
+                          );
+                          if (!widget.hostContext.mounted || source == null) {
+                            return;
+                          }
+
                           final confirmed =
                               await AllocationConfirmDialog.showNewMoneyConfirm(
                                 context: widget.hostContext,
@@ -784,6 +809,17 @@ class _AddMoneyDialogState extends State<AddMoneyDialog> {
                           widget.onBusyChanged(true);
                           try {
                             await budget.addMoney(amount);
+                            if (source.isWallet) {
+                              await wallet.setAmount(wallet.amount + amount);
+                            } else {
+                              final card = cards.cardById(source.cardId!);
+                              if (card != null) {
+                                await cards.setCardAmount(
+                                  cardId: card.id,
+                                  amount: card.amount + amount,
+                                );
+                              }
+                            }
                             if (context.mounted) Navigator.pop(context);
                             if (!widget.hostContext.mounted) return;
                             ScaffoldMessenger.of(widget.hostContext)
@@ -792,7 +828,8 @@ class _AddMoneyDialogState extends State<AddMoneyDialog> {
                                 SnackBar(
                                   content: Text(
                                     '${AllocationConfirmDialog.formatMoney(widget.hostContext, amount)} '
-                                    'added to your available balance.',
+                                    'added to ${source.label} and your '
+                                    'available balance.',
                                   ),
                                 ),
                               );

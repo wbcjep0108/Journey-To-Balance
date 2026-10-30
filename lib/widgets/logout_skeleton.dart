@@ -113,145 +113,159 @@ class _LogoutSkeletonState extends State<LogoutSkeleton>
         child: Scaffold(
           backgroundColor: Colors.white,
           body: SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(
-                kLoginPaddingH,
-                kLoginPaddingTop,
-                kLoginPaddingH,
-                kLoginPaddingBottom,
-              ),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: kLoginMaxWidth),
-                  child: AnimatedBuilder(
-                    animation: _controller,
-                    builder: (context, _) => Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        // ── Logo badge ──
-                        Center(
-                          child: _SkeletonBlock(
-                            width: kLoginLogoSize,
-                            height: kLoginLogoSize,
-                            radius: kLoginLogoRadius,
-                            progress: _controller.value,
-                            staticOnly: reduceMotion,
-                          ),
+            child: LayoutBuilder(
+              builder: (context, viewport) {
+                final availableHeight =
+                    viewport.maxHeight - kLoginPaddingTop - kLoginPaddingBottom;
+                final minContentHeight = availableHeight > 0
+                    ? availableHeight
+                    : 0.0;
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(
+                    kLoginPaddingH,
+                    kLoginPaddingTop,
+                    kLoginPaddingH,
+                    kLoginPaddingBottom,
+                  ),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: minContentHeight),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          maxWidth: kLoginMaxWidth,
                         ),
-                        // ── Title ──
-                        const SizedBox(height: kLoginLogoTitleGap),
-                        Center(
-                          child: _SkeletonBlock(
-                            width: kLoginTitleSkeletonWidth,
-                            height: kLoginTitleHeight,
-                            radius: kLoginTitleHeight / 2,
-                            progress: _controller.value,
-                            staticOnly: reduceMotion,
-                          ),
-                        ),
-                        // ── Tagline ──
-                        const SizedBox(height: kLoginTitleTaglineGap),
-                        Center(
-                          child: _SkeletonBlock(
-                            width: kLoginTaglineSkeletonWidth,
-                            height: kLoginTaglineHeight,
-                            radius: kLoginTaglineHeight / 2,
-                            progress: _controller.value,
-                            staticOnly: reduceMotion,
-                          ),
-                        ),
-                        // ── Mode toggle track ──
-                        const SizedBox(height: kLoginTaglineToggleGap),
-                        _SkeletonBlock(
-                          height: kLoginToggleHeight,
-                          radius: kLoginToggleRadius,
-                          progress: _controller.value,
-                          staticOnly: reduceMotion,
-                        ),
-                        // ── Email field ──
-                        const SizedBox(height: kLoginToggleFieldGap),
-                        _SkeletonBlock(
-                          height: kLoginFieldHeight,
-                          radius: kLoginFieldRadius,
-                          progress: _controller.value,
-                          staticOnly: reduceMotion,
-                        ),
-                        // ── Password field ──
-                        const SizedBox(height: kLoginFieldFieldGap),
-                        _SkeletonBlock(
-                          height: kLoginFieldHeight,
-                          radius: kLoginFieldRadius,
-                          progress: _controller.value,
-                          staticOnly: reduceMotion,
-                        ),
-                        // ── Primary button ──
-                        const SizedBox(height: kLoginFieldButtonGap),
-                        _SkeletonBlock(
-                          height: kLoginPrimaryButtonHeight,
-                          radius: kLoginButtonRadius,
-                          baseColor: const Color(0xFFE5E7EB),
-                          progress: _controller.value,
-                          staticOnly: reduceMotion,
-                        ),
-                        // ── "or" divider row ──
-                        const SizedBox(height: kLoginButtonDividerGap),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _SkeletonBlock(
-                                height: 1,
-                                radius: 0.5,
+                        child: AnimatedBuilder(
+                          animation: _controller,
+                          builder: (context, _) => Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              // ── Logo badge ──
+                              Center(
+                                child: _SkeletonBlock(
+                                  width: kLoginLogoSize,
+                                  height: kLoginLogoSize,
+                                  radius: kLoginLogoRadius,
+                                  progress: _controller.value,
+                                  staticOnly: reduceMotion,
+                                ),
+                              ),
+                              // ── Title ──
+                              const SizedBox(height: kLoginLogoTitleGap),
+                              Center(
+                                child: _SkeletonBlock(
+                                  width: kLoginTitleSkeletonWidth,
+                                  height: kLoginTitleHeight,
+                                  radius: kLoginTitleHeight / 2,
+                                  progress: _controller.value,
+                                  staticOnly: reduceMotion,
+                                ),
+                              ),
+                              // ── Tagline ──
+                              const SizedBox(height: kLoginTitleTaglineGap),
+                              Center(
+                                child: _SkeletonBlock(
+                                  width: kLoginTaglineSkeletonWidth,
+                                  height: kLoginTaglineHeight,
+                                  radius: kLoginTaglineHeight / 2,
+                                  progress: _controller.value,
+                                  staticOnly: reduceMotion,
+                                ),
+                              ),
+                              // ── Mode toggle track ──
+                              const SizedBox(height: kLoginTaglineToggleGap),
+                              _SkeletonBlock(
+                                height: kLoginToggleHeight,
+                                radius: kLoginToggleRadius,
                                 progress: _controller.value,
                                 staticOnly: reduceMotion,
                               ),
-                            ),
-                            const SizedBox(
-                              width: kLoginDividerLabelPadding * 2 + 14,
-                            ),
-                            Expanded(
-                              child: _SkeletonBlock(
-                                height: 1,
-                                radius: 0.5,
+                              // ── Email field ──
+                              const SizedBox(height: kLoginToggleFieldGap),
+                              _SkeletonBlock(
+                                height: kLoginFieldHeight,
+                                radius: kLoginFieldRadius,
                                 progress: _controller.value,
                                 staticOnly: reduceMotion,
                               ),
-                            ),
-                          ],
-                        ),
-                        // ── Google button ──
-                        const SizedBox(height: kLoginDividerGoogleGap),
-                        _SkeletonBlock(
-                          height: kLoginGoogleButtonHeight,
-                          radius: kLoginButtonRadius,
-                          progress: _controller.value,
-                          staticOnly: reduceMotion,
-                        ),
-                        // ── Terms / help text lines ──
-                        const SizedBox(height: kLoginGoogleTermsGap),
-                        Center(
-                          child: _SkeletonBlock(
-                            width: kLoginTermsLine1Width,
-                            height: kLoginTermsLineHeight,
-                            radius: kLoginTermsLineHeight / 2,
-                            progress: _controller.value,
-                            staticOnly: reduceMotion,
+                              // ── Password field ──
+                              const SizedBox(height: kLoginFieldFieldGap),
+                              _SkeletonBlock(
+                                height: kLoginFieldHeight,
+                                radius: kLoginFieldRadius,
+                                progress: _controller.value,
+                                staticOnly: reduceMotion,
+                              ),
+                              // ── Primary button ──
+                              const SizedBox(height: kLoginFieldButtonGap),
+                              _SkeletonBlock(
+                                height: kLoginPrimaryButtonHeight,
+                                radius: kLoginButtonRadius,
+                                baseColor: const Color(0xFFE5E7EB),
+                                progress: _controller.value,
+                                staticOnly: reduceMotion,
+                              ),
+                              // ── "or" divider row ──
+                              const SizedBox(height: kLoginButtonDividerGap),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _SkeletonBlock(
+                                      height: 1,
+                                      radius: 0.5,
+                                      progress: _controller.value,
+                                      staticOnly: reduceMotion,
+                                    ),
+                                  ),
+                                  const SizedBox(
+                                    width: kLoginDividerLabelPadding * 2 + 14,
+                                  ),
+                                  Expanded(
+                                    child: _SkeletonBlock(
+                                      height: 1,
+                                      radius: 0.5,
+                                      progress: _controller.value,
+                                      staticOnly: reduceMotion,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              // ── Google button ──
+                              const SizedBox(height: kLoginDividerGoogleGap),
+                              _SkeletonBlock(
+                                height: kLoginGoogleButtonHeight,
+                                radius: kLoginButtonRadius,
+                                progress: _controller.value,
+                                staticOnly: reduceMotion,
+                              ),
+                              // ── Terms / help text lines ──
+                              const SizedBox(height: kLoginGoogleTermsGap),
+                              Center(
+                                child: _SkeletonBlock(
+                                  width: kLoginTermsLine1Width,
+                                  height: kLoginTermsLineHeight,
+                                  radius: kLoginTermsLineHeight / 2,
+                                  progress: _controller.value,
+                                  staticOnly: reduceMotion,
+                                ),
+                              ),
+                              const SizedBox(height: kLoginTermsLineGap),
+                              Center(
+                                child: _SkeletonBlock(
+                                  width: kLoginTermsLine2Width,
+                                  height: kLoginTermsLineHeight,
+                                  radius: kLoginTermsLineHeight / 2,
+                                  progress: _controller.value,
+                                  staticOnly: reduceMotion,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: kLoginTermsLineGap),
-                        Center(
-                          child: _SkeletonBlock(
-                            width: kLoginTermsLine2Width,
-                            height: kLoginTermsLineHeight,
-                            radius: kLoginTermsLineHeight / 2,
-                            progress: _controller.value,
-                            staticOnly: reduceMotion,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
           ),
         ),

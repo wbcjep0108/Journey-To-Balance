@@ -8,10 +8,15 @@ import {
   requestPasswordReset,
   verifyPasswordResetCode,
 } from "./passwordReset";
+import {
+  consumeEmailDailyCounters,
+  DailyCounterState,
+} from "./rateLimit";
 
 function fixture(options: {
   account?: "password" | "google" | "unknown";
   allowed?: boolean;
+  dailyEmailAllowed?: boolean;
 } = {}) {
   let now = 1_000_000;
   let record: Awaited<ReturnType<PasswordResetDependencies["getRecord"]>> = null;
@@ -31,6 +36,7 @@ function fixture(options: {
     revokeRefreshTokens: async () => { revocations++; },
     sendCode: async (email, code) => { sent.push({email, code}); },
     allowRequest: async () => options.allowed ?? true,
+    allowDailyEmail: async () => options.dailyEmailAllowed ?? true,
     acquireLock: async () => true,
     releaseLock: async () => undefined,
     hmacSecret: "test-secret",
@@ -79,6 +85,83 @@ describe("password reset", () => {
       await requestPasswordReset(item.deps, "person@example.com", "127.0.0.1");
       assert.equal(item.sent.length, 0);
     }
+  });
+
+  it("keeps the neutral response and skips a daily-capped email", async () => {
+    const allowed = fixture();
+    const capped = fixture({dailyEmailAllowed: false});
+    const allowedResponse = await requestPasswordReset(
+      allowed.deps,
+      "person@example.com",
+      "127.0.0.1",
+    );
+    const cappedResponse = await requestPasswordReset(
+      capped.deps,
+      "person@example.com",
+      "127.0.0.1",
+    );
+    assert.deepEqual(cappedResponse, allowedResponse);
+    assert.deepEqual(cappedResponse, {ok: true});
+    assert.equal(allowed.sent.length, 1);
+    assert.equal(capped.sent.length, 0);
+  });
+
+  it("skips the sixth recipient email with identical neutral responses", async () => {
+    const item = fixture();
+    let global: DailyCounterState | undefined;
+    let recipient: DailyCounterState | undefined;
+    item.deps.allowDailyEmail = async () => {
+      const outcome = consumeEmailDailyCounters(
+        global,
+        recipient,
+        Date.UTC(2026, 9, 30, 4),
+      );
+      if (!outcome.ok) return false;
+      global = outcome.global;
+      recipient = outcome.scoped;
+      return true;
+    };
+
+    const responses = [];
+    for (let request = 0; request < 6; request++) {
+      responses.push(await requestPasswordReset(
+        item.deps,
+        "person@example.com",
+        "127.0.0.1",
+      ));
+      item.advance(30_001);
+    }
+    assert.deepEqual(responses, Array(6).fill({ok: true}));
+    assert.equal(item.sent.length, 5);
+  });
+
+  it("skips the 101st global email with identical neutral responses", async () => {
+    const item = fixture();
+    let global: DailyCounterState | undefined;
+    const recipients = new Map<string, DailyCounterState>();
+    item.deps.allowDailyEmail = async (email) => {
+      const outcome = consumeEmailDailyCounters(
+        global,
+        recipients.get(email),
+        Date.UTC(2026, 9, 30, 4),
+      );
+      if (!outcome.ok) return false;
+      global = outcome.global;
+      recipients.set(email, outcome.scoped!);
+      return true;
+    };
+
+    const responses = [];
+    for (let request = 0; request < 101; request++) {
+      responses.push(await requestPasswordReset(
+        item.deps,
+        `person${request}@example.com`,
+        "127.0.0.1",
+      ));
+      item.advance(30_001);
+    }
+    assert.deepEqual(responses, Array(101).fill({ok: true}));
+    assert.equal(item.sent.length, 100);
   });
 
   it("expires a code after ten minutes", async () => {

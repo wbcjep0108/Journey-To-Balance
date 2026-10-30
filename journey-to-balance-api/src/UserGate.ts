@@ -3,6 +3,12 @@ import {DurableObject} from "cloudflare:workers";
 import {ApiError, badRequest} from "./errors";
 import {
   consumeFixedWindow,
+  consumeEmailDailyCounters,
+  consumeGlobalProtectedCounter,
+  consumeProtectedDailyCounters,
+  DailyCounterState,
+  DailyLimitOutcome,
+  manilaDailyWindow,
   nextRateBucket,
   RATE_LIMITS,
   RateBucketName,
@@ -42,6 +48,116 @@ export type IsolatedRateLimitOutcome =
   };
 
 export class UserGate extends DurableObject {
+  /** Atomically consumes the shared global and per-user protected-action pools. */
+  async consumeProtectedDaily(userKey: string): Promise<DailyLimitOutcome> {
+    if (!userKey) throw badRequest("Invalid daily user key.");
+    const now = Date.now();
+    const window = manilaDailyWindow(now);
+    const globalKey = `daily:protected:global:${window.key}`;
+    const userCounterKey = `daily:protected:user:${window.key}:${userKey}`;
+    const outcome = await this.ctx.storage.transaction(async (txn) => {
+      const values = await txn.get<DailyCounterState>([
+        globalKey,
+        userCounterKey,
+      ]);
+      const result = consumeProtectedDailyCounters(
+        values.get(globalKey),
+        values.get(userCounterKey),
+        now,
+      );
+      if (result.ok) {
+        await txn.put({
+          [globalKey]: result.global,
+          [userCounterKey]: result.scoped!,
+        });
+      }
+      return result;
+    });
+    await this.finishDailyConsumption(outcome, window.expiresAt);
+    return outcome;
+  }
+
+  /** Atomically consumes only the global protected-request safety valve. */
+  async consumeGlobalProtectedDaily(): Promise<DailyLimitOutcome> {
+    const now = Date.now();
+    const window = manilaDailyWindow(now);
+    const key = `daily:protected:global:${window.key}`;
+    const outcome = await this.ctx.storage.transaction(async (txn) => {
+      const current = await txn.get<DailyCounterState>(key);
+      const result = consumeGlobalProtectedCounter(current, now);
+      if (result.ok) await txn.put(key, result.global);
+      return result;
+    });
+    await this.finishDailyConsumption(outcome, window.expiresAt);
+    return outcome;
+  }
+
+  /** Atomically consumes the shared global and anonymous-recipient email pools. */
+  async consumeEmailDaily(recipientKey: string): Promise<DailyLimitOutcome> {
+    if (!recipientKey) throw badRequest("Invalid daily recipient key.");
+    const now = Date.now();
+    const window = manilaDailyWindow(now);
+    const globalKey = `daily:email:global:${window.key}`;
+    const recipientCounterKey = `daily:email:recipient:${window.key}:${recipientKey}`;
+    const outcome = await this.ctx.storage.transaction(async (txn) => {
+      const values = await txn.get<DailyCounterState>([
+        globalKey,
+        recipientCounterKey,
+      ]);
+      const result = consumeEmailDailyCounters(
+        values.get(globalKey),
+        values.get(recipientCounterKey),
+        now,
+      );
+      if (result.ok) {
+        await txn.put({
+          [globalKey]: result.global,
+          [recipientCounterKey]: result.scoped!,
+        });
+      }
+      return result;
+    });
+    await this.finishDailyConsumption(outcome, window.expiresAt);
+    return outcome;
+  }
+
+  /** Deletes expired daily keys and schedules the next cleanup. */
+  async alarm(): Promise<void> {
+    const now = Date.now();
+    const counters = await this.ctx.storage.list<DailyCounterState>({
+      prefix: "daily:",
+    });
+    const expired: string[] = [];
+    let nextExpiry: number | undefined;
+    for (const [key, state] of counters) {
+      if (state.expiresAt <= now) {
+        expired.push(key);
+      } else if (nextExpiry == null || state.expiresAt < nextExpiry) {
+        nextExpiry = state.expiresAt;
+      }
+    }
+    if (expired.length > 0) await this.ctx.storage.delete(expired);
+    if (nextExpiry != null) await this.ctx.storage.setAlarm(nextExpiry);
+  }
+
+  private async finishDailyConsumption(
+    outcome: DailyLimitOutcome,
+    expiresAt: number,
+  ): Promise<void> {
+    if (!outcome.ok) {
+      console.warn("Daily cap reached", {
+        bucket: outcome.info.bucket,
+        count: outcome.info.count,
+        limit: outcome.info.limit,
+      });
+      return;
+    }
+    const currentAlarm = await this.ctx.storage.getAlarm();
+    if (currentAlarm == null || currentAlarm > expiresAt) {
+      await this.ctx.storage.setAlarm(expiresAt);
+    }
+  }
+
   /** Serializes a short public security operation for this object identity. */
   async acquirePublicLock(ttlMs: number): Promise<boolean> {
     if (!Number.isInteger(ttlMs) || ttlMs < 1) {

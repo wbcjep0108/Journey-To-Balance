@@ -2,11 +2,14 @@ import type {AuthUser} from "./auth";
 import {
   badRequest,
   internal,
-  RateLimitExceededError,
 } from "./errors";
 import type {Env} from "./finance";
 import {FirestoreClient} from "./firestore";
 import {buildPinResetEmailHtml} from "./pinResetEmail";
+import {
+  enforceDailyEmailLimit,
+  enforceProtectedActionLimits,
+} from "./protection";
 import type {RateBucketName} from "./rateLimit";
 
 const OTP_TTL_MS = 10 * 60 * 1000;
@@ -53,19 +56,7 @@ function client(env: Env): FirestoreClient {
 }
 
 async function enforceLimit(env: Env, uid: string, bucket: RateBucketName) {
-  const gate = env.USER_GATE.get(env.USER_GATE.idFromName(uid));
-  const outcome = await gate.enforceRateLimitsOutcome(bucket);
-  if (!outcome.ok) {
-    throw new RateLimitExceededError(
-      {
-        bucket: outcome.info.bucket,
-        limit: outcome.info.limit,
-        remaining: outcome.info.remaining,
-        resetAt: outcome.info.resetAt,
-      },
-      outcome.message,
-    );
-  }
+  await enforceProtectedActionLimits(env, uid, bucket);
 }
 
 function requireAccountEmail(user: AuthUser, typedEmail: string): string {
@@ -111,7 +102,7 @@ async function sendOtpEmail(env: Env, to: string, otp: string): Promise<void> {
   });
 
   if (!res.ok) {
-    console.error("Brevo failed", await res.text());
+    console.error("Brevo delivery failed", {status: res.status});
     throw internal("Could not send the code. Please try again.");
   }
 }
@@ -135,6 +126,8 @@ export async function handlePinReset(
     if (Date.now() - lastSentAt < OTP_RESEND_MS) {
       throw badRequest("Wait a moment before requesting another code.");
     }
+
+    await enforceDailyEmailLimit(env, email);
 
     const otp = randomOtp();
     const hash = await hashOtp(user.uid, otp);

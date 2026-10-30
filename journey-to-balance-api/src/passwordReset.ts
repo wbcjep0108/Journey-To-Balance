@@ -1,5 +1,7 @@
 import {getGoogleAccessToken, FirestoreClient} from "./firestore";
 import type {Env} from "./finance";
+import {consumeDailyEmailAllowance} from "./protection";
+import {RATE_LIMIT_CONFIG} from "./rateLimit";
 import {renderPasswordResetEmail} from "./passwordResetEmail";
 import type {UserGate} from "./UserGate";
 
@@ -7,9 +9,6 @@ const CODE_TTL_MS = 10 * 60 * 1000;
 const TOKEN_TTL_MS = 10 * 60 * 1000;
 const RESEND_MS = 30_000;
 const MAX_ATTEMPTS = 5;
-const REQUEST_WINDOW_MS = 60 * 60 * 1000;
-const EMAIL_REQUEST_LIMIT = 3;
-const IP_REQUEST_LIMIT = 20;
 const OPERATION_LOCK_MS = 30_000;
 const RECORD_PATH = ["security", "passwordReset"] as const;
 const FALLBACK_LOOKUP_EMAIL = "invalid@invalid.example";
@@ -36,6 +35,7 @@ export interface PasswordResetDependencies {
   revokeRefreshTokens(localId: string): Promise<void>;
   sendCode(email: string, code: string): Promise<void>;
   allowRequest(email: string, ip: string): Promise<boolean>;
+  allowDailyEmail(email: string): Promise<boolean>;
   acquireLock(email: string): Promise<boolean>;
   releaseLock(email: string): Promise<void>;
   hmacSecret: string;
@@ -139,6 +139,7 @@ export async function requestPasswordReset(
     if (existing?.kind === "code" && now - existing.createdAtMs < RESEND_MS) {
       return {ok: true};
     }
+    if (!await deps.allowDailyEmail(email)) return {ok: true};
 
     await deps.setRecord(account.localId, {
       kind: "code",
@@ -361,16 +362,18 @@ export function createPasswordResetDependencies(env: Env): PasswordResetDependen
       ]);
       const [emailAllowed, ipAllowed] = await Promise.all([
         gate(env, `password-reset-email:${emailKey}`).consumePublicRateLimit(
-          EMAIL_REQUEST_LIMIT,
-          REQUEST_WINDOW_MS,
+          RATE_LIMIT_CONFIG.passwordResetPerHour.email,
+          RATE_LIMIT_CONFIG.windows.passwordResetHourMs,
         ),
         gate(env, `password-reset-ip:${ipKey}`).consumePublicRateLimit(
-          IP_REQUEST_LIMIT,
-          REQUEST_WINDOW_MS,
+          RATE_LIMIT_CONFIG.passwordResetPerHour.ip,
+          RATE_LIMIT_CONFIG.windows.passwordResetHourMs,
         ),
       ]);
       return emailAllowed && ipAllowed;
     },
+    allowDailyEmail: async (email) =>
+      (await consumeDailyEmailAllowance(env, email)).ok,
     acquireLock: async (email) => {
       const emailKey = await sha256Hex(`password-reset-email:${email}`);
       return gate(env, `password-reset-email:${emailKey}`).acquirePublicLock(

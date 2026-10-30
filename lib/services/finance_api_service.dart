@@ -348,11 +348,9 @@ class FinanceApiService implements PasswordResetApi {
   }
 
   Future<void> deleteAccount({required String confirmationEmail}) async {
-    await _post(
-      '/api/auth/delete-account',
-      {'confirmationEmail': confirmationEmail},
-      forceRefresh: true,
-    );
+    await _post('/api/auth/delete-account', {
+      'confirmationEmail': confirmationEmail,
+    }, forceRefresh: true);
   }
 }
 
@@ -380,7 +378,9 @@ class FinanceApiException implements Exception {
   bool get isRateLimited =>
       statusCode == 429 ||
       code == 'rate-limit-exceeded' ||
-      code == 'resource-exhausted';
+      code == 'resource-exhausted' ||
+      code == 'daily-rate-limit-exceeded' ||
+      code == 'temporarily-busy';
 
   static bool isRateLimitError(Object error) =>
       error is FinanceApiException && error.isRateLimited;
@@ -403,15 +403,29 @@ class FinanceApiException implements Exception {
     final retryAfter = _parseRetryAfter(headers);
     final bucket = _header(headers, 'x-ratelimit-bucket');
 
+    if (status == 503 && code == 'temporarily-busy') {
+      return FinanceApiException(
+        code: 'temporarily-busy',
+        message: 'The service is busy. Please try again later.',
+        statusCode: status,
+        retryAfterSeconds: retryAfter,
+        bucket: bucket,
+      );
+    }
     if (status == 429 ||
         code == 'resource-exhausted' ||
-        code == 'rate-limit-exceeded') {
+        code == 'rate-limit-exceeded' ||
+        code == 'daily-rate-limit-exceeded') {
+      final isDaily = code == 'daily-rate-limit-exceeded';
       return FinanceApiException(
-        code: code == 'rate-limit-exceeded'
+        code: isDaily
+            ? 'daily-rate-limit-exceeded'
+            : code == 'rate-limit-exceeded'
             ? 'rate-limit-exceeded'
             : 'resource-exhausted',
-        message:
-            'You\'re doing that a little too quickly. Please try again in a moment.',
+        message: isDaily
+            ? 'You\'ve reached today\'s limit. Try again tomorrow.'
+            : 'You\'re doing that a little too quickly. Please try again in a moment.',
         statusCode: status,
         retryAfterSeconds: retryAfter,
         bucket: bucket,

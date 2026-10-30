@@ -590,341 +590,384 @@ class _LoginScreenState extends State<LoginScreen> {
       backgroundColor: Colors.white,
       resizeToAvoidBottomInset: true,
       body: SafeArea(
-        child: AutofillGroup(
-          child: SingleChildScrollView(
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: const EdgeInsets.fromLTRB(
-              kLoginPaddingH,
-              kLoginPaddingTop,
-              kLoginPaddingH,
-              kLoginPaddingBottom,
-            ),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: kLoginMaxWidth),
-                child: Form(
-                  key: _formKey,
-                  autovalidateMode: _submitted
-                      ? AutovalidateMode.onUserInteraction
-                      : AutovalidateMode.disabled,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const Center(child: BrandMark(size: kLoginLogoSize)),
-                      const SizedBox(height: kLoginLogoTitleGap),
-                      const Text(
-                        'Journey to Balance',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 28,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF121212),
-                        ),
+        child: LayoutBuilder(
+          key: const ValueKey('auth-form-viewport'),
+          builder: (context, viewport) {
+            final availableHeight =
+                viewport.maxHeight - kLoginPaddingTop - kLoginPaddingBottom;
+            final minContentHeight = availableHeight > 0
+                ? availableHeight
+                : 0.0;
+            return AutofillGroup(
+              child: SingleChildScrollView(
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                padding: const EdgeInsets.fromLTRB(
+                  kLoginPaddingH,
+                  kLoginPaddingTop,
+                  kLoginPaddingH,
+                  kLoginPaddingBottom,
+                ),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: minContentHeight),
+                  child: Center(
+                    child: ConstrainedBox(
+                      key: const ValueKey('auth-form-container'),
+                      constraints: const BoxConstraints(
+                        maxWidth: kLoginMaxWidth,
                       ),
-                      const SizedBox(height: kLoginTitleTaglineGap),
-                      const Text(
-                        'Sign in to sync your money everywhere.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: Color(0xFF737983),
-                        ),
-                      ),
-                      const SizedBox(height: kLoginTaglineToggleGap),
-                      _ModeToggle(
-                        isSignUp: _isSignUp,
-                        enabled: !_busy,
-                        duration: reduceMotion
-                            ? Duration.zero
-                            : const Duration(milliseconds: 260),
-                        onChanged: _setMode,
-                      ),
-                      const SizedBox(height: kLoginToggleFieldGap),
-                      _AuthField(
-                        key: const ValueKey('email-field'),
-                        label: 'Email',
-                        controller: _emailController,
-                        focusNode: _emailFocus,
-                        enabled: !_busy,
-                        keyboardType: TextInputType.emailAddress,
-                        textInputAction: TextInputAction.next,
-                        autofillHints: const [AutofillHints.email],
-                        onSubmitted: (_) => _passwordFocus.requestFocus(),
-                        validator: (value) => isValidAuthEmail(value ?? '')
-                            ? null
-                            : 'Enter a valid email address.',
-                      ),
-                      const SizedBox(height: kLoginFieldFieldGap),
-                      _AuthField(
-                        key: const ValueKey('password-field'),
-                        label: 'Password',
-                        controller: _passwordController,
-                        focusNode: _passwordFocus,
-                        enabled: !_busy,
-                        obscureText: !_showPassword,
-                        textInputAction: _isSignUp
-                            ? TextInputAction.next
-                            : TextInputAction.done,
-                        autofillHints: [
-                          _isSignUp
-                              ? AutofillHints.newPassword
-                              : AutofillHints.password,
-                        ],
-                        suffixIcon: IconButton(
-                          tooltip: _showPassword
-                              ? 'Hide password'
-                              : 'Show password',
-                          onPressed: _busy
-                              ? null
-                              : () => setState(
-                                  () => _showPassword = !_showPassword,
-                                ),
-                          icon: Icon(
-                            _showPassword
-                                ? Icons.visibility_off_outlined
-                                : Icons.visibility_outlined,
-                          ),
-                        ),
-                        onSubmitted: (_) => _isSignUp
-                            ? _confirmFocus.requestFocus()
-                            : _submit(),
-                        validator: (value) => (value ?? '').length >= 8
-                            ? null
-                            : 'Password must be at least 8 characters.',
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.only(top: 7, left: 14),
-                        child: Text(
-                          'Use at least 8 characters.',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: _passwordController.text.length >= 8
-                                ? const Color(0xFF16803A)
-                                : const Color(0xFF737983),
-                          ),
-                        ),
-                      ),
-                      AnimatedSwitcher(
-                        duration: animationDuration,
-                        transitionBuilder: (child, animation) => FadeTransition(
-                          opacity: animation,
-                          child: SizeTransition(
-                            sizeFactor: animation,
-                            alignment: Alignment.topLeft,
-                            child: child,
-                          ),
-                        ),
-                        child: _isSignUp
-                            ? Padding(
-                                key: const ValueKey('confirm-password-field'),
-                                padding: const EdgeInsets.only(top: 16),
-                                child: _AuthField(
-                                  label: 'Confirm password',
-                                  controller: _confirmController,
-                                  focusNode: _confirmFocus,
-                                  enabled: !_busy,
-                                  obscureText: !_showConfirm,
-                                  textInputAction: TextInputAction.done,
-                                  autofillHints: const [
-                                    AutofillHints.newPassword,
-                                  ],
-                                  suffixIcon: IconButton(
-                                    tooltip: _showConfirm
-                                        ? 'Hide password'
-                                        : 'Show password',
-                                    onPressed: _busy
-                                        ? null
-                                        : () => setState(
-                                            () => _showConfirm = !_showConfirm,
-                                          ),
-                                    icon: Icon(
-                                      _showConfirm
-                                          ? Icons.visibility_off_outlined
-                                          : Icons.visibility_outlined,
-                                    ),
-                                  ),
-                                  onSubmitted: (_) => _submit(),
-                                  validator: (value) =>
-                                      value == _passwordController.text
-                                      ? null
-                                      : 'Passwords do not match.',
-                                ),
-                              )
-                            : Align(
-                                key: const ValueKey('forgot-password-link'),
-                                alignment: Alignment.centerRight,
-                                child: TextButton(
-                                  onPressed: _busy ? null : _forgotPassword,
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: const Color(0xFF25282D),
-                                  ),
-                                  child: const Text('Forgot password?'),
+                      child: Form(
+                        key: _formKey,
+                        autovalidateMode: _submitted
+                            ? AutovalidateMode.onUserInteraction
+                            : AutovalidateMode.disabled,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const Center(
+                              child: BrandMark(size: kLoginLogoSize),
+                            ),
+                            const SizedBox(height: kLoginLogoTitleGap),
+                            const Text(
+                              'Journey to Balance',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 28,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF121212),
+                              ),
+                            ),
+                            const SizedBox(height: kLoginTitleTaglineGap),
+                            const Text(
+                              'Sign in to sync your money everywhere.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: Color(0xFF737983),
+                              ),
+                            ),
+                            const SizedBox(height: kLoginTaglineToggleGap),
+                            _ModeToggle(
+                              isSignUp: _isSignUp,
+                              enabled: !_busy,
+                              duration: reduceMotion
+                                  ? Duration.zero
+                                  : const Duration(milliseconds: 260),
+                              onChanged: _setMode,
+                            ),
+                            const SizedBox(height: kLoginToggleFieldGap),
+                            _AuthField(
+                              key: const ValueKey('email-field'),
+                              label: 'Email',
+                              controller: _emailController,
+                              focusNode: _emailFocus,
+                              enabled: !_busy,
+                              keyboardType: TextInputType.emailAddress,
+                              textInputAction: TextInputAction.next,
+                              autofillHints: const [AutofillHints.email],
+                              onSubmitted: (_) => _passwordFocus.requestFocus(),
+                              validator: (value) =>
+                                  isValidAuthEmail(value ?? '')
+                                  ? null
+                                  : 'Enter a valid email address.',
+                            ),
+                            const SizedBox(height: kLoginFieldFieldGap),
+                            _AuthField(
+                              key: const ValueKey('password-field'),
+                              label: 'Password',
+                              controller: _passwordController,
+                              focusNode: _passwordFocus,
+                              enabled: !_busy,
+                              obscureText: !_showPassword,
+                              textInputAction: _isSignUp
+                                  ? TextInputAction.next
+                                  : TextInputAction.done,
+                              autofillHints: [
+                                _isSignUp
+                                    ? AutofillHints.newPassword
+                                    : AutofillHints.password,
+                              ],
+                              suffixIcon: IconButton(
+                                tooltip: _showPassword
+                                    ? 'Hide password'
+                                    : 'Show password',
+                                onPressed: _busy
+                                    ? null
+                                    : () => setState(
+                                        () => _showPassword = !_showPassword,
+                                      ),
+                                icon: Icon(
+                                  _showPassword
+                                      ? Icons.visibility_off_outlined
+                                      : Icons.visibility_outlined,
                                 ),
                               ),
-                      ),
-                      AnimatedSwitcher(
-                        duration: animationDuration,
-                        transitionBuilder: (child, animation) => FadeTransition(
-                          opacity: animation,
-                          child: SizeTransition(
-                            sizeFactor: animation,
-                            alignment: Alignment.topLeft,
-                            child: child,
-                          ),
-                        ),
-                        child: _isSignUp
-                            ? Padding(
-                                key: const ValueKey('terms-consent-row'),
-                                padding: const EdgeInsets.only(top: 12),
-                                child: _TermsConsentRow(
-                                  agreed: _termsAgreed,
-                                  highlighted: _termsHighlighted,
-                                  showError: _termsError,
-                                  onChanged: _setTermsAgreed,
-                                ),
-                              )
-                            : const SizedBox.shrink(),
-                      ),
-                      AnimatedSwitcher(
-                        duration: animationDuration,
-                        child: _error == null
-                            ? const SizedBox.shrink()
-                            : Padding(
-                                key: ValueKey(_error),
-                                padding: const EdgeInsets.only(top: 12),
-                                child: Text(
-                                  _error!,
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                    fontFamily: 'Inter',
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
-                                    color: Color(0xFFDC2626),
-                                  ),
-                                ),
-                              ),
-                      ),
-                      const SizedBox(height: kLoginFieldButtonGap),
-                      Opacity(
-                        opacity: _isSignUp && !_termsAgreed ? 0.5 : 1,
-                        child: SizedBox(
-                          height: kLoginPrimaryButtonHeight,
-                          child: FilledButton(
-                            key: const ValueKey('primary-auth-button'),
-                            onPressed: _busy ? null : _submit,
-                            style: FilledButton.styleFrom(
-                              backgroundColor: const Color(0xFF121212),
-                              foregroundColor: Colors.white,
-                              disabledBackgroundColor: const Color(0xFF4B4B4B),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(
-                                  kLoginButtonRadius,
+                              onSubmitted: (_) => _isSignUp
+                                  ? _confirmFocus.requestFocus()
+                                  : _submit(),
+                              validator: (value) => (value ?? '').length >= 8
+                                  ? null
+                                  : 'Password must be at least 8 characters.',
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.only(top: 7, left: 14),
+                              child: Text(
+                                'Use at least 8 characters.',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: _passwordController.text.length >= 8
+                                      ? const Color(0xFF16803A)
+                                      : const Color(0xFF737983),
                                 ),
                               ),
                             ),
-                            child: _busy
-                                ? const SizedBox(
+                            AnimatedSwitcher(
+                              duration: animationDuration,
+                              transitionBuilder: (child, animation) =>
+                                  FadeTransition(
+                                    opacity: animation,
+                                    child: SizeTransition(
+                                      sizeFactor: animation,
+                                      alignment: Alignment.topLeft,
+                                      child: child,
+                                    ),
+                                  ),
+                              child: _isSignUp
+                                  ? Padding(
+                                      key: const ValueKey(
+                                        'confirm-password-field',
+                                      ),
+                                      padding: const EdgeInsets.only(top: 16),
+                                      child: _AuthField(
+                                        label: 'Confirm password',
+                                        controller: _confirmController,
+                                        focusNode: _confirmFocus,
+                                        enabled: !_busy,
+                                        obscureText: !_showConfirm,
+                                        textInputAction: TextInputAction.done,
+                                        autofillHints: const [
+                                          AutofillHints.newPassword,
+                                        ],
+                                        suffixIcon: IconButton(
+                                          tooltip: _showConfirm
+                                              ? 'Hide password'
+                                              : 'Show password',
+                                          onPressed: _busy
+                                              ? null
+                                              : () => setState(
+                                                  () => _showConfirm =
+                                                      !_showConfirm,
+                                                ),
+                                          icon: Icon(
+                                            _showConfirm
+                                                ? Icons.visibility_off_outlined
+                                                : Icons.visibility_outlined,
+                                          ),
+                                        ),
+                                        onSubmitted: (_) => _submit(),
+                                        validator: (value) =>
+                                            value == _passwordController.text
+                                            ? null
+                                            : 'Passwords do not match.',
+                                      ),
+                                    )
+                                  : Align(
+                                      key: const ValueKey(
+                                        'forgot-password-link',
+                                      ),
+                                      alignment: Alignment.centerRight,
+                                      child: TextButton(
+                                        onPressed: _busy
+                                            ? null
+                                            : _forgotPassword,
+                                        style: TextButton.styleFrom(
+                                          foregroundColor: const Color(
+                                            0xFF25282D,
+                                          ),
+                                        ),
+                                        child: const Text('Forgot password?'),
+                                      ),
+                                    ),
+                            ),
+                            AnimatedSwitcher(
+                              duration: animationDuration,
+                              transitionBuilder: (child, animation) =>
+                                  FadeTransition(
+                                    opacity: animation,
+                                    child: SizeTransition(
+                                      sizeFactor: animation,
+                                      alignment: Alignment.topLeft,
+                                      child: child,
+                                    ),
+                                  ),
+                              child: _isSignUp
+                                  ? Padding(
+                                      key: const ValueKey('terms-consent-row'),
+                                      padding: const EdgeInsets.only(top: 12),
+                                      child: _TermsConsentRow(
+                                        agreed: _termsAgreed,
+                                        highlighted: _termsHighlighted,
+                                        showError: _termsError,
+                                        onChanged: _setTermsAgreed,
+                                      ),
+                                    )
+                                  : const SizedBox.shrink(),
+                            ),
+                            AnimatedSwitcher(
+                              duration: animationDuration,
+                              child: _error == null
+                                  ? const SizedBox.shrink()
+                                  : Padding(
+                                      key: ValueKey(_error),
+                                      padding: const EdgeInsets.only(top: 12),
+                                      child: Text(
+                                        _error!,
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(
+                                          fontFamily: 'Inter',
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w500,
+                                          color: Color(0xFFDC2626),
+                                        ),
+                                      ),
+                                    ),
+                            ),
+                            const SizedBox(height: kLoginFieldButtonGap),
+                            Opacity(
+                              opacity: _isSignUp && !_termsAgreed ? 0.5 : 1,
+                              child: SizedBox(
+                                height: kLoginPrimaryButtonHeight,
+                                child: FilledButton(
+                                  key: const ValueKey('primary-auth-button'),
+                                  onPressed: _busy ? null : _submit,
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: const Color(0xFF121212),
+                                    foregroundColor: Colors.white,
+                                    disabledBackgroundColor: const Color(
+                                      0xFF4B4B4B,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(
+                                        kLoginButtonRadius,
+                                      ),
+                                    ),
+                                  ),
+                                  child: _busy
+                                      ? const SizedBox(
+                                          width: 22,
+                                          height: 22,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2.2,
+                                            color: Colors.white,
+                                          ),
+                                        )
+                                      : Text(
+                                          _isSignUp
+                                              ? 'Create account'
+                                              : 'Log in',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: kLoginButtonDividerGap),
+                            const Row(
+                              children: [
+                                Expanded(
+                                  child: Divider(color: Color(0xFFE2E4E8)),
+                                ),
+                                Padding(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: kLoginDividerLabelPadding,
+                                  ),
+                                  child: Text(
+                                    'or',
+                                    style: TextStyle(color: Color(0xFF737983)),
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Divider(color: Color(0xFFE2E4E8)),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: kLoginDividerGoogleGap),
+                            Opacity(
+                              opacity: _isSignUp && !_termsAgreed ? 0.5 : 1,
+                              child: SizedBox(
+                                height: kLoginGoogleButtonHeight,
+                                child: OutlinedButton.icon(
+                                  onPressed: _busy ? null : _googleSignIn,
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: const Color(0xFF121212),
+                                    side: const BorderSide(
+                                      color: Color(0xFFCED1D6),
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(
+                                        kLoginButtonRadius,
+                                      ),
+                                    ),
+                                  ),
+                                  icon: Image.asset(
+                                    'assets/images/google.png',
                                     width: 22,
                                     height: 22,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2.2,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : Text(
-                                    _isSignUp ? 'Create account' : 'Log in',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w700,
+                                  ),
+                                  label: const Text(
+                                    'Continue with Google',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
                                     ),
                                   ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: kLoginButtonDividerGap),
-                      const Row(
-                        children: [
-                          Expanded(child: Divider(color: Color(0xFFE2E4E8))),
-                          Padding(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: kLoginDividerLabelPadding,
-                            ),
-                            child: Text(
-                              'or',
-                              style: TextStyle(color: Color(0xFF737983)),
-                            ),
-                          ),
-                          Expanded(child: Divider(color: Color(0xFFE2E4E8))),
-                        ],
-                      ),
-                      const SizedBox(height: kLoginDividerGoogleGap),
-                      Opacity(
-                        opacity: _isSignUp && !_termsAgreed ? 0.5 : 1,
-                        child: SizedBox(
-                          height: kLoginGoogleButtonHeight,
-                          child: OutlinedButton.icon(
-                            onPressed: _busy ? null : _googleSignIn,
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: const Color(0xFF121212),
-                              side: const BorderSide(color: Color(0xFFCED1D6)),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(
-                                  kLoginButtonRadius,
                                 ),
                               ),
                             ),
-                            icon: Image.asset(
-                              'assets/images/google.png',
-                              width: 22,
-                              height: 22,
-                            ),
-                            label: const Text(
-                              'Continue with Google',
-                              style: TextStyle(fontWeight: FontWeight.w600),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: kLoginGoogleTermsGap),
-                      if (!_isSignUp)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 6),
-                          child: LegalAgreementText(
-                            signUp: false,
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      if (!_isSignUp) const SizedBox(height: 4),
-                      Center(
-                        child: TextButton(
-                          onPressed: _busy
-                              ? null
-                              : () => _showSignInHelp(
-                                  context,
-                                  onTryAgain: _googleSignIn,
+                            const SizedBox(height: kLoginGoogleTermsGap),
+                            if (!_isSignUp)
+                              const Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 6),
+                                child: LegalAgreementText(
+                                  signUp: false,
+                                  textAlign: TextAlign.center,
                                 ),
-                          style: TextButton.styleFrom(
-                            foregroundColor: const Color(0xFF737983),
-                          ),
-                          child: const Text(
-                            'Having trouble signing in?',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
+                              ),
+                            if (!_isSignUp) const SizedBox(height: 4),
+                            Center(
+                              child: TextButton(
+                                onPressed: _busy
+                                    ? null
+                                    : () => _showSignInHelp(
+                                        context,
+                                        onTryAgain: _googleSignIn,
+                                      ),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: const Color(0xFF737983),
+                                ),
+                                child: const Text(
+                                  'Having trouble signing in?',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
                             ),
-                          ),
+                          ],
                         ),
                       ),
-                    ],
+                    ),
                   ),
                 ),
               ),
-            ),
-          ),
+            );
+          },
         ),
       ),
     );

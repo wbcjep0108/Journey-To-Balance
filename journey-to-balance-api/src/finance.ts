@@ -17,9 +17,9 @@ import {
   conflict,
   internal,
   notFound,
-  RateLimitExceededError,
 } from "./errors";
 import {FirestoreClient} from "./firestore";
+import {enforceProtectedActionLimits} from "./protection";
 import {RATE_LIMITS, RateBucketName} from "./rateLimit";
 import {
   normalizeTransactionIconAsset,
@@ -129,20 +129,9 @@ async function withProtection<T>(
     }
   }
 
-  // Structured DO outcome (same as /api/test/rate-limit-add-money).
-  // Never throw ApiError across DO RPC — instanceof is lost → HTTP 500.
-  const outcome = await gate.enforceRateLimitsOutcome(bucket);
-  if (!outcome.ok) {
-    throw new RateLimitExceededError(
-      {
-        bucket: outcome.info.bucket,
-        limit: outcome.info.limit,
-        remaining: outcome.info.remaining,
-        resetAt: outcome.info.resetAt,
-      },
-      outcome.message,
-    );
-  }
+  // Minute checks run in the user's gate before the shared daily transaction.
+  // Limit outcomes cross DO RPC as data and become ApiErrors in this isolate.
+  await enforceProtectedActionLimits(env, uid, bucket);
 
   const result = await run();
 

@@ -48,9 +48,25 @@ export class RateLimitExceededError extends ApiError {
     },
     message =
       "You're doing that a little too quickly. Please try again in a moment.",
+    code = "rate-limit-exceeded",
   ) {
-    super(429, "rate-limit-exceeded", message);
+    super(429, code, message);
     this.name = "RateLimitExceededError";
+  }
+}
+
+export class ServiceBusyError extends ApiError {
+  constructor(
+    readonly info: {
+      bucket: string;
+      limit: number;
+      remaining: number;
+      resetAt: number;
+    },
+    message = "The service is busy. Please try again later.",
+  ) {
+    super(503, "temporarily-busy", message);
+    this.name = "ServiceBusyError";
   }
 }
 
@@ -69,7 +85,10 @@ export function jsonError(
         headers.set(key, value);
       });
     }
-    if (error instanceof RateLimitExceededError) {
+    if (
+      error instanceof RateLimitExceededError ||
+      error instanceof ServiceBusyError
+    ) {
       new Headers(
         rateLimitHeaders({
           bucket: error.info.bucket,

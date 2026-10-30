@@ -21,6 +21,10 @@ Uses **SQLite-backed Durable Objects** (available on Cloudflare Workers Free).
 - One Durable Object per Firebase UID (`idFromName(uid)`)
 - Requests to the same UID are serialized → safe fixed 60s windows
 - Operation bucket + general (60/min) bucket
+- One named `USER_GATE` Durable Object atomically tracks global, per-user daily,
+  and anonymous email-recipient daily counters
+- Daily windows reset at midnight Asia/Manila; expired keys are cleaned after
+  approximately 26 hours
 
 **Not used:** Workers KV for counters (eventually consistent; Free write limits too low).
 
@@ -82,24 +86,38 @@ They reuse `USER_GATE`, `FIREBASE_PROJECT_ID`,
 `FIREBASE_SERVICE_ACCOUNT_JSON`, and the existing Brevo secrets. No additional
 binding or secret is required.
 
-All finance routes: `POST` + `Authorization: Bearer <Firebase ID token>`
+All finance routes use `POST` plus
+`Authorization: Bearer <Firebase ID token>`.
 
-| Path | Rate bucket |
-|------|-------------|
-| `/api/auth/forgot-pin/request` | 3/min |
-| `/api/auth/forgot-pin/verify` | 10/min |
-| `/api/finance/receive-salary` | 10/min |
-| `/api/finance/add-money` | 20/min |
-| `/api/finance/update-available-balance` | 20/min |
-| `/api/finance/update-percentages` | 10/min |
-| `/api/finance/update-monthly-salary` | 20/min |
-| `/api/finance/add-transaction` | 30/min |
-| `/api/finance/update-transaction` | 30/min |
-| `/api/finance/delete-transaction` | 20/min |
-| `/api/finance/contribute-to-savings-goal` | 20/min |
-| `/api/finance/update-savings-goal-settings` | 20/min |
+| Scope or route | Limit | Window | Behavior / pool |
+|---|---:|---|---|
+| All protected finance/PIN actions for one user | 60 | 1 minute | Shared general minute pool |
+| `/api/auth/forgot-pin/request` | 3 | 1 minute | Per-user operation pool |
+| `/api/auth/forgot-pin/verify` | 10 | 1 minute | Per-user operation pool |
+| `/api/finance/receive-salary` | 5 | 1 minute | Per-user operation pool |
+| `/api/finance/add-money` | 5 | 1 minute | Per-user operation pool |
+| `/api/finance/update-available-balance` | 20 | 1 minute | Per-user operation pool |
+| `/api/finance/update-percentages` | 10 | 1 minute | Per-user operation pool |
+| `/api/finance/update-monthly-salary` | 20 | 1 minute | Per-user operation pool |
+| `/api/finance/add-transaction` | 30 | 1 minute | Per-user operation pool |
+| `/api/finance/update-transaction` | 30 | 1 minute | Per-user operation pool |
+| `/api/finance/delete-transaction` | 20 | 1 minute | Per-user operation pool |
+| `/api/finance/contribute-to-savings-goal` | 20 | 1 minute | Per-user operation pool |
+| `/api/finance/update-savings-goal-settings` | 20 | 1 minute | Per-user operation pool |
+| `/api/finance/migrate-budget-schema` | 10 | 1 minute | Per-user operation pool |
+| Isolated rate-limit test probe | 5 | 1 minute | Does not use the general minute pool |
+| Password-reset requests per email | 3 | 1 hour | Neutral `{ "ok": true }` when limited |
+| Password-reset requests per IP | 20 | 1 hour | Neutral `{ "ok": true }` when limited |
+| Protected finance/PIN actions per user | 150 | Manila calendar day | Shared daily pool; HTTP 429 |
+| Protected Worker requests across all users | 20,000 | Manila calendar day | Global valve; HTTP 503; health checks excluded |
+| Emails per user/email address | 5 | Manila calendar day | Shared by password reset and Forgot PIN |
+| Emails across all users | 100 | Manila calendar day | Shared global email pool |
 
-Rate exceeded → **HTTP 429** `{ error: { code: "resource-exhausted", message: "..." } }`
+Minute and per-user daily limits return HTTP 429 with `Retry-After` and
+rate-limit headers. The global protected-request valve returns HTTP 503 with
+code `temporarily-busy` and `Retry-After`. Password-reset request responses
+remain neutral when an email cap is reached; Forgot PIN returns its normal 429
+rate-limit response.
 
 ## Status
 

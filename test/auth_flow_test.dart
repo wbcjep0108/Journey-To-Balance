@@ -289,6 +289,41 @@ void main() {
     );
   });
 
+  testWidgets('centers the complete login and signup forms vertically', (
+    tester,
+  ) async {
+    const screenSize = Size(430, 1100);
+    await tester.binding.setSurfaceSize(screenSize);
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(_loginApp(_FakeAuthService()));
+    await tester.pumpAndSettle();
+
+    Rect formRect() =>
+        tester.getRect(find.byKey(const ValueKey('auth-form-container')));
+    final viewportRect = tester.getRect(
+      find.byKey(const ValueKey('auth-form-viewport')),
+    );
+
+    final loginRect = formRect();
+    expect(
+      ((loginRect.top - viewportRect.top) -
+              (viewportRect.bottom - loginRect.bottom))
+          .abs(),
+      lessThan(8),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('signup-toggle')));
+    await tester.pumpAndSettle();
+    final signupRect = formRect();
+    expect(
+      ((signupRect.top - viewportRect.top) -
+              (viewportRect.bottom - signupRect.bottom))
+          .abs(),
+      lessThan(8),
+    );
+  });
+
   testWidgets('switching modes resets the sign-up agreement', (tester) async {
     await tester.pumpWidget(_loginApp(_FakeAuthService()));
     await tester.tap(find.byKey(const ValueKey('signup-toggle')));
