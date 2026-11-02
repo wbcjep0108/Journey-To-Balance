@@ -11,6 +11,7 @@ import '../../services/user_session_cleanup.dart';
 import '../../widgets/barrier_blur.dart';
 import '../../widgets/journey_about_dialog.dart';
 import '../../widgets/journey_help_dialog.dart';
+import '../../widgets/sign_out_confirmation_dialog.dart';
 import '../legal/legal_links.dart';
 import 'currency_settings_page.dart';
 import 'notification_settings_page.dart';
@@ -32,6 +33,12 @@ class _AccountPageState extends State<AccountPage> {
 
   Future<void> _signOut() async {
     if (_isSigningOut) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => withBarrierBlur(const SignOutConfirmationDialog()),
+    );
+    if (!mounted || confirmed != true) return;
 
     final transition = context.read<LogoutTransitionController>();
     final messenger = ScaffoldMessenger.of(context);
@@ -177,7 +184,10 @@ class _AccountPageState extends State<AccountPage> {
               const SizedBox(height: 14),
               Row(
                 children: [
-                  _AboutLink(label: 'About Journey to Balance', onPressed: _openAbout),
+                  _AboutLink(
+                    label: 'About Journey to Balance',
+                    onPressed: _openAbout,
+                  ),
                   const Spacer(),
                   Row(
                     mainAxisSize: MainAxisSize.min,
