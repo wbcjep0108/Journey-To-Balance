@@ -18,10 +18,16 @@ import 'notification_settings_page.dart';
 import 'security_settings_page.dart';
 
 class AccountPage extends StatefulWidget {
-  const AccountPage({super.key, this.onHelpAndSupport, this.onAbout});
+  const AccountPage({
+    super.key,
+    this.onHelpAndSupport,
+    this.onAbout,
+    this.onRunSetup,
+  });
 
   final VoidCallback? onHelpAndSupport;
   final VoidCallback? onAbout;
+  final VoidCallback? onRunSetup;
 
   @override
   State<AccountPage> createState() => _AccountPageState();
@@ -174,6 +180,7 @@ class _AccountPageState extends State<AccountPage> {
                         onCurrency: _openCurrency,
                         onSecurity: _openSecurity,
                         onNotifications: _openNotifications,
+                        onRunSetup: widget.onRunSetup,
                         onHelp: _openHelp,
                         onSignOut: _signOut,
                       ),
@@ -266,6 +273,7 @@ class _AccountCard extends StatelessWidget {
     required this.onCurrency,
     required this.onSecurity,
     required this.onNotifications,
+    required this.onRunSetup,
     required this.onHelp,
     required this.onSignOut,
   });
@@ -277,6 +285,7 @@ class _AccountCard extends StatelessWidget {
   final VoidCallback onCurrency;
   final VoidCallback onSecurity;
   final VoidCallback onNotifications;
+  final VoidCallback? onRunSetup;
   final VoidCallback onHelp;
   final VoidCallback onSignOut;
 
@@ -360,6 +369,12 @@ class _AccountCard extends StatelessWidget {
             icon: Icons.notifications_none_rounded,
             label: 'Notifications',
             onTap: onNotifications,
+          ),
+          const Divider(height: 1, color: Color(0xFFE5E7EB)),
+          _AccountLinkTile(
+            icon: Icons.tune_rounded,
+            label: 'Run setup again',
+            onTap: onRunSetup ?? () {},
           ),
           const Divider(height: 1, color: Color(0xFFE5E7EB)),
           _AccountLinkTile(

@@ -1,7 +1,7 @@
-import type {AuthUser} from "./auth";
-import {badRequest, unauthorized} from "./errors";
-import type {Env} from "./finance";
-import {deleteFirebaseAuthUser, FirestoreClient} from "./firestore";
+import type { AuthUser } from "./auth";
+import { badRequest, unauthorized } from "./errors";
+import type { Env } from "./finance";
+import { deleteFirebaseAuthUser, FirestoreClient } from "./firestore";
 
 export interface DeleteAccountDependencies {
   purgeFirestoreUserTree(uid: string): Promise<void>;
@@ -15,18 +15,11 @@ export interface DeleteAccountOutcome {
   message: string;
 }
 
-/**
- * Irreversible user account deletion pipeline:
- * 1. Requires fresh reauthentication (auth_time within 5 minutes).
- * 2. Requires exact confirmation of registered email.
- * 3. Purges Firestore user document tree recursively (including unknown subcollections).
- * 4. Clears user's Worker Durable Object state (rate limits, idempotency).
- * 5. Deletes user identity from Firebase Authentication.
- */
+
 export async function handleDeleteAccount(
   deps: DeleteAccountDependencies,
   user: AuthUser,
-  body: {confirmationEmail?: unknown},
+  body: { confirmationEmail?: unknown },
   maxAuthAgeSeconds = 300,
 ): Promise<DeleteAccountOutcome> {
   // 1. Fresh reauthentication check

@@ -59,18 +59,24 @@ class WalletCashProvider extends ChangeNotifier {
   }
 
   Future<void> setAmount(double amount) async {
+    await setAmountVerified(amount);
+  }
+
+  Future<bool> setAmountVerified(double amount) async {
     final next = amount < 0 ? 0.0 : amount;
     final previous = _amount;
     _amount = next;
     notifyListeners();
 
     final uid = _uid;
-    if (uid == null) return;
+    if (uid == null) return false;
     try {
       await _service.saveCashAmount(uid, next);
+      return (_amount - next).abs() < 0.001;
     } catch (_) {
       _amount = previous;
       notifyListeners();
+      return false;
     }
   }
 

@@ -25,6 +25,8 @@ class ReminderClock {
   }
 }
 
+enum NotificationPermissionDecision { undetermined, granted, denied }
+
 class NotificationPrefsProvider extends ChangeNotifier {
   NotificationPrefsProvider({FlutterSecureStorage? storage})
     : _storage = storage ?? const FlutterSecureStorage();
@@ -34,6 +36,7 @@ class NotificationPrefsProvider extends ChangeNotifier {
   static const plannerKey = 'notif_planner_enabled';
   static const morningMinutesKey = 'notif_morning_minutes';
   static const eveningMinutesKey = 'notif_evening_minutes';
+  static const permissionDecisionKey = 'notif_permission_decision';
 
   final FlutterSecureStorage _storage;
 
@@ -43,6 +46,8 @@ class NotificationPrefsProvider extends ChangeNotifier {
   ReminderClock _morning = ReminderClock.morningDefault;
   ReminderClock _evening = ReminderClock.eveningDefault;
   bool _loaded = false;
+  NotificationPermissionDecision _permissionDecision =
+      NotificationPermissionDecision.undetermined;
 
   bool get dailyEnabled => _dailyEnabled;
   bool get loanEnabled => _loanEnabled;
@@ -50,6 +55,7 @@ class NotificationPrefsProvider extends ChangeNotifier {
   ReminderClock get morning => _morning;
   ReminderClock get evening => _evening;
   bool get isLoaded => _loaded;
+  NotificationPermissionDecision get permissionDecision => _permissionDecision;
 
   static Future<bool> readDailyEnabled({FlutterSecureStorage? storage}) async {
     return _readBool(
@@ -127,6 +133,7 @@ class NotificationPrefsProvider extends ChangeNotifier {
     _plannerEnabled = await readPlannerEnabled(storage: _storage);
     _morning = await readMorning(storage: _storage);
     _evening = await readEvening(storage: _storage);
+    _permissionDecision = await readPermissionDecision(storage: _storage);
     _loaded = true;
     notifyListeners();
   }
@@ -166,6 +173,31 @@ class NotificationPrefsProvider extends ChangeNotifier {
     await _write(eveningMinutesKey, '${value.minutesSinceMidnight}');
   }
 
+  static Future<NotificationPermissionDecision> readPermissionDecision({
+    FlutterSecureStorage? storage,
+  }) async {
+    try {
+      final raw = await (storage ?? const FlutterSecureStorage()).read(
+        key: permissionDecisionKey,
+      );
+      return NotificationPermissionDecision.values.firstWhere(
+        (value) => value.name == raw,
+        orElse: () => NotificationPermissionDecision.undetermined,
+      );
+    } catch (_) {
+      return NotificationPermissionDecision.undetermined;
+    }
+  }
+
+  Future<void> setPermissionDecision(
+    NotificationPermissionDecision value,
+  ) async {
+    if (_permissionDecision == value) return;
+    _permissionDecision = value;
+    notifyListeners();
+    await _write(permissionDecisionKey, value.name);
+  }
+
   Future<void> _write(String key, String value) async {
     try {
       await _storage.write(key: key, value: value);
@@ -178,4 +210,37 @@ bool plannerNotificationsAllowed({
   required bool permissionGranted,
 }) {
   return settingEnabled && permissionGranted;
+}
+
+bool shouldRequestOnboardingNotificationPermission({
+  required bool previousValue,
+  required bool nextValue,
+}) {
+  return !previousValue && nextValue;
+}
+
+Future<bool> requestOnboardingCompletionPermissionIfNeeded({
+  required bool anyReminderEnabled,
+  required NotificationPermissionDecision decision,
+  required Future<bool> Function() requestPermission,
+  required Future<void> Function(NotificationPermissionDecision decision)
+  saveDecision,
+}) async {
+  if (!anyReminderEnabled ||
+      decision != NotificationPermissionDecision.undetermined) {
+    return false;
+  }
+
+  var granted = false;
+  try {
+    granted = await requestPermission();
+  } catch (_) {
+    granted = false;
+  }
+  await saveDecision(
+    granted
+        ? NotificationPermissionDecision.granted
+        : NotificationPermissionDecision.denied,
+  );
+  return true;
 }

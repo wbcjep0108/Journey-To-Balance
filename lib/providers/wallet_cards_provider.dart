@@ -34,11 +34,7 @@ class WalletCardModel {
 
   String get bankLabel => walletBankLabel(iconAsset);
 
-  WalletCardModel copyWith({
-    String? id,
-    String? iconAsset,
-    double? amount,
-  }) {
+  WalletCardModel copyWith({String? id, String? iconAsset, double? amount}) {
     return WalletCardModel(
       id: id ?? this.id,
       iconAsset: iconAsset ?? this.iconAsset,
@@ -127,7 +123,11 @@ class WalletCardsProvider extends ChangeNotifier {
   bool hasIcon(String iconAsset) => _cards.any((c) => c.iconAsset == iconAsset);
 
   Future<void> addCard({required String iconAsset}) async {
-    if (hasIcon(iconAsset)) return;
+    await addCardVerified(iconAsset: iconAsset);
+  }
+
+  Future<bool> addCardVerified({required String iconAsset}) async {
+    if (hasIcon(iconAsset)) return true;
     final id = DateTime.now().microsecondsSinceEpoch.toString();
     final previous = _cards;
     _cards = [
@@ -135,7 +135,8 @@ class WalletCardsProvider extends ChangeNotifier {
       WalletCardModel(id: id, iconAsset: iconAsset, amount: 0),
     ];
     notifyListeners();
-    await _persist(previous);
+    final saved = await _persist(previous);
+    return saved && hasIcon(iconAsset);
   }
 
   Future<void> removeByIconAsset(String iconAsset) async {
@@ -155,7 +156,11 @@ class WalletCardsProvider extends ChangeNotifier {
   }
 
   Future<void> setCardAmounts(Map<String, double> amountsById) async {
-    if (amountsById.isEmpty) return;
+    await setCardAmountsVerified(amountsById);
+  }
+
+  Future<bool> setCardAmountsVerified(Map<String, double> amountsById) async {
+    if (amountsById.isEmpty) return true;
     final previous = _cards;
     _cards = _cards
         .map((c) {
@@ -165,17 +170,25 @@ class WalletCardsProvider extends ChangeNotifier {
         })
         .toList(growable: false);
     notifyListeners();
-    await _persist(previous);
+    final saved = await _persist(previous);
+    if (!saved) return false;
+    return amountsById.entries.every((entry) {
+      final card = cardById(entry.key);
+      final expected = entry.value < 0 ? 0.0 : entry.value;
+      return card != null && (card.amount - expected).abs() < 0.001;
+    });
   }
 
-  Future<void> _persist(List<WalletCardModel> previous) async {
+  Future<bool> _persist(List<WalletCardModel> previous) async {
     final uid = _uid;
-    if (uid == null) return;
+    if (uid == null) return false;
     try {
       await _service.saveCards(uid, _cards);
+      return true;
     } catch (_) {
       _cards = previous;
       notifyListeners();
+      return false;
     }
   }
 

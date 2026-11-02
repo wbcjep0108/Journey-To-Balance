@@ -59,7 +59,7 @@ void main() {
       expect(find.byKey(const ValueKey('legal-jump-list')), findsOneWidget);
       expect(find.text(document.sections.first.heading), findsNWidgets(2));
       expect(find.text('1. ${document.sections.first.heading}'), findsNothing);
-      expect(find.text('Last updated: October 29, 2026'), findsOneWidget);
+      expect(find.text('Last updated: October 30, 2026'), findsOneWidget);
       expect(find.text('Version: $currentLegalVersion'), findsOneWidget);
 
       final contact = find.byKey(const ValueKey('legal-contact-card'));

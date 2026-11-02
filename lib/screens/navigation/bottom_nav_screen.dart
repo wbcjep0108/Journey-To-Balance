@@ -8,7 +8,14 @@ import '../savings/savings_page.dart';
 import '../../services/notification_router.dart';
 
 class BottomNavScreen extends StatefulWidget {
-  const BottomNavScreen({super.key});
+  const BottomNavScreen({
+    super.key,
+    required this.showFinishSetup,
+    required this.onRunSetup,
+  });
+
+  final bool showFinishSetup;
+  final VoidCallback onRunSetup;
 
   @override
   State<BottomNavScreen> createState() => _BottomNavScreenState();
@@ -48,11 +55,15 @@ class _BottomNavScreenState extends State<BottomNavScreen>
   void initState() {
     super.initState();
     _pages = [
-      HomePage(onProfileTap: () => _onItemTapped(4)),
+      HomePage(
+        onProfileTap: () => _onItemTapped(4),
+        showFinishSetup: widget.showFinishSetup,
+        onFinishSetup: widget.onRunSetup,
+      ),
       const BillsPage(),
       const SavingsPage(),
       const PersonalPage(),
-      const AccountPage(),
+      AccountPage(onRunSetup: widget.onRunSetup),
     ];
     _entranceController = AnimationController(
       vsync: this,
@@ -102,6 +113,18 @@ class _BottomNavScreenState extends State<BottomNavScreen>
       _entranceController.value = 1;
     } else {
       _entranceController.forward();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant BottomNavScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.showFinishSetup != widget.showFinishSetup) {
+      _pages[0] = HomePage(
+        onProfileTap: () => _onItemTapped(4),
+        showFinishSetup: widget.showFinishSetup,
+        onFinishSetup: widget.onRunSetup,
+      );
     }
   }
 

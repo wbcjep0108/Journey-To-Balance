@@ -25,9 +25,16 @@ import 'monthly_spending_dashboard_page.dart';
 import 'wallet_page.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key, this.onProfileTap});
+  const HomePage({
+    super.key,
+    this.onProfileTap,
+    this.showFinishSetup = false,
+    this.onFinishSetup,
+  });
 
   final VoidCallback? onProfileTap;
+  final bool showFinishSetup;
+  final VoidCallback? onFinishSetup;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -561,6 +568,11 @@ class _HomePageState extends State<HomePage> {
                   ],
                 ),
               ),
+              if (widget.showFinishSetup)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  child: FinishSetupCard(onTap: widget.onFinishSetup),
+                ),
               Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
@@ -594,6 +606,57 @@ class _HomePageState extends State<HomePage> {
                 padding: EdgeInsets.fromLTRB(16, 40, 16, 12),
                 child: ForeignExchangeCard(),
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class FinishSetupCard extends StatelessWidget {
+  const FinishSetupCard({super.key, required this.onTap});
+
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: const Color(0xFFF1F2F4),
+      borderRadius: BorderRadius.circular(24),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(24),
+        child: const Padding(
+          padding: EdgeInsets.all(18),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 22,
+                backgroundColor: Colors.white,
+                child: Icon(Icons.tune_rounded, color: Color(0xFF121212)),
+              ),
+              SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Finish setup',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Add your income, starting money, and reminders.',
+                      style: TextStyle(color: Color(0xFF737983)),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded),
             ],
           ),
         ),

@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import 'firebase_options.dart';
 import 'models/loan_entry.dart';
+import 'models/onboarding_state.dart';
 import 'providers/app_lock_provider.dart';
 import 'providers/budget_provider.dart';
 import 'providers/currency_provider.dart';
@@ -19,7 +20,7 @@ import 'screens/auth/login_screen.dart';
 import 'screens/auth/pin_setup_screen.dart';
 import 'screens/auth/pin_unlock_screen.dart';
 import 'screens/legal/legal_acceptance_gate.dart';
-import 'screens/navigation/bottom_nav_screen.dart';
+import 'screens/onboarding/onboarding_gate.dart';
 import 'screens/splash/splash_screen.dart';
 import 'screens/splash/welcome_transition.dart';
 import 'services/finance_api_service.dart';
@@ -28,13 +29,12 @@ import 'services/wallet_firestore_service.dart';
 import 'services/wallet_migration_service.dart';
 import 'services/notification_router.dart';
 import 'services/notification_service.dart';
+import 'services/onboarding_service.dart';
 import 'services/planner_firestore_service.dart';
 import 'services/logout_transition_controller.dart';
 import 'services/user_session_cleanup.dart';
 import 'widgets/app_privacy_blur.dart';
-import 'widgets/budget_exceeded_dialog.dart';
 import 'widgets/logout_skeleton.dart';
-import 'widgets/rate_limit_dialog.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -57,6 +57,7 @@ void main() async {
           ),
         ),
         Provider(create: (_) => FinanceApiService()),
+        Provider(create: (_) => OnboardingService()),
         ChangeNotifierProvider(
           create: (context) => BudgetProvider(
             context.read<FirestoreFinanceService>(),
@@ -282,6 +283,8 @@ class _UserDataGateState extends State<_UserDataGate> {
   bool _ready = false;
   bool _loading = false;
   String? _error;
+  OnboardingRecord? _onboardingRecord;
+  bool _showOnboarding = false;
 
   @override
   void initState() {
@@ -299,6 +302,8 @@ class _UserDataGateState extends State<_UserDataGate> {
       _started = false;
       _ready = false;
       _error = null;
+      _onboardingRecord = null;
+      _showOnboarding = false;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         _load();
@@ -349,13 +354,34 @@ class _UserDataGateState extends State<_UserDataGate> {
       if (!mounted) return;
       await context.read<PlannerProvider>().loadForUser(widget.uid);
       if (!mounted) return;
+      final onboardingRecord = await context
+          .read<OnboardingService>()
+          .loadRecord(widget.uid);
+      if (!mounted) return;
       final error = context.read<BudgetProvider>().errorMessage;
       final loans = context.read<LoanProvider>().loans;
+      final budget = context.read<BudgetProvider>();
+      final user = FirebaseAuth.instance.currentUser;
+      final creationTime = user?.uid == widget.uid
+          ? user?.metadata.creationTime
+          : null;
+      final releaseCutoff = DateTime.parse(ONBOARDING_RELEASE_CUTOFF);
+      final showOnboarding = isOnboardingEligible(
+        record: onboardingRecord,
+        creationTime: creationTime,
+        releaseCutoff: releaseCutoff,
+        monthlySalary: budget.monthlySalary,
+        hasCards: context.read<WalletCardsProvider>().cards.isNotEmpty,
+        walletCash: context.read<WalletCashProvider>().amount,
+        hasTransactions: budget.hasTransactions,
+      );
       setState(() {
         _error = error;
         _ready = error == null;
+        _onboardingRecord = onboardingRecord;
+        _showOnboarding = showOnboarding;
       });
-      if (error == null) {
+      if (error == null && !showOnboarding) {
         unawaited(_activateReminders(loans));
       }
     } catch (_) {
@@ -372,7 +398,27 @@ class _UserDataGateState extends State<_UserDataGate> {
 
   Future<void> _activateReminders(List<LoanEntry> loans) async {
     try {
-      await NotificationService.instance.requestPermission();
+      final prefs = context.read<NotificationPrefsProvider>();
+      if (prefs.permissionDecision ==
+          NotificationPermissionDecision.undetermined) {
+        final granted = await NotificationService.instance.requestPermission();
+        if (mounted) {
+          await prefs.setPermissionDecision(
+            granted
+                ? NotificationPermissionDecision.granted
+                : NotificationPermissionDecision.denied,
+          );
+        }
+      }
+      if (mounted) {
+        await context.read<PlannerProvider>().refreshNotificationPermission();
+      }
+      await NotificationService.instance.syncAll(loans: loans);
+    } catch (_) {}
+  }
+
+  Future<void> _syncRemindersAfterOnboarding(List<LoanEntry> loans) async {
+    try {
       if (mounted) {
         await context.read<PlannerProvider>().refreshNotificationPermission();
       }
@@ -396,10 +442,12 @@ class _UserDataGateState extends State<_UserDataGate> {
   Widget build(BuildContext context) {
     // Keep BottomNav mounted once ready — never swap it for Splash on reload.
     if (_ready) {
-      return const RateLimitListener(
-        child: PlannerAlertListener(
-          child: PostLoginWelcome(child: BottomNavScreen()),
-        ),
+      return OnboardingGate(
+        uid: widget.uid,
+        showInitially: _showOnboarding,
+        initialRecord: _onboardingRecord,
+        onInitialFlowClosed: () =>
+            _syncRemindersAfterOnboarding(context.read<LoanProvider>().loans),
       );
     }
 

@@ -11,6 +11,7 @@ import '../../providers/wallet_cards_provider.dart';
 import '../../providers/wallet_cash_provider.dart';
 import '../../widgets/allocation_confirm_dialog.dart';
 import '../../widgets/barrier_blur.dart';
+import '../../widgets/bank_card_picker.dart';
 import '../../widgets/sensitive_action_auth.dart';
 
 Future<bool> _confirmWalletFunding({
@@ -229,19 +230,6 @@ class _WalletPageState extends State<WalletPage> {
   }
 
   Future<void> _showAddCardSheet() async {
-    const banks = <String>[
-      'assets/images/bank/landbank.png',
-      'assets/images/bank/bdo.png',
-      'assets/images/bank/metrobank.png',
-      'assets/images/bank/bpi.png',
-      'assets/images/bank/unionbank.png',
-      'assets/images/bank/gcash.png',
-      'assets/images/bank/gotyme.png',
-      'assets/images/bank/maya.png',
-      'assets/images/bank/maribank.png',
-      'assets/images/bank/pnb.png',
-    ];
-
     await showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
@@ -302,8 +290,8 @@ class _WalletPageState extends State<WalletPage> {
                             childAspectRatio: _BankCardArt.aspectRatio,
                             padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
                             children: [
-                              for (final iconAsset in banks)
-                                _BankPickTile(
+                              for (final iconAsset in bankCardIconAssets)
+                                BankCardPickerTile(
                                   iconAsset: iconAsset,
                                   selected:
                                       pendingAdd == iconAsset ||
@@ -1833,64 +1821,6 @@ class _CashBill extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _BankPickTile extends StatelessWidget {
-  const _BankPickTile({
-    required this.iconAsset,
-    required this.selected,
-    required this.alreadyAdded,
-    required this.onTap,
-  });
-
-  final String iconAsset;
-  final bool selected;
-  final bool alreadyAdded;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: selected ? const Color(0xFF111827) : Colors.transparent,
-            width: 2,
-          ),
-        ),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            _BankCardArt(assetPath: iconAsset, borderRadius: 14),
-            if (alreadyAdded)
-              const Positioned(
-                right: 8,
-                top: 8,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: Color(0xFF111827),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Padding(
-                    padding: EdgeInsets.all(4),
-                    child: Icon(
-                      Icons.check_rounded,
-                      size: 14,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
       ),
     );
   }

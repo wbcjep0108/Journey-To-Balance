@@ -60,18 +60,24 @@ class CurrencyProvider extends ChangeNotifier {
   }
 
   Future<void> setCurrency(AppCurrency currency) async {
-    if (_currency.code == currency.code) return;
+    await setCurrencyVerified(currency);
+  }
+
+  Future<bool> setCurrencyVerified(AppCurrency currency) async {
+    if (_currency.code == currency.code) return true;
     final previous = _currency;
     _currency = currency;
     notifyListeners();
 
     final uid = _uid;
-    if (uid == null) return;
+    if (uid == null) return false;
     try {
       await _service.saveCurrency(uid, currency.code);
+      return _currency.code == currency.code;
     } catch (_) {
       _currency = previous;
       notifyListeners();
+      return false;
     }
   }
 
@@ -85,10 +91,7 @@ class CurrencyProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  String format(
-    double amount, {
-    int? decimalDigits,
-  }) {
+  String format(double amount, {int? decimalDigits}) {
     final digits = decimalDigits ?? (amount % 1 == 0 ? 0 : 2);
     return NumberFormat.currency(
       locale: _currency.locale,

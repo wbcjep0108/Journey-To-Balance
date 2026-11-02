@@ -165,8 +165,20 @@ class PlannerProvider extends ChangeNotifier {
     }
     try {
       if (_notificationPrefs.plannerEnabled) {
-        _notificationPermissionGranted = await _notifications
-            .requestPermission();
+        if (_notificationPrefs.permissionDecision ==
+            NotificationPermissionDecision.undetermined) {
+          _notificationPermissionGranted = await _notifications
+              .requestPermission();
+          await _notificationPrefs.setPermissionDecision(
+            _notificationPermissionGranted
+                ? NotificationPermissionDecision.granted
+                : NotificationPermissionDecision.denied,
+          );
+        } else {
+          _notificationPermissionGranted =
+              _notificationPrefs.permissionDecision ==
+              NotificationPermissionDecision.granted;
+        }
       }
     } catch (_) {
       _notificationPermissionGranted = false;

@@ -50,8 +50,8 @@ void main() {
     expect(store.createdDocumentId, 'acceptance_$currentLegalVersion');
     expect(store.createdTermsVersion, currentLegalVersion);
     expect(store.createdPrivacyVersion, currentLegalVersion);
-    expect(currentLegalVersion, '2026-10-29-v2');
-    expect(legalVersionDateLabel(), 'October 29, 2026');
+    expect(currentLegalVersion, '2026-10-30-v4');
+    expect(legalVersionDateLabel(), 'October 30, 2026');
     expect(service.documentId, matches(r'^acceptance_.+$'));
     expect(currentLegalVersion.length, lessThanOrEqualTo(32));
   });

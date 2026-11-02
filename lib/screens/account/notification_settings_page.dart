@@ -34,6 +34,12 @@ class NotificationSettingsPage extends StatelessWidget {
 
     final granted = await NotificationService.instance.requestPermission();
     if (!context.mounted) return;
+    await prefs.setPermissionDecision(
+      granted
+          ? NotificationPermissionDecision.granted
+          : NotificationPermissionDecision.denied,
+    );
+    if (!context.mounted) return;
     await prefs.setPlannerEnabled(granted);
     if (!context.mounted) return;
     await context.read<PlannerProvider>().refreshNotificationPermission();

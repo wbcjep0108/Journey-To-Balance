@@ -91,8 +91,7 @@ class BudgetProvider extends ChangeNotifier {
     final previousById = {for (final entry in previous) entry.id: entry};
     final pendingLocals = previous
         .where(
-          (entry) =>
-              _pendingUpsertKeys.contains(_entryKey(category, entry.id)),
+          (entry) => _pendingUpsertKeys.contains(_entryKey(category, entry.id)),
         )
         .where((entry) => !remote.any((item) => item.id == entry.id))
         .toList();
@@ -124,8 +123,7 @@ class BudgetProvider extends ChangeNotifier {
               localSource.isNotEmpty) {
             mergedEntry = mergedEntry.copyWith(
               fundingSourceId: localSource,
-              fundingSourceLabel:
-                  previousById[entry.id]?.fundingSourceLabel,
+              fundingSourceLabel: previousById[entry.id]?.fundingSourceLabel,
             );
           }
           return mergedEntry;
@@ -152,6 +150,12 @@ class BudgetProvider extends ChangeNotifier {
   List<FinancialEntry> entriesFor(FinancialCategory category) {
     return List.unmodifiable(_entries[category]!);
   }
+
+  bool get hasTransactions => FinancialCategory.values.any(
+    (category) => _entries[category]!.isNotEmpty,
+  );
+
+  String newRequestId() => _api.newRequestId();
 
   double totalUsedFor(FinancialCategory category) {
     final active = _entries[category]!
@@ -286,7 +290,6 @@ class BudgetProvider extends ChangeNotifier {
     return (savingsGoalCurrent / savingsGoalTarget).clamp(0.0, 1.0);
   }
 
-
   /// Contributions to the savings goal from Bills / Savings / Personal.
   List<DayTransaction> get savingsGoalActivity {
     final results = <DayTransaction>[];
@@ -365,8 +368,9 @@ class BudgetProvider extends ChangeNotifier {
   /// True when the user logged a non-refund spend today.
   bool get hasTrackedSpendingToday {
     final now = DateTime.now();
-    return entriesForDay(DateTime(now.year, now.month, now.day))
-        .any((item) => !item.entry.isRefund);
+    return entriesForDay(
+      DateTime(now.year, now.month, now.day),
+    ).any((item) => !item.entry.isRefund);
   }
 
   Future<void>? _activeLoad;
@@ -412,8 +416,10 @@ class BudgetProvider extends ChangeNotifier {
       if (loaded != null) {
         final budget = loaded.values;
         monthlySalary = budget['monthlySalary']!;
-        budgetSchemaVersion =
-            (budget['schemaVersion'] ?? 1).round().clamp(1, currentBudgetSchemaVersion);
+        budgetSchemaVersion = (budget['schemaVersion'] ?? 1).round().clamp(
+          1,
+          currentBudgetSchemaVersion,
+        );
         _applyForfeited(budget);
         _applySavingsGoal(budget, title: loaded.savingsGoalTitle);
         _applyBudget(
@@ -436,9 +442,7 @@ class BudgetProvider extends ChangeNotifier {
       if (migrated) {
         unawaited(() async {
           try {
-            await _api.migrateBudgetSchema(
-              requestId: _api.newRequestId(),
-            );
+            await _api.migrateBudgetSchema(requestId: _api.newRequestId());
           } catch (error) {
             // Keep local migrated view; next Worker mutation also migrates.
             // Still surface rate-limit UX when the Worker rejects the call.
@@ -503,8 +507,10 @@ class BudgetProvider extends ChangeNotifier {
       } else {
         final budget = loaded.values;
         monthlySalary = budget['monthlySalary']!;
-        budgetSchemaVersion =
-            (budget['schemaVersion'] ?? 1).round().clamp(1, currentBudgetSchemaVersion);
+        budgetSchemaVersion = (budget['schemaVersion'] ?? 1).round().clamp(
+          1,
+          currentBudgetSchemaVersion,
+        );
         _applyBudget(
           availableBalance: budget['availableBalance']!,
           billsPercentage: budget['billsPercentage']!,
@@ -573,6 +579,8 @@ class BudgetProvider extends ChangeNotifier {
     double? billsPercentage,
     double? savingsPercentage,
     double? personalPercentage,
+    String? salaryRequestId,
+    String? percentagesRequestId,
   }) async {
     _requireUid();
     final nextBills = billsPercentage ?? this.billsPercentage;
@@ -601,13 +609,13 @@ class BudgetProvider extends ChangeNotifier {
     try {
       await _api.updateMonthlySalary(
         monthlySalary: monthlySalary,
-        requestId: _api.newRequestId(),
+        requestId: salaryRequestId ?? _api.newRequestId(),
       );
       await _api.updatePercentages(
         billsPercentage: nextBills,
         savingsPercentage: nextSavings,
         personalPercentage: nextPersonal,
-        requestId: _api.newRequestId(),
+        requestId: percentagesRequestId ?? _api.newRequestId(),
       );
     } catch (error) {
       this.monthlySalary = previousSalary;
@@ -668,10 +676,7 @@ class BudgetProvider extends ChangeNotifier {
     errorMessage = null;
     _budgetMutationDepth++;
     try {
-      await _api.addMoney(
-        amount: amount,
-        requestId: requestId,
-      );
+      await _api.addMoney(amount: amount, requestId: requestId);
       availableBalance += amount;
       _distributeAddedFunds(amount);
       _recordDistributedCredits(
@@ -692,14 +697,17 @@ class BudgetProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> updateAvailableBalance(double newBalance) async {
+  Future<void> updateAvailableBalance(
+    double newBalance, {
+    String? requestId,
+  }) async {
     _requireUid();
     if (newBalance < 0) {
       throw ArgumentError('Available balance cannot be negative.');
     }
 
     final previous = _remainingSnapshot();
-    final requestId = _api.newRequestId();
+    final effectiveRequestId = requestId ?? _api.newRequestId();
     availableBalance = newBalance;
     // Manual AB edit: always recalculate all categories from the new total
     // using the user's current percentages (not incremental delta).
@@ -709,11 +717,11 @@ class BudgetProvider extends ChangeNotifier {
 
     try {
       await _api.updateAvailableBalance(
-          availableBalance: newBalance,
-          requestId: requestId,
-        );
+        availableBalance: newBalance,
+        requestId: effectiveRequestId,
+      );
       _recordAllocationCredits(
-        requestId: requestId,
+        requestId: effectiveRequestId,
         title: 'Allocation update',
         billsAdd: _billsRemaining - previous['bills']!,
         savingsAdd: _savingsRemaining - previous['savings']!,
@@ -756,11 +764,11 @@ class BudgetProvider extends ChangeNotifier {
 
     try {
       await _api.updatePercentages(
-          billsPercentage: billsPercentage,
-          savingsPercentage: savingsPercentage,
-          personalPercentage: personalPercentage,
-          requestId: _api.newRequestId(),
-        );
+        billsPercentage: billsPercentage,
+        savingsPercentage: savingsPercentage,
+        personalPercentage: personalPercentage,
+        requestId: _api.newRequestId(),
+      );
     } catch (error) {
       this.billsPercentage = previousPct.bills;
       this.savingsPercentage = previousPct.savings;
@@ -787,9 +795,9 @@ class BudgetProvider extends ChangeNotifier {
 
     try {
       await _api.updateMonthlySalary(
-          monthlySalary: monthlySalary,
-          requestId: _api.newRequestId(),
-        );
+        monthlySalary: monthlySalary,
+        requestId: _api.newRequestId(),
+      );
     } catch (error) {
       this.monthlySalary = previousSalary;
       _reportMutationFailure(
@@ -901,13 +909,13 @@ class BudgetProvider extends ChangeNotifier {
 
     try {
       await _api.updateTransaction(
-          category: category.collection,
-          entryId: updated.id,
-          title: updated.title,
-          amount: updated.amount,
-          requestId: _api.newRequestId(),
-          iconAsset: updated.iconAsset,
-        );
+        category: category.collection,
+        entryId: updated.id,
+        title: updated.title,
+        amount: updated.amount,
+        requestId: _api.newRequestId(),
+        iconAsset: updated.iconAsset,
+      );
     } catch (error) {
       list[index] = previousEntry;
       _restoreRemainings(previous);
@@ -952,11 +960,11 @@ class BudgetProvider extends ChangeNotifier {
     unawaited(() async {
       try {
         await _api.updateSavingsGoalSettings(
-            target: target,
-            targetDateMs: savingsGoalTargetDate.millisecondsSinceEpoch,
-            title: nextTitle,
-            requestId: _api.newRequestId(),
-          );
+          target: target,
+          targetDateMs: savingsGoalTargetDate.millisecondsSinceEpoch,
+          title: nextTitle,
+          requestId: _api.newRequestId(),
+        );
       } catch (error) {
         savingsGoalTarget = previousTarget;
         savingsGoalTargetDate = previousDate;
@@ -1081,11 +1089,11 @@ class BudgetProvider extends ChangeNotifier {
       unawaited(() async {
         try {
           await _api.deleteTransaction(
-              category: category.collection,
-              entryId: entry.id,
-              refund: true,
-              requestId: requestId,
-            );
+            category: category.collection,
+            entryId: entry.id,
+            refund: true,
+            requestId: requestId,
+          );
         } catch (error) {
           list[index] = previousEntry;
           _restoreRemainings(previous);
@@ -1115,11 +1123,11 @@ class BudgetProvider extends ChangeNotifier {
     unawaited(() async {
       try {
         await _api.deleteTransaction(
-            category: category.collection,
-            entryId: entry.id,
-            refund: false,
-            requestId: requestId,
-          );
+          category: category.collection,
+          entryId: entry.id,
+          refund: false,
+          requestId: requestId,
+        );
       } catch (error) {
         list.insert(index, entry);
         _pendingDeleteKeys.remove(key);
@@ -1292,7 +1300,6 @@ class BudgetProvider extends ChangeNotifier {
         return 'Personal';
     }
   }
-
 
   void _applyBudget({
     required double availableBalance,
