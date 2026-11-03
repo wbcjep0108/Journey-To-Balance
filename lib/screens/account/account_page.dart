@@ -155,8 +155,8 @@ class _AccountPageState extends State<AccountPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF1F2F4),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 108),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 132),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -167,24 +167,21 @@ class _AccountPageState extends State<AccountPage> {
                 ),
                 const SizedBox(height: 12),
               ],
-              Expanded(
-                child: Center(
-                  child: SingleChildScrollView(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 440),
-                      child: _AccountCard(
-                        user: user,
-                        isSigningOut: _isSigningOut,
-                        currencyLabel: context.watch<CurrencyProvider>().code,
-                        onSwitchProfile: _signOut,
-                        onCurrency: _openCurrency,
-                        onSecurity: _openSecurity,
-                        onNotifications: _openNotifications,
-                        onRunSetup: widget.onRunSetup,
-                        onHelp: _openHelp,
-                        onSignOut: _signOut,
-                      ),
-                    ),
+              Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 440),
+                  child: _AccountCard(
+                    user: user,
+                    isSigningOut: _isSigningOut,
+                    currencyLabel: context.watch<CurrencyProvider>().code,
+                    onSwitchProfile: _signOut,
+                    onCurrency: _openCurrency,
+                    onSecurity: _openSecurity,
+                    onNotifications: _openNotifications,
+                    onRunSetup: widget.onRunSetup,
+                    onHelp: _openHelp,
+                    onSignOut: _signOut,
                   ),
                 ),
               ),
@@ -254,7 +251,10 @@ class _VerificationBanner extends StatelessWidget {
                 ? const SizedBox(
                     width: 16,
                     height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Color(0xFF121212),
+                    ),
                   )
                 : const Text('Resend'),
           ),
@@ -393,7 +393,10 @@ class _AccountCard extends StatelessWidget {
                 ? const SizedBox(
                     width: 18,
                     height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Color(0xFF121212),
+                    ),
                   )
                 : const Text(
                     'Sign Out',

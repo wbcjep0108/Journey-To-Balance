@@ -114,6 +114,9 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         fontFamily: 'Inter',
+        progressIndicatorTheme: const ProgressIndicatorThemeData(
+          color: Color(0xFF121212),
+        ),
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFF222222),
           brightness: Brightness.light,
@@ -332,13 +335,41 @@ class _UserDataGateState extends State<_UserDataGate> {
     try {
       await context.read<BudgetProvider>().loadForUser(widget.uid);
       if (!mounted) return;
+      final user = FirebaseAuth.instance.currentUser;
+      final creationTime = user?.uid == widget.uid
+          ? user?.metadata.creationTime
+          : null;
+      final onboardingService = context.read<OnboardingService>();
+      await onboardingService.retryPendingForRecentUser(
+        widget.uid,
+        creationTime,
+      );
+      if (!mounted) return;
+
+      OnboardingRecord? onboardingRecord;
+      var onboardingReadSucceeded = false;
+      try {
+        onboardingRecord = await onboardingService.loadRecord(widget.uid);
+        onboardingReadSucceeded = true;
+      } catch (_) {
+        // An unavailable marker is not evidence that onboarding is pending.
+        // Leave it unchanged and try again on the next full data load.
+      }
+      if (!mounted) return;
       // One-time migration of legacy local wallet data -> Firestore. MUST run
       // before the wallet providers attach realtime listeners below, otherwise
       // an empty remote snapshot could seed over the local values. Firestore is
       // the source of truth if it already has data; local data is never deleted
       // and is kept as a fallback. On failure this throws into the catch below,
       // surfacing the retry UI without touching local data.
-      await context.read<WalletMigrationService>().migrateIfNeeded(widget.uid);
+      if (shouldRunWalletMigration(
+        onboardingReadSucceeded: onboardingReadSucceeded,
+        record: onboardingRecord,
+      )) {
+        await context.read<WalletMigrationService>().migrateIfNeeded(
+          widget.uid,
+        );
+      }
       if (!mounted) return;
       // Wallet data (cash, cards, currency, loans) now syncs from Firestore
       // under users/{uid}/wallet. Loaded in parallel; each provider also opens
@@ -354,27 +385,9 @@ class _UserDataGateState extends State<_UserDataGate> {
       if (!mounted) return;
       await context.read<PlannerProvider>().loadForUser(widget.uid);
       if (!mounted) return;
-      final onboardingRecord = await context
-          .read<OnboardingService>()
-          .loadRecord(widget.uid);
-      if (!mounted) return;
       final error = context.read<BudgetProvider>().errorMessage;
       final loans = context.read<LoanProvider>().loans;
-      final budget = context.read<BudgetProvider>();
-      final user = FirebaseAuth.instance.currentUser;
-      final creationTime = user?.uid == widget.uid
-          ? user?.metadata.creationTime
-          : null;
-      final releaseCutoff = DateTime.parse(ONBOARDING_RELEASE_CUTOFF);
-      final showOnboarding = isOnboardingEligible(
-        record: onboardingRecord,
-        creationTime: creationTime,
-        releaseCutoff: releaseCutoff,
-        monthlySalary: budget.monthlySalary,
-        hasCards: context.read<WalletCardsProvider>().cards.isNotEmpty,
-        walletCash: context.read<WalletCashProvider>().amount,
-        hasTransactions: budget.hasTransactions,
-      );
+      final showOnboarding = isOnboardingEligible(record: onboardingRecord);
       setState(() {
         _error = error;
         _ready = error == null;

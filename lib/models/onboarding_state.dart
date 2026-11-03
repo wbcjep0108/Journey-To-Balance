@@ -1,9 +1,6 @@
 import 'dart:convert';
 
-// ignore: constant_identifier_names
-const String ONBOARDING_RELEASE_CUTOFF = '2026-11-02T16:00:00Z';
-
-enum OnboardingStatus { completed, dismissed }
+enum OnboardingStatus { pending, completed, dismissed }
 
 class OnboardingRecord {
   const OnboardingRecord({required this.status, this.step});
@@ -12,18 +9,16 @@ class OnboardingRecord {
   final int? step;
 }
 
-bool isOnboardingEligible({
+bool isOnboardingEligible({required OnboardingRecord? record}) {
+  return record?.status == OnboardingStatus.pending;
+}
+
+bool shouldRunWalletMigration({
+  required bool onboardingReadSucceeded,
   required OnboardingRecord? record,
-  required DateTime? creationTime,
-  required DateTime releaseCutoff,
-  required double monthlySalary,
-  required bool hasCards,
-  required double walletCash,
-  required bool hasTransactions,
 }) {
-  if (record != null || creationTime == null) return false;
-  if (creationTime.isBefore(releaseCutoff)) return false;
-  return monthlySalary == 0 && !hasCards && walletCash == 0 && !hasTransactions;
+  if (!onboardingReadSucceeded) return false;
+  return record?.status != OnboardingStatus.pending;
 }
 
 bool isValidPercentageSplit({

@@ -118,7 +118,9 @@ class _TotalLoanPageState extends State<TotalLoanPage> {
                                   Navigator.of(dialogContext).pop(false),
                               style: TextButton.styleFrom(
                                 foregroundColor: const Color(0xFF6B7280),
-                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(999),
                                 ),
@@ -138,7 +140,9 @@ class _TotalLoanPageState extends State<TotalLoanPage> {
                                 backgroundColor: const Color(0xFF121212),
                                 foregroundColor: Colors.white,
                                 elevation: 0,
-                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(999),
                                 ),
@@ -216,8 +220,7 @@ class _TotalLoanPageState extends State<TotalLoanPage> {
                         onPressed: () {
                           Navigator.of(context).push(
                             MaterialPageRoute<void>(
-                              builder: (_) =>
-                                  const PaidLoanTransactionsPage(),
+                              builder: (_) => const PaidLoanTransactionsPage(),
                             ),
                           );
                         },
@@ -321,7 +324,7 @@ class _TotalLoanPageState extends State<TotalLoanPage> {
                           child: const Icon(
                             Icons.add,
                             size: 30,
-                            color: Colors.black,
+                            color: Color(0xFF121212),
                             weight: 800,
                           ),
                         ),
@@ -426,9 +429,7 @@ class _AddLoanDialogState extends State<_AddLoanDialog> {
         finalDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Enter name, amount, and both dates as MM/DD/YYYY.',
-          ),
+          content: Text('Enter name, amount, and both dates as MM/DD/YYYY.'),
         ),
       );
       return;
@@ -591,10 +592,7 @@ class _AddLoanDialogState extends State<_AddLoanDialog> {
                 ),
                 child: const Text(
                   'Confirm',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                  ),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
                 ),
               ),
               TextButton(
@@ -605,10 +603,7 @@ class _AddLoanDialogState extends State<_AddLoanDialog> {
                 ),
                 child: const Text(
                   'Cancel',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
-                  ),
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
                 ),
               ),
             ],
@@ -620,10 +615,7 @@ class _AddLoanDialogState extends State<_AddLoanDialog> {
 }
 
 class _DateInputField extends StatelessWidget {
-  const _DateInputField({
-    required this.controller,
-    required this.onPick,
-  });
+  const _DateInputField({required this.controller, required this.onPick});
 
   final TextEditingController controller;
   final VoidCallback onPick;
@@ -729,9 +721,9 @@ class _LoanCard extends StatelessWidget {
       symbol: currency.symbol,
       decimalDigits: loan.amount % 1 == 0 ? 0 : 2,
     ).format(loan.amount);
-    final monthlyLabel = DateFormat('MMM d, yyyy').format(
-      loan.nextActionableDue ?? loan.monthlyDueDate,
-    );
+    final monthlyLabel = DateFormat(
+      'MMM d, yyyy',
+    ).format(loan.nextActionableDue ?? loan.monthlyDueDate);
     final status = loan.status;
     final statusColor = switch (status) {
       LoanStatus.pending => const Color(0xFF6B7280),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/auth_service.dart';
 import '../../services/legal_acceptance_service.dart';
+import '../../widgets/skeleton.dart';
 import 'legal_agreement_text.dart';
 
 class LegalAcceptanceGate extends StatefulWidget {
@@ -65,13 +66,17 @@ class _LegalAcceptanceGateState extends State<LegalAcceptanceGate> {
 
   @override
   Widget build(BuildContext context) {
-    if (_checking) {
-      return const Scaffold(
-        backgroundColor: Colors.white,
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-    if (!_needsAcceptance) return widget.child;
+    return ColoredBox(
+      color: Colors.white,
+      child: SkeletonSwitcher(
+        loading: _checking,
+        skeleton: const LegalAcceptanceSkeleton(),
+        child: _needsAcceptance ? _buildAcceptance() : widget.child,
+      ),
+    );
+  }
+
+  Widget _buildAcceptance() {
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -160,10 +165,80 @@ class _LegalAcceptanceGateState extends State<LegalAcceptanceGate> {
                     onPressed: _saving ? null : () => AuthService().signOut(),
                     style: TextButton.styleFrom(
                       foregroundColor: const Color(0xFF121212),
-                    ),  
+                    ),
                     child: const Text('Sign out'),
                   ),
                 ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class LegalAcceptanceSkeleton extends StatelessWidget {
+  const LegalAcceptanceSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: SkeletonShimmer(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Center(
+                      child: SkeletonLine(
+                        key: ValueKey('legal-skeleton-title'),
+                        width: 260,
+                        height: 26,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const SkeletonLine(height: 14),
+                    const SizedBox(height: 7),
+                    const Center(child: SkeletonLine(width: 310, height: 14)),
+                    const SizedBox(height: 24),
+                    const SizedBox(
+                      key: ValueKey('legal-skeleton-checkbox-row'),
+                      height: 48,
+                      child: Row(
+                        children: [
+                          SkeletonBlock(width: 40, height: 40, radius: 6),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                SkeletonLine(height: 12),
+                                SizedBox(height: 7),
+                                SkeletonLine(width: 220, height: 12),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    const SkeletonBlock(
+                      key: ValueKey('legal-skeleton-button'),
+                      height: 52,
+                      radius: 26,
+                    ),
+                    const SizedBox(height: 12),
+                    const Center(child: SkeletonLine(width: 62, height: 14)),
+                  ],
+                ),
               ),
             ),
           ),

@@ -16,6 +16,8 @@ import '../../services/notification_service.dart';
 import '../../services/onboarding_service.dart';
 import '../../services/onboarding_save_runner.dart';
 import '../../widgets/bank_card_picker.dart';
+import '../../widgets/barrier_blur.dart';
+import '../../widgets/skeleton.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({
@@ -206,23 +208,28 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     if (_saving) return;
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: Colors.white,
-        title: const Text('Skip setup?'),
-        content: const Text('You can finish it anytime from Home.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF121212),
+      builder: (dialogContext) => withBarrierBlur(
+        AlertDialog(
+          backgroundColor: Colors.white,
+          title: const Text('Skip setup?'),
+          content: const Text('You can finish it anytime from Home.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF121212),
+              ),
+              child: const Text('Cancel'),
             ),
-            child: const Text('Skip'),
-          ),
-        ],
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF121212),
+              ),
+              child: const Text('Skip'),
+            ),
+          ],
+        ),
       ),
     );
     if (confirmed != true || !mounted) return;
@@ -382,25 +389,27 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final choice = await showDialog<String>(
       context: context,
       barrierDismissible: false,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: Colors.white,
-        title: const Text('Setup was not fully saved'),
-        content: const Text(
-          'Check your connection and try again. Your progress is safe.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, 'continue'),
-            child: const Text('Continue anyway'),
+      builder: (dialogContext) => withBarrierBlur(
+        AlertDialog(
+          backgroundColor: Colors.white,
+          title: const Text('Setup was not fully saved'),
+          content: const Text(
+            'Check your connection and try again. Your progress is safe.',
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, 'retry'),
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF121212),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, 'continue'),
+              child: const Text('Continue anyway'),
             ),
-            child: const Text('Retry'),
-          ),
-        ],
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, 'retry'),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF121212),
+              ),
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
       ),
     );
     if (!mounted) return;
@@ -521,26 +530,28 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Future<void> _showPercentageTotalError() {
     return showDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: Colors.white,
-        title: const Text(
-          'Check your budget split',
-          style: TextStyle(color: Color(0xFF121212)),
-        ),
-        content: const Text(
-          'Bills, Savings, and Personal must total 100%.',
-          style: TextStyle(color: Color(0xFF737983)),
-        ),
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF121212),
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('OK'),
+      builder: (dialogContext) => withBarrierBlur(
+        AlertDialog(
+          backgroundColor: Colors.white,
+          title: const Text(
+            'Check your budget split',
+            style: TextStyle(color: Color(0xFF121212)),
           ),
-        ],
+          content: const Text(
+            'Bills, Savings, and Personal must total 100%.',
+            style: TextStyle(color: Color(0xFF737983)),
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF121212),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -633,14 +644,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) {
-      return const Scaffold(
-        backgroundColor: Colors.white,
-        body: Center(
-          child: CircularProgressIndicator(color: Color(0xFF121212)),
-        ),
-      );
-    }
+    return ColoredBox(
+      color: Colors.white,
+      child: SkeletonSwitcher(
+        loading: _loading,
+        skeleton: const OnboardingPageSkeleton(),
+        child: _loading ? const SizedBox.shrink() : _buildOnboarding(),
+      ),
+    );
+  }
+
+  Widget _buildOnboarding() {
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (_, _) => _back(),
@@ -1073,6 +1087,71 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class OnboardingPageSkeleton extends StatelessWidget {
+  const OnboardingPageSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: SkeletonShimmer(
+          child: Column(
+            children: [
+              const SizedBox(height: 48),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 520),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const Center(
+                            child: SkeletonCircle(
+                              key: ValueKey('onboarding-skeleton-badge'),
+                              size: 56,
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          const Center(
+                            child: SkeletonLine(width: 270, height: 28),
+                          ),
+                          const SizedBox(height: 12),
+                          const SkeletonLine(height: 14),
+                          const SizedBox(height: 7),
+                          const Center(
+                            child: SkeletonLine(width: 300, height: 14),
+                          ),
+                          const SizedBox(height: 34),
+                          const SkeletonBlock(
+                            key: ValueKey('onboarding-skeleton-field'),
+                            height: 56,
+                            radius: 30,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.fromLTRB(20, 8, 20, 18),
+                child: SkeletonBlock(
+                  key: ValueKey('onboarding-skeleton-button'),
+                  height: 52,
+                  radius: 30,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

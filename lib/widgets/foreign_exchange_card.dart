@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../models/app_currency.dart';
 import '../services/exchange_rate_service.dart';
 import 'barrier_blur.dart';
+import 'skeleton.dart';
 
 class ForeignExchangeCard extends StatefulWidget {
   const ForeignExchangeCard({super.key});
@@ -111,115 +112,116 @@ class _ForeignExchangeCardState extends State<ForeignExchangeCard> {
               return currency.searchText.contains(query.trim().toLowerCase());
             }).toList();
             return withBarrierBlur(
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-              child: Container(
-                height: MediaQuery.sizeOf(sheetContext).height * 0.55,
-                clipBehavior: Clip.antiAlias,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF7F7F8),
-                  borderRadius: BorderRadius.circular(26),
-                ),
-                child: Column(
-                  children: [
-                    const SizedBox(height: 10),
-                    Container(
-                      width: 42,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFD1D5DB),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
+              SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+                  child: Container(
+                    height: MediaQuery.sizeOf(sheetContext).height * 0.55,
+                    clipBehavior: Clip.antiAlias,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF7F7F8),
+                      borderRadius: BorderRadius.circular(26),
                     ),
-                    const Padding(
-                      padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-                      child: Text(
-                        'Select currency',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                      child: TextField(
-                        onChanged: (value) =>
-                            setSheetState(() => query = value),
-                        textInputAction: TextInputAction.search,
-                        decoration: InputDecoration(
-                          hintText: 'Search currency',
-                          prefixIcon: const Icon(Icons.search_rounded),
-                          filled: true,
-                          fillColor: Colors.white,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16),
-                            borderSide: BorderSide.none,
+                    child: Column(
+                      children: [
+                        const SizedBox(height: 10),
+                        Container(
+                          width: 42,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFD1D5DB),
+                            borderRadius: BorderRadius.circular(999),
                           ),
                         ),
-                      ),
-                    ),
-                    Expanded(
-                      child: options.isEmpty
-                          ? const Center(
-                              child: Text(
-                                'No currencies found.',
-                                style: TextStyle(
-                                  color: Color(0xFF6B7280),
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            )
-                          : ListView.builder(
-                              itemCount: options.length,
-                              itemBuilder: (context, i) {
-                                final currency = options[i];
-                                final isCurrent =
-                                    currency.code == _currencies[index].code;
-                                return ListTile(
-                                  selected: isCurrent,
-                                  selectedColor: const Color(0xFF121212),
-                                  selectedTileColor: Colors.transparent,
-                                  textColor: const Color(0xFF121212),
-                                  iconColor: const Color(0xFF121212),
-                                  leading: Text(
-                                    currency.symbol.trim(),
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 16,
-                                      color: Color(0xFF121212),
-                                    ),
-                                  ),
-                                  title: Text(
-                                    currency.name,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      color: Color(0xFF121212),
-                                    ),
-                                  ),
-                                  trailing: Text(
-                                    currency.code,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                      color: Color(0xFF6B7280),
-                                    ),
-                                  ),
-                                  onTap: () =>
-                                      Navigator.pop(sheetContext, currency),
-                                );
-                              },
+                        const Padding(
+                          padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+                          child: Text(
+                            'Select currency',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
                             ),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                          child: TextField(
+                            onChanged: (value) =>
+                                setSheetState(() => query = value),
+                            textInputAction: TextInputAction.search,
+                            decoration: InputDecoration(
+                              hintText: 'Search currency',
+                              prefixIcon: const Icon(Icons.search_rounded),
+                              filled: true,
+                              fillColor: Colors.white,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                borderSide: BorderSide.none,
+                              ),
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: options.isEmpty
+                              ? const Center(
+                                  child: Text(
+                                    'No currencies found.',
+                                    style: TextStyle(
+                                      color: Color(0xFF6B7280),
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                )
+                              : ListView.builder(
+                                  itemCount: options.length,
+                                  itemBuilder: (context, i) {
+                                    final currency = options[i];
+                                    final isCurrent =
+                                        currency.code ==
+                                        _currencies[index].code;
+                                    return ListTile(
+                                      selected: isCurrent,
+                                      selectedColor: const Color(0xFF121212),
+                                      selectedTileColor: Colors.transparent,
+                                      textColor: const Color(0xFF121212),
+                                      iconColor: const Color(0xFF121212),
+                                      leading: Text(
+                                        currency.symbol.trim(),
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 16,
+                                          color: Color(0xFF121212),
+                                        ),
+                                      ),
+                                      title: Text(
+                                        currency.name,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFF121212),
+                                        ),
+                                      ),
+                                      trailing: Text(
+                                        currency.code,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w700,
+                                          color: Color(0xFF6B7280),
+                                        ),
+                                      ),
+                                      onTap: () =>
+                                          Navigator.pop(sheetContext, currency),
+                                    );
+                                  },
+                                ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ),
             );
           },
         );
@@ -267,44 +269,84 @@ class _ForeignExchangeCardState extends State<ForeignExchangeCard> {
             ),
           ),
           const SizedBox(height: 16),
-          if (_loading)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 18),
-              child: CircularProgressIndicator(strokeWidth: 2.4),
-            )
-          else if (_error != null)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Column(
-                children: [
-                  Text(
-                    _error!,
-                    style: const TextStyle(
-                      color: Color(0xFF6B7280),
-                      fontWeight: FontWeight.w600,
+          SizedBox(
+            height: 168,
+            child: SkeletonSwitcher(
+              loading: _loading,
+              skeleton: const ForeignExchangeCardSkeleton(),
+              child: _error != null
+                  ? Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            _error!,
+                            style: const TextStyle(
+                              color: Color(0xFF6B7280),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: _loadRates,
+                            child: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    )
+                  : Column(
+                      children: [
+                        for (var i = 0; i < 3; i++) ...[
+                          if (i > 0) const SizedBox(height: 12),
+                          _ExchangeRow(
+                            currency: _currencies[i],
+                            controller: _controllers[i],
+                            onPickCurrency: () => _pickCurrency(i),
+                            onChanged: () {
+                              if (_updating) return;
+                              _recalculateFrom(i);
+                            },
+                          ),
+                        ],
+                      ],
                     ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class ForeignExchangeCardSkeleton extends StatelessWidget {
+  const ForeignExchangeCardSkeleton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      key: const ValueKey('foreign-exchange-skeleton'),
+      height: 168,
+      child: SkeletonShimmer(
+        child: Column(
+          children: [
+            for (var index = 0; index < 3; index++) ...[
+              if (index > 0) const SizedBox(height: 12),
+              Row(
+                key: ValueKey('foreign-exchange-skeleton-row-$index'),
+                children: const [
+                  Expanded(
+                    flex: 7,
+                    child: SkeletonBlock(height: 48, radius: 24),
                   ),
-                  TextButton(
-                    onPressed: _loadRates,
-                    child: const Text('Retry'),
+                  SizedBox(width: 10),
+                  Expanded(
+                    flex: 4,
+                    child: SkeletonBlock(height: 48, radius: 24),
                   ),
                 ],
               ),
-            )
-          else
-            for (var i = 0; i < 3; i++) ...[
-              if (i > 0) const SizedBox(height: 12),
-              _ExchangeRow(
-                currency: _currencies[i],
-                controller: _controllers[i],
-                onPickCurrency: () => _pickCurrency(i),
-                onChanged: () {
-                  if (_updating) return;
-                  _recalculateFrom(i);
-                },
-              ),
             ],
-        ],
+          ],
+        ),
       ),
     );
   }

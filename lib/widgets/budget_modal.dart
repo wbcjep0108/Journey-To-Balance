@@ -17,9 +17,7 @@ import 'rate_limit_dialog.dart';
 /// The account a spend is paid from. Either the cash wallet, or a specific
 /// bank card identified by [cardId].
 class PaymentSource {
-  const PaymentSource.wallet()
-      : isWallet = true,
-        cardId = null;
+  const PaymentSource.wallet() : isWallet = true, cardId = null;
 
   const PaymentSource.card(String this.cardId) : isWallet = false;
 
@@ -235,7 +233,8 @@ class _BudgetModalState extends State<BudgetModal>
     if (_nameController.text.trim().isEmpty ||
         _quickSelectOptions.any(
           (o) =>
-              o.label.toLowerCase() == _nameController.text.trim().toLowerCase(),
+              o.label.toLowerCase() ==
+              _nameController.text.trim().toLowerCase(),
         )) {
       _nameController
         ..text = option.label
@@ -504,7 +503,7 @@ class _BudgetModalState extends State<BudgetModal>
                                   height: 18,
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
-                                    color: Colors.black,
+                                    color: Color(0xFF121212),
                                   ),
                                 )
                               : const Text('Save'),
@@ -559,9 +558,7 @@ class _IconSelectSection extends StatelessWidget {
             color: Colors.white,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: showError
-                  ? const Color(0xFFB3261E)
-                  : Colors.transparent,
+              color: showError ? const Color(0xFFB3261E) : Colors.transparent,
               width: showError ? 1.4 : 1.2,
             ),
             boxShadow: [
@@ -632,7 +629,8 @@ class _QuickSelectChips extends StatelessWidget {
         for (final option in options)
           _CategoryChip(
             option: option,
-            selected: identical(selectedOption, option) ||
+            selected:
+                identical(selectedOption, option) ||
                 selectedOption?.assetPath == option.assetPath,
             onTap: () => onSelected(option),
           ),
@@ -836,9 +834,7 @@ class _CategoryChip extends StatelessWidget {
             color: Colors.white,
             borderRadius: BorderRadius.circular(30),
             border: Border.all(
-              color: selected
-                  ? const Color(0xFF25282D)
-                  : Colors.transparent,
+              color: selected ? const Color(0xFF25282D) : Colors.transparent,
               width: 1.2,
             ),
             boxShadow: [
@@ -855,7 +851,9 @@ class _CategoryChip extends StatelessWidget {
               if (option.usesMaterialIcon)
                 Icon(
                   option.materialIcon ??
-                      SpendCategoryOption.materialIconForAsset(option.assetPath),
+                      SpendCategoryOption.materialIconForAsset(
+                        option.assetPath,
+                      ),
                   size: 22,
                   color: const Color(0xFF25282D),
                 )

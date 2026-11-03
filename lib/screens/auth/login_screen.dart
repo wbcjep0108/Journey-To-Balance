@@ -2,11 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/auth_service.dart';
 import '../../services/finance_api_service.dart';
 import '../../services/legal_acceptance_service.dart';
+import '../../services/onboarding_service.dart';
 import '../../widgets/barrier_blur.dart';
 import '../../widgets/security_ui.dart';
 import '../legal/legal_agreement_text.dart';
@@ -414,11 +416,13 @@ class LoginScreen extends StatefulWidget {
     this.authService,
     this.passwordResetApi,
     this.legalAcceptanceService,
+    this.onboardingService,
   });
 
   final AuthService? authService;
   final PasswordResetApi? passwordResetApi;
   final LegalAcceptanceService? legalAcceptanceService;
+  final OnboardingService? onboardingService;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -457,6 +461,9 @@ class _LoginScreenState extends State<LoginScreen> {
     return widget.legalAcceptanceService ??
         (_createdLegalAcceptance ??= LegalAcceptanceService());
   }
+
+  OnboardingService get _onboarding =>
+      widget.onboardingService ?? context.read<OnboardingService>();
 
   void _refresh() {
     if (mounted) setState(() => _error = null);
@@ -533,6 +540,9 @@ class _LoginScreenState extends State<LoginScreen> {
         final credential = await _auth.createAccount(email, password);
         final user = credential.user;
         if (user != null) {
+          if (shouldCreatePendingOnboarding(emailAccountCreated: true)) {
+            unawaited(_onboarding.markNewUser(user.uid));
+          }
           unawaited(_legalAcceptance.acceptCurrentVersion(user.uid));
         }
       } else {
@@ -558,6 +568,13 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       final credential = await _auth.signInWithGoogle();
       final user = credential?.user;
+      if (user != null &&
+          shouldCreatePendingOnboarding(
+            emailAccountCreated: false,
+            googleIsNewUser: credential?.additionalUserInfo?.isNewUser,
+          )) {
+        unawaited(_onboarding.markNewUser(user.uid));
+      }
       if (_isSignUp && user != null) {
         unawaited(_legalAcceptance.acceptCurrentVersion(user.uid));
       }

@@ -503,7 +503,7 @@ class _HomePageState extends State<HomePage> {
                                             height: 16,
                                             child: CircularProgressIndicator(
                                               strokeWidth: 2,
-                                              color: Colors.black,
+                                              color: Color(0xFF121212),
                                             ),
                                           )
                                         : const Icon(
@@ -546,7 +546,7 @@ class _HomePageState extends State<HomePage> {
                                       height: 16,
                                       child: CircularProgressIndicator(
                                         strokeWidth: 2,
-                                        color: Colors.black,
+                                        color: Color(0xFF121212),
                                       ),
                                     )
                                   : const Icon(

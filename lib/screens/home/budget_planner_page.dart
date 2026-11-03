@@ -484,7 +484,7 @@ class _BudgetPlannerPageState extends State<BudgetPlannerPage> {
                           height: 16,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Color(0xFFDC2626),
+                            color: Color(0xFF121212),
                           ),
                         )
                       : const Text('Delete plan'),

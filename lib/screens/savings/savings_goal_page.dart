@@ -1533,7 +1533,7 @@ class _ConfirmButtonState extends State<_ConfirmButton> {
                     height: 18,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: Colors.black,
+                      color: Color(0xFF121212),
                     ),
                   )
                 : Text(

@@ -4,90 +4,46 @@ import 'package:just_budget/providers/notification_prefs_provider.dart';
 
 void main() {
   group('onboarding eligibility', () {
-    final cutoff = DateTime.parse(ONBOARDING_RELEASE_CUTOFF);
-
-    test('shows for a new empty account on the cutoff', () {
+    test('shows only for a pending record', () {
       expect(
         isOnboardingEligible(
-          record: null,
-          creationTime: cutoff,
-          releaseCutoff: cutoff,
-          monthlySalary: 0,
-          hasCards: false,
-          walletCash: 0,
-          hasTransactions: false,
+          record: const OnboardingRecord(status: OnboardingStatus.pending),
         ),
         isTrue,
       );
     });
 
-    test('account created just before the cutoff is not eligible', () {
+    test('an account without a record never shows onboarding', () {
+      expect(isOnboardingEligible(record: null), isFalse);
+    });
+
+    test('completed and dismissed records never show onboarding', () {
+      for (final status in [
+        OnboardingStatus.completed,
+        OnboardingStatus.dismissed,
+      ]) {
+        expect(
+          isOnboardingEligible(record: OnboardingRecord(status: status)),
+          isFalse,
+        );
+      }
+    });
+
+    test('pending onboarding skips stale local wallet migration', () {
+      const record = OnboardingRecord(status: OnboardingStatus.pending);
+
+      expect(isOnboardingEligible(record: record), isTrue);
       expect(
-        isOnboardingEligible(
-          record: null,
-          creationTime: cutoff.subtract(const Duration(seconds: 1)),
-          releaseCutoff: cutoff,
-          monthlySalary: 0,
-          hasCards: false,
-          walletCash: 0,
-          hasTransactions: false,
-        ),
+        shouldRunWalletMigration(onboardingReadSucceeded: true, record: record),
         isFalse,
       );
     });
 
-    test('account created just after the cutoff is eligible', () {
+    test('an unavailable onboarding read skips wallet migration', () {
       expect(
-        isOnboardingEligible(
-          record: null,
-          creationTime: cutoff.add(const Duration(milliseconds: 1)),
-          releaseCutoff: cutoff,
-          monthlySalary: 0,
-          hasCards: false,
-          walletCash: 0,
-          hasTransactions: false,
-        ),
-        isTrue,
+        shouldRunWalletMigration(onboardingReadSucceeded: false, record: null),
+        isFalse,
       );
-    });
-
-    test('never shows with any account data', () {
-      for (final state in [
-        (salary: 1.0, cards: false, cash: 0.0, transactions: false),
-        (salary: 0.0, cards: true, cash: 0.0, transactions: false),
-        (salary: 0.0, cards: false, cash: 1.0, transactions: false),
-        (salary: 0.0, cards: false, cash: 0.0, transactions: true),
-      ]) {
-        expect(
-          isOnboardingEligible(
-            record: null,
-            creationTime: cutoff,
-            releaseCutoff: cutoff,
-            monthlySalary: state.salary,
-            hasCards: state.cards,
-            walletCash: state.cash,
-            hasTransactions: state.transactions,
-          ),
-          isFalse,
-        );
-      }
-    });
-
-    test('never shows for completed or dismissed records', () {
-      for (final status in OnboardingStatus.values) {
-        expect(
-          isOnboardingEligible(
-            record: OnboardingRecord(status: status),
-            creationTime: cutoff,
-            releaseCutoff: cutoff,
-            monthlySalary: 0,
-            hasCards: false,
-            walletCash: 0,
-            hasTransactions: false,
-          ),
-          isFalse,
-        );
-      }
     });
   });
 

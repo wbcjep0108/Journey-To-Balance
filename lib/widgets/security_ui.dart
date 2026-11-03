@@ -85,7 +85,7 @@ class _SecurityActionButtonState extends State<SecurityActionButton> {
                     height: 20,
                     child: CircularProgressIndicator(
                       strokeWidth: 2.2,
-                      color: Colors.black,
+                      color: Color(0xFF121212),
                     ),
                   )
                 : Text(
