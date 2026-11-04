@@ -226,23 +226,6 @@ export default {
         return rateLimitProbeResponse(outcome, "Rate limit test passed");
       }
 
-      // Temporary: probe production addMoney bucket (same DO / keys / window).
-      // Does not touch Firestore. Shares counters with real Add Money.
-      if (
-        request.method === "GET" &&
-        (url.pathname === "/api/test/rate-limit-add-money" ||
-          url.pathname === "/api/test/rate-limit-add-money/")
-      ) {
-        const user = await verifyFirebaseIdToken(request, projectId);
-        const gate = env.USER_GATE.get(env.USER_GATE.idFromName(user.uid));
-        const outcome = await gate.enforceRateLimitsOutcome("addMoney");
-        if (outcome.ok) await enforceGlobalProtectedLimit(env);
-        return rateLimitProbeResponse(
-          outcome,
-          "addMoney rate limit probe (non-mutating)",
-        );
-      }
-
       if (!url.pathname.startsWith(FINANCE_PREFIX)) {
         throw notFound("Not found.");
       }

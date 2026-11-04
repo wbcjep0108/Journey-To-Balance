@@ -26,7 +26,7 @@ Journey to Balance is a Flutter personal-finance app for recording income, bills
 | API | Cloudflare Worker with TypeScript, Firebase ID-token verification, Firestore REST access, and Durable Objects for rate limiting |
 | Server functions | Firebase Functions v2 with TypeScript and Firebase Admin SDK; retained as an optional callable-functions implementation |
 
-Other notable packages include `intl` for formatting, `crypto` for security-related helpers, `url_launcher` for external links, and `package_info_plus` for app metadata. `cloud_functions` is declared in the Flutter project, but the current app-side finance flow uses the Worker API.
+Other notable packages include `intl` for formatting, `crypto` for security-related helpers, `url_launcher` for external links, and `package_info_plus` for app metadata.
 
 ## Folder structure
 
@@ -189,7 +189,6 @@ npm test
 
 - Firebase App Check is prepared in [functions/src/index.ts](functions/src/index.ts) but is currently not enforced; the code notes that provider setup is still needed before enabling enforcement.
 - Several Flutter tests use placeholder `UnimplementedError` stubs for dependencies, so those test doubles need implementation before they exercise those paths end to end.
-- The Worker route for probing the production `addMoney` rate-limit bucket is explicitly marked temporary in [journey-to-balance-api/src/index.ts](journey-to-balance-api/src/index.ts).
 - No deployment-status record is kept in the repository, so deployed Worker and Functions state must be confirmed in their respective consoles.
 
 ## Author

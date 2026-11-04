@@ -103,7 +103,9 @@ class NotificationService {
           AndroidFlutterLocalNotificationsPlugin
         >();
     final androidResult = await android?.requestNotificationsPermission();
-    await android?.requestExactAlarmsPermission();
+    try {
+      await android?.requestExactAlarmsPermission();
+    } catch (_) {}
 
     final ios = _plugin
         .resolvePlatformSpecificImplementation<
@@ -312,8 +314,10 @@ class NotificationService {
   }) async {
     if (!when.isAfter(tz.TZDateTime.now(tz.local))) return;
 
-    try {
-      await _plugin.zonedSchedule(
+    final scheduleMode = await _androidScheduleMode();
+
+    Future<void> schedule(AndroidScheduleMode mode) {
+      return _plugin.zonedSchedule(
         id,
         title,
         body,
@@ -333,14 +337,49 @@ class NotificationService {
             presentSound: true,
           ),
         ),
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        androidScheduleMode: mode,
         payload: payload,
         matchDateTimeComponents: match,
       );
-      if (id != _morningId && id != _eveningId) {
-        _loanNotificationIds.add(id);
+    }
+
+    try {
+      await schedule(scheduleMode);
+    } catch (_) {
+      if (defaultTargetPlatform != TargetPlatform.android ||
+          scheduleMode == AndroidScheduleMode.inexactAllowWhileIdle) {
+        return;
       }
-    } catch (_) {}
+      try {
+        await schedule(AndroidScheduleMode.inexactAllowWhileIdle);
+      } catch (_) {
+        return;
+      }
+    }
+
+    if (id != _morningId && id != _eveningId) {
+      _loanNotificationIds.add(id);
+    }
+  }
+
+  Future<AndroidScheduleMode> _androidScheduleMode() async {
+    if (defaultTargetPlatform != TargetPlatform.android) {
+      return AndroidScheduleMode.exactAllowWhileIdle;
+    }
+
+    try {
+      final android = _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
+      final canScheduleExactly =
+          await android?.canScheduleExactNotifications() ?? false;
+      return canScheduleExactly
+          ? AndroidScheduleMode.exactAllowWhileIdle
+          : AndroidScheduleMode.inexactAllowWhileIdle;
+    } catch (_) {
+      return AndroidScheduleMode.inexactAllowWhileIdle;
+    }
   }
 
   Future<void> _cancelLoanNotifications() async {

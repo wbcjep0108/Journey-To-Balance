@@ -108,7 +108,7 @@ describe("rateLimit", () => {
 
   it("exposes expected limit values", () => {
     assert.equal(RATE_LIMITS.general, 60);
-    assert.equal(RATE_LIMITS.receiveSalary, 10);
+    assert.equal(RATE_LIMITS.receiveSalary, 5);
     assert.equal(RATE_LIMITS.addTransaction, 30);
   });
 });

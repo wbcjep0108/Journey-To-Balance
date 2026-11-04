@@ -39,7 +39,7 @@ const termsOfServiceSections = <LegalSection>[
   LegalSection(
     heading: 'Ending your account',
     body:
-        'You can stop using the app and sign out at any time. Signing out clears the current in-app session and scheduled reminders, but it does not delete your Firebase account, cloud data, local PIN settings, notification choices, or legacy wallet data kept on the device. The app does not currently include an account-deletion button. To ask about deletion, email $legalSupportEmail.',
+        'You can stop using the app and sign out at any time. Signing out clears the current in-app session and scheduled reminders, but it does not delete your Firebase account, cloud data, local PIN settings, notification choices, or legacy wallet data kept on the device. You can permanently delete your account from Security settings by selecting Delete Account, entering your registered email address, and completing fresh password or Google reauthentication. If the request succeeds, the app deletes your Firebase Authentication account and associated cloud data and clears local session and security data for that account. This action cannot be undone. If you cannot use the in-app deletion option, email $legalSupportEmail for assistance.',
   ),
   LegalSection(
     heading: 'Disclaimers and limits of liability',
