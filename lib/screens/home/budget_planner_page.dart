@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -35,6 +37,10 @@ class _BudgetPlannerPageState extends State<BudgetPlannerPage> {
   PlannerPeriod _period = PlannerPeriod.day;
   late DateTime _start;
   bool _initialized = false;
+  Map<FinancialCategory, List<FinancialEntry>> _draftEntries = {
+    for (final category in FinancialCategory.values) category: [],
+  };
+  int _draftLoadGeneration = 0;
 
   @override
   void initState() {
@@ -52,13 +58,15 @@ class _BudgetPlannerPageState extends State<BudgetPlannerPage> {
     if (_initialized) return;
     _initialized = true;
     final plan = context.read<PlannerProvider>().plan;
-    if (plan == null) return;
-    _period = plan.period;
-    _start = plan.start;
-    _enabled.addAll(plan.enabledCategories);
-    for (final entry in plan.amounts.entries) {
-      _controllers[entry.key]!.text = _editableAmount(entry.value);
+    if (plan != null) {
+      _period = plan.period;
+      _start = plan.start;
+      _enabled.addAll(plan.enabledCategories);
+      for (final entry in plan.amounts.entries) {
+        _controllers[entry.key]!.text = _editableAmount(entry.value);
+      }
     }
+    unawaited(_refreshDraftEntries());
   }
 
   @override
@@ -102,11 +110,26 @@ class _BudgetPlannerPageState extends State<BudgetPlannerPage> {
     alertEligible: true,
   );
 
-  double _draftSpent(BudgetProvider budget) {
-    return plannerSpent(_draftPlan, {
-      for (final category in FinancialCategory.values)
-        category: budget.entriesFor(category),
-    });
+  double _draftSpent() {
+    return plannerSpent(_draftPlan, _draftEntries);
+  }
+
+  Future<void> _refreshDraftEntries() async {
+    final generation = ++_draftLoadGeneration;
+    final plan = _draftPlan;
+    try {
+      final entries = await context.read<BudgetProvider>().loadEntriesInRange(
+        startInclusive: plan.localStart,
+        endExclusive: plan.localEndExclusive,
+      );
+      if (!mounted || generation != _draftLoadGeneration) return;
+      setState(() => _draftEntries = entries);
+    } catch (_) {}
+  }
+
+  void _setPeriod(PlannerPeriod period) {
+    setState(() => _period = period);
+    unawaited(_refreshDraftEntries());
   }
 
   Future<void> _pickDate() async {
@@ -122,6 +145,7 @@ class _BudgetPlannerPageState extends State<BudgetPlannerPage> {
     );
     if (picked != null && mounted) {
       setState(() => _start = DateUtils.dateOnly(picked));
+      unawaited(_refreshDraftEntries());
     }
   }
 
@@ -270,12 +294,11 @@ class _BudgetPlannerPageState extends State<BudgetPlannerPage> {
 
   @override
   Widget build(BuildContext context) {
-    final budget = context.watch<BudgetProvider>();
     final planner = context.watch<PlannerProvider>();
     final currency = context.watch<CurrencyProvider>();
     final draftPlan = _draftPlan;
     final total = _total;
-    final spent = _draftSpent(budget);
+    final spent = _draftSpent();
     final now = DateTime.now();
     final progress = total <= 0 || now.isBefore(draftPlan.localStart)
         ? 0.0
@@ -325,7 +348,7 @@ class _BudgetPlannerPageState extends State<BudgetPlannerPage> {
                             child: _PeriodButton(
                               period: period,
                               selected: _period == period,
-                              onTap: () => setState(() => _period = period),
+                              onTap: () => _setPeriod(period),
                             ),
                           ),
                         ],

@@ -1,23 +1,22 @@
-import 'dart:async';
-
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 
 import '../models/app_currency.dart';
-import '../services/wallet_firestore_service.dart';
+import '../services/wallet_repository.dart';
 
 /// Preferred display currency, synced across devices via the user's wallet
 /// document (`users/{uid}/wallet/data`).
 class CurrencyProvider extends ChangeNotifier {
-  CurrencyProvider({WalletFirestoreService? service})
-    : _service = service ?? WalletFirestoreService();
+  CurrencyProvider(this._repository) {
+    _repository.addListener(_syncFromRepository);
+    _syncFromRepository();
+  }
 
-  final WalletFirestoreService _service;
+  final WalletRepository _repository;
 
   String? _uid;
   AppCurrency _currency = AppCurrency.php;
   bool _loaded = false;
-  StreamSubscription<WalletSnapshot>? _sub;
 
   AppCurrency get currency => _currency;
   String get symbol => _currency.symbol;
@@ -35,33 +34,22 @@ class CurrencyProvider extends ChangeNotifier {
     _loaded = false;
     notifyListeners();
 
-    try {
-      final wallet = await _service.load(uid);
-      _currency = AppCurrency.byCode(wallet.currencyCode);
-    } catch (_) {
-      _currency = AppCurrency.php;
-    }
+    await _repository.loadForUser(uid);
+    _syncFromRepository();
+  }
 
-    _loaded = true;
+  void _syncFromRepository() {
+    _uid = _repository.uid;
+    final next = AppCurrency.byCode(_repository.wallet.currencyCode);
+    final loaded = _repository.isLoaded;
+    if (next.code == _currency.code && loaded == _loaded) return;
+    _currency = next;
+    _loaded = loaded;
     notifyListeners();
-
-    _subscribe(uid);
   }
 
-  void _subscribe(String uid) {
-    _sub?.cancel();
-    _sub = _service.watch(uid).listen((snapshot) {
-      if (snapshot.hasPendingWrites) return;
-      final next = AppCurrency.byCode(snapshot.wallet.currencyCode);
-      if (next.code == _currency.code) return;
-      _currency = next;
-      notifyListeners();
-    });
-  }
-
-  Future<void> setCurrency(AppCurrency currency) async {
-    await setCurrencyVerified(currency);
-  }
+  Future<bool> setCurrency(AppCurrency currency) =>
+      setCurrencyVerified(currency);
 
   Future<bool> setCurrencyVerified(AppCurrency currency) async {
     if (_currency.code == currency.code) return true;
@@ -69,22 +57,18 @@ class CurrencyProvider extends ChangeNotifier {
     _currency = currency;
     notifyListeners();
 
-    final uid = _uid;
-    if (uid == null) return false;
-    try {
-      await _service.saveCurrency(uid, currency.code);
-      return _currency.code == currency.code;
-    } catch (_) {
+    if (_uid == null) return false;
+    final saved = await _repository.saveCurrency(currency.code);
+    if (!saved) {
       _currency = previous;
       notifyListeners();
       return false;
     }
+    return _currency.code == currency.code;
   }
 
   /// Resets to the signed-out state and stops listening.
   Future<void> clear() async {
-    await _sub?.cancel();
-    _sub = null;
     _uid = null;
     _currency = AppCurrency.php;
     _loaded = true;
@@ -107,7 +91,7 @@ class CurrencyProvider extends ChangeNotifier {
 
   @override
   void dispose() {
-    _sub?.cancel();
+    _repository.removeListener(_syncFromRepository);
     super.dispose();
   }
 }

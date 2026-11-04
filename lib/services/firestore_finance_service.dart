@@ -7,6 +7,7 @@ class FirestoreFinanceService {
     : _firestore = firestore ?? FirebaseFirestore.instance;
 
   final FirebaseFirestore _firestore;
+  static const entryPageSize = 50;
 
   DocumentReference<Map<String, dynamic>> _user(String uid) {
     return _firestore.collection('users').doc(uid);
@@ -187,22 +188,69 @@ class FirestoreFinanceService {
     FinancialCategory category, {
     bool serverOnly = false,
   }) async {
-    final query = _entries(
+    final page = await loadEntriesPage(uid, category, serverOnly: serverOnly);
+    return page.entries;
+  }
+
+  Future<EntriesPage> loadEntriesPage(
+    String uid,
+    FinancialCategory category, {
+    DocumentSnapshot<Map<String, dynamic>>? startAfter,
+    bool serverOnly = false,
+  }) async {
+    Query<Map<String, dynamic>> query = _entries(
       uid,
       category,
-    ).orderBy('createdAt', descending: true);
+    ).orderBy('createdAt', descending: true).limit(entryPageSize);
+    if (startAfter != null) query = query.startAfterDocument(startAfter);
     final snapshot = serverOnly
         ? await query.get(const GetOptions(source: Source.server))
         : await query.get();
+    return EntriesPage(
+      entries: snapshot.docs.map(FinancialEntry.fromFirestore).toList(),
+      cursor: snapshot.docs.lastOrNull,
+      hasMore: snapshot.docs.length == entryPageSize,
+    );
+  }
+
+  Future<List<FinancialEntry>> loadEntriesInRange(
+    String uid,
+    FinancialCategory category, {
+    required DateTime startInclusive,
+    required DateTime endExclusive,
+  }) async {
+    final snapshot = await _entries(uid, category)
+        .where(
+          'createdAt',
+          isGreaterThanOrEqualTo: Timestamp.fromDate(startInclusive),
+        )
+        .where('createdAt', isLessThan: Timestamp.fromDate(endExclusive))
+        .orderBy('createdAt', descending: true)
+        .get();
     return snapshot.docs.map(FinancialEntry.fromFirestore).toList();
   }
 
-  Stream<EntriesSnapshot> watchEntries(
+  Future<double> sumNonRefundEntries(
     String uid,
     FinancialCategory category,
-  ) {
+  ) async {
+    final collection = _entries(uid, category);
+    final snapshots = await Future.wait([
+      collection.aggregate(sum('amount')).get(),
+      collection
+          .where('isRefund', isEqualTo: true)
+          .aggregate(sum('amount'))
+          .get(),
+    ]);
+    final allEntries = snapshots[0].getSum('amount') ?? 0;
+    final refunds = snapshots[1].getSum('amount') ?? 0;
+    return allEntries - refunds;
+  }
+
+  Stream<EntriesSnapshot> watchEntries(String uid, FinancialCategory category) {
     return _entries(uid, category)
         .orderBy('createdAt', descending: true)
+        .limit(entryPageSize)
         .snapshots()
         .map(
           (snapshot) => EntriesSnapshot(
@@ -364,4 +412,16 @@ class EntriesSnapshot {
   final List<FinancialEntry> entries;
   final bool hasPendingWrites;
   final bool isFromCache;
+}
+
+class EntriesPage {
+  const EntriesPage({
+    required this.entries,
+    required this.cursor,
+    required this.hasMore,
+  });
+
+  final List<FinancialEntry> entries;
+  final DocumentSnapshot<Map<String, dynamic>>? cursor;
+  final bool hasMore;
 }

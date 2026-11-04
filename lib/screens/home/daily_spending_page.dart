@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -13,10 +15,13 @@ import '../../widgets/planner_progress_bar.dart';
 import '../../widgets/rate_limit_dialog.dart';
 import '../../widgets/sensitive_action_auth.dart';
 
-class DailySpendingPage extends StatelessWidget {
+class DailySpendingPage extends StatefulWidget {
   const DailySpendingPage({super.key, required this.day});
 
   final DateTime day;
+
+  @override
+  State<DailySpendingPage> createState() => _DailySpendingPageState();
 
   static String categoryLabel(FinancialCategory category) {
     return switch (category) {
@@ -25,14 +30,46 @@ class DailySpendingPage extends StatelessWidget {
       FinancialCategory.personal => 'Personal',
     };
   }
+}
+
+class _DailySpendingPageState extends State<DailySpendingPage> {
+  List<DayTransaction> _transactions = const [];
+  bool _started = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started) return;
+    _started = true;
+    unawaited(_loadDay());
+  }
+
+  Future<void> _loadDay() async {
+    final target = DateTime(widget.day.year, widget.day.month, widget.day.day);
+    try {
+      final byCategory = await context
+          .read<BudgetProvider>()
+          .loadEntriesInRange(
+            startInclusive: target,
+            endExclusive: target.add(const Duration(days: 1)),
+          );
+      final transactions = <DayTransaction>[
+        for (final category in FinancialCategory.values)
+          for (final entry in byCategory[category] ?? const <FinancialEntry>[])
+            DayTransaction(category: category, entry: entry),
+      ]..sort((a, b) => b.entry.createdAt.compareTo(a.entry.createdAt));
+      if (!mounted) return;
+      setState(() => _transactions = transactions);
+    } catch (_) {}
+  }
 
   @override
   Widget build(BuildContext context) {
-    final budget = context.watch<BudgetProvider>();
+    context.watch<BudgetProvider>();
     final currency = context.watch<CurrencyProvider>();
     final planner = context.watch<PlannerProvider>();
-    final target = DateTime(day.year, day.month, day.day);
-    final transactions = budget.entriesForDay(target);
+    final target = DateTime(widget.day.year, widget.day.month, widget.day.day);
+    final transactions = _transactions;
     // Daily statistics show only money that was USED (spent). Refunds and
     // added-money credits (isRefund) are excluded from the total.
     final total = transactions
@@ -219,6 +256,17 @@ class DailySpendingPage extends StatelessWidget {
         item.category,
         item.entry,
       );
+      if (mounted) {
+        setState(() {
+          _transactions = _transactions
+              .where(
+                (candidate) =>
+                    candidate.category != item.category ||
+                    candidate.entry.id != item.entry.id,
+              )
+              .toList();
+        });
+      }
       return true;
     } catch (error) {
       if (isFinanceRateLimitError(error)) return false;

@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../models/financial_entry.dart';
 import '../../models/monthly_spending_stats.dart';
 import '../../providers/budget_provider.dart';
 import '../../providers/currency_provider.dart';
@@ -21,12 +24,40 @@ class MonthlySpendingDashboardPage extends StatefulWidget {
 class _MonthlySpendingDashboardPageState
     extends State<MonthlySpendingDashboardPage> {
   late DateTime _selectedMonth;
+  Map<FinancialCategory, List<FinancialEntry>> _entries = {
+    for (final category in FinancialCategory.values) category: [],
+  };
+  bool _started = false;
+  int _loadGeneration = 0;
 
   @override
   void initState() {
     super.initState();
     final now = DateTime.now();
     _selectedMonth = DateTime(now.year, now.month);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started) return;
+    _started = true;
+    unawaited(_loadMonth());
+  }
+
+  Future<void> _loadMonth() async {
+    final generation = ++_loadGeneration;
+    final month = _selectedMonth;
+    final start = DateTime(month.year, month.month);
+    final end = DateTime(month.year, month.month + 1);
+    try {
+      final entries = await context.read<BudgetProvider>().loadEntriesInRange(
+        startInclusive: start,
+        endExclusive: end,
+      );
+      if (!mounted || generation != _loadGeneration) return;
+      setState(() => _entries = entries);
+    } catch (_) {}
   }
 
   void _shiftMonth(int delta) {
@@ -36,17 +67,14 @@ class _MonthlySpendingDashboardPageState
         _selectedMonth.month + delta,
       );
     });
+    unawaited(_loadMonth());
   }
 
   Future<void> _pickMonth() async {
     final now = DateTime.now();
     final picked = await showDatePicker(
       context: context,
-      initialDate: DateTime(
-        _selectedMonth.year,
-        _selectedMonth.month,
-        1,
-      ),
+      initialDate: DateTime(_selectedMonth.year, _selectedMonth.month, 1),
       firstDate: DateTime(now.year - 5),
       lastDate: DateTime(now.year + 1, 12, 31),
       helpText: 'Select month',
@@ -57,13 +85,14 @@ class _MonthlySpendingDashboardPageState
     setState(() {
       _selectedMonth = DateTime(picked.year, picked.month);
     });
+    unawaited(_loadMonth());
   }
 
   @override
   Widget build(BuildContext context) {
-    final budget = context.watch<BudgetProvider>();
-    final stats = MonthlySpendingStats.fromBudget(
-      budget: budget,
+    context.watch<BudgetProvider>();
+    final stats = MonthlySpendingStats.fromEntries(
+      entries: _entries,
       month: _selectedMonth,
     );
 
@@ -131,11 +160,7 @@ class _MonthlySpendingDashboardPageState
 
             return ListView(
               padding: padding,
-              children: [
-                calendar,
-                const SizedBox(height: 24),
-                summary,
-              ],
+              children: [calendar, const SizedBox(height: 24), summary],
             );
           },
         ),
@@ -221,10 +246,7 @@ class _CalendarHeatmapPanel extends StatelessWidget {
 }
 
 class _MonthCalendarGrid extends StatelessWidget {
-  const _MonthCalendarGrid({
-    required this.stats,
-    required this.onDayTap,
-  });
+  const _MonthCalendarGrid({required this.stats, required this.onDayTap});
 
   final MonthlySpendingStats stats;
   final ValueChanged<DateTime> onDayTap;
@@ -261,8 +283,7 @@ class _MonthCalendarGrid extends StatelessWidget {
 
     for (var day = 1; day <= daysInMonth; day++) {
       final date = DateTime(year, month, day);
-      final intensity =
-          stats.intensityByDay[date] ?? SpendingIntensity.none;
+      final intensity = stats.intensityByDay[date] ?? SpendingIntensity.none;
       final isToday =
           today.year == year && today.month == month && today.day == day;
       final amount = stats.dailyTotals[date] ?? 0;
@@ -398,18 +419,9 @@ class _SpendingLevelKey extends StatelessWidget {
           const Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _LegendItem(
-                color: Color(0xFFD1D5DB),
-                label: 'MINIMAL',
-              ),
-              _LegendItem(
-                color: Color(0xFF9CA3AF),
-                label: 'AVERAGE',
-              ),
-              _LegendItem(
-                color: Color(0xFF111827),
-                label: 'SIGNIFICANT',
-              ),
+              _LegendItem(color: Color(0xFFD1D5DB), label: 'MINIMAL'),
+              _LegendItem(color: Color(0xFF9CA3AF), label: 'AVERAGE'),
+              _LegendItem(color: Color(0xFF111827), label: 'SIGNIFICANT'),
             ],
           ),
         ],
@@ -478,9 +490,7 @@ class _SummaryAndBreakdownPanel extends StatelessWidget {
     final symbol = context.watch<CurrencyProvider>().symbol;
     void openDay(DateTime day) {
       Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => DailySpendingPage(day: day),
-        ),
+        MaterialPageRoute<void>(builder: (_) => DailySpendingPage(day: day)),
       );
     }
 
@@ -606,8 +616,7 @@ class _SummaryAndBreakdownPanel extends StatelessWidget {
             label: 'Lowest Spending Days',
             value: _lowest,
             valueColor: const Color(0xFFD6C4A3),
-            onValueTap:
-                stats.lowestDays.isEmpty ? null : openLowestDays,
+            onValueTap: stats.lowestDays.isEmpty ? null : openLowestDays,
           ),
           const SizedBox(height: 28),
           const Text(
@@ -618,7 +627,7 @@ class _SummaryAndBreakdownPanel extends StatelessWidget {
               color: Colors.black,
             ),
           ),
-          
+
           const SizedBox(height: 16),
           if (stats.breakdown.isEmpty)
             Padding(
@@ -729,7 +738,8 @@ class _CategoryBreakdownRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final percent = item.percent.clamp(0, 100);
-    final label = '${item.label} · ${categoryDashboardLabel(item.category)} '
+    final label =
+        '${item.label} · ${categoryDashboardLabel(item.category)} '
         '${percent.round()}%';
 
     return Column(

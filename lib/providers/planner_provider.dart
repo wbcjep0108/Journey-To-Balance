@@ -61,6 +61,8 @@ class PlannerProvider extends ChangeNotifier {
   bool _notificationPermissionGranted = true;
   bool _checkingAlert = false;
   bool _alertCheckPending = false;
+  double _spent = 0;
+  int _spentLoadGeneration = 0;
   PlannerExceededEvent? _pendingExceededEvent;
 
   BudgetPlan? get plan => _plan;
@@ -74,10 +76,7 @@ class PlannerProvider extends ChangeNotifier {
   bool get hasPlan => _plan != null;
   PlannerExceededEvent? get pendingExceededEvent => _pendingExceededEvent;
 
-  double get spent {
-    final current = _plan;
-    return current == null ? 0 : _spentFor(current);
-  }
+  double get spent => _plan == null ? 0 : _spent;
 
   double get progress {
     final current = _plan;
@@ -97,10 +96,12 @@ class PlannerProvider extends ChangeNotifier {
 
     try {
       _plan = await _service.load(uid);
+      await _refreshSpent();
       await _evaluateAlert();
       _subscription = _service.watch(uid).listen((snapshot) {
         if (_uid != uid) return;
         _plan = snapshot.plan;
+        unawaited(_refreshSpent());
         notifyListeners();
         _queueAlertCheck();
       }, onError: (_) {});
@@ -138,6 +139,7 @@ class PlannerProvider extends ChangeNotifier {
       createdAt: DateTime.now(),
       alertEligible: true,
     );
+    final initialSpent = await _loadSpentFor(initial);
     final next = BudgetPlan(
       id: initial.id,
       period: initial.period,
@@ -145,11 +147,12 @@ class PlannerProvider extends ChangeNotifier {
       endExclusive: initial.endExclusive,
       amounts: initial.amounts,
       createdAt: initial.createdAt,
-      alertEligible: _spentFor(initial) <= initial.total,
+      alertEligible: initialSpent <= initial.total,
     );
 
     final previous = _plan;
     _plan = next;
+    _spent = initialSpent;
     _isSaving = true;
     _alertTracker.reset();
     await _evaluateAlert();
@@ -195,6 +198,7 @@ class PlannerProvider extends ChangeNotifier {
 
     _isDeleting = true;
     _plan = null;
+    _spent = 0;
     _pendingExceededEvent = null;
     _alertTracker.reset();
     notifyListeners();
@@ -232,6 +236,7 @@ class PlannerProvider extends ChangeNotifier {
     _subscription = null;
     _uid = null;
     _plan = null;
+    _spent = 0;
     _pendingExceededEvent = null;
     _alertTracker.reset();
     _isLoading = false;
@@ -240,15 +245,32 @@ class PlannerProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  double _spentFor(BudgetPlan plan) {
-    return plannerSpent(plan, {
-      for (final category in FinancialCategory.values)
-        category: _budget.entriesFor(category),
-    });
+  Future<double> _loadSpentFor(BudgetPlan plan) async {
+    final entries = await _budget.loadEntriesInRange(
+      startInclusive: plan.localStart,
+      endExclusive: plan.localEndExclusive,
+    );
+    return plannerSpent(plan, entries);
+  }
+
+  Future<void> _refreshSpent() async {
+    final plan = _plan;
+    if (plan == null) {
+      _spent = 0;
+      return;
+    }
+    final generation = ++_spentLoadGeneration;
+    try {
+      final next = await _loadSpentFor(plan);
+      if (_plan?.id != plan.id || generation != _spentLoadGeneration) return;
+      _spent = next;
+      notifyListeners();
+    } catch (_) {}
   }
 
   void _onBudgetChanged() {
     if (_uid == null || _plan == null) return;
+    unawaited(_refreshSpent());
     notifyListeners();
     _queueAlertCheck();
   }
@@ -271,7 +293,7 @@ class PlannerProvider extends ChangeNotifier {
     if (uid == null || current == null || _checkingAlert) return;
     _checkingAlert = true;
     try {
-      final currentSpent = _spentFor(current);
+      final currentSpent = _spent;
       final shouldAlert = await _alertTracker.evaluate(
         uid: uid,
         plan: current,

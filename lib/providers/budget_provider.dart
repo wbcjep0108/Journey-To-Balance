@@ -52,6 +52,13 @@ class BudgetProvider extends ChangeNotifier {
   final Map<FinancialCategory, List<FinancialEntry>> _entries = {
     for (final category in FinancialCategory.values) category: [],
   };
+  final Map<FinancialCategory, EntriesPage?> _entryPages = {
+    for (final category in FinancialCategory.values) category: null,
+  };
+  final Map<FinancialCategory, Set<String>> _liveEntryIds = {
+    for (final category in FinancialCategory.values) category: <String>{},
+  };
+  final Set<FinancialCategory> _loadingMoreCategories = {};
   final Map<FinancialCategory, double> _forfeited = {
     for (final category in FinancialCategory.values) category: 0,
   };
@@ -151,18 +158,82 @@ class BudgetProvider extends ChangeNotifier {
     return List.unmodifiable(_entries[category]!);
   }
 
+  bool hasMoreEntries(FinancialCategory category) =>
+      _entryPages[category]?.hasMore ?? false;
+
+  bool isLoadingMoreEntries(FinancialCategory category) =>
+      _loadingMoreCategories.contains(category);
+
+  Future<void> loadMoreEntries(FinancialCategory category) async {
+    final uid = _requireUid();
+    final currentPage = _entryPages[category];
+    if (currentPage == null ||
+        !currentPage.hasMore ||
+        _loadingMoreCategories.contains(category)) {
+      return;
+    }
+
+    _loadingMoreCategories.add(category);
+    notifyListeners();
+    try {
+      final page = await _service.loadEntriesPage(
+        uid,
+        category,
+        startAfter: currentPage.cursor,
+      );
+      if (_uid != uid) return;
+      final existingIds = _entries[category]!.map((entry) => entry.id).toSet();
+      _entries[category]!.addAll(
+        page.entries.where((entry) => existingIds.add(entry.id)),
+      );
+      _entries[category]!.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      _entryPages[category] = page;
+    } catch (_) {
+      errorMessage = 'Could not load older entries. Check your connection.';
+    } finally {
+      _loadingMoreCategories.remove(category);
+      notifyListeners();
+    }
+  }
+
+  Future<Map<FinancialCategory, List<FinancialEntry>>> loadEntriesInRange({
+    required DateTime startInclusive,
+    required DateTime endExclusive,
+  }) async {
+    final uid = _requireUid();
+    final results = await Future.wait(
+      FinancialCategory.values.map((category) {
+        final page = _entryPages[category];
+        if (page != null && !page.hasMore) {
+          return Future.value(
+            _entries[category]!
+                .where(
+                  (entry) =>
+                      !entry.createdAt.isBefore(startInclusive) &&
+                      entry.createdAt.isBefore(endExclusive),
+                )
+                .toList(),
+          );
+        }
+        return _service.loadEntriesInRange(
+          uid,
+          category,
+          startInclusive: startInclusive,
+          endExclusive: endExclusive,
+        );
+      }),
+    );
+    return {
+      for (var index = 0; index < FinancialCategory.values.length; index++)
+        FinancialCategory.values[index]: results[index],
+    };
+  }
+
   bool get hasTransactions => FinancialCategory.values.any(
     (category) => _entries[category]!.isNotEmpty,
   );
 
   String newRequestId() => _api.newRequestId();
-
-  double totalUsedFor(FinancialCategory category) {
-    final active = _entries[category]!
-        .where((entry) => !entry.isRefund)
-        .fold<double>(0, (total, entry) => total + entry.amount);
-    return active + _forfeited[category]!;
-  }
 
   double get billsAmount => _billsRemaining;
   double get savingsAmount => _savingsRemaining;
@@ -305,7 +376,14 @@ class BudgetProvider extends ChangeNotifier {
   }
 
   /// Monday–Sunday spending totals from Bills + Savings + Personal.
-  List<WeeklyDaySpend> get weeklySpending {
+  List<WeeklyDaySpend> get weeklySpending => weeklySpendingForEntries({
+    for (final category in FinancialCategory.values)
+      category: _entries[category]!,
+  });
+
+  List<WeeklyDaySpend> weeklySpendingForEntries(
+    Map<FinancialCategory, List<FinancialEntry>> entriesByCategory,
+  ) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final monday = today.subtract(Duration(days: today.weekday - 1));
@@ -323,7 +401,8 @@ class BudgetProvider extends ChangeNotifier {
 
     final totals = List<double>.filled(7, 0);
     for (final category in FinancialCategory.values) {
-      for (final entry in _entries[category]!) {
+      for (final entry
+          in entriesByCategory[category] ?? const <FinancialEntry>[]) {
         if (entry.isRefund) continue;
         final local = entry.createdAt.toLocal();
         final day = DateTime(local.year, local.month, local.day);
@@ -408,7 +487,7 @@ class BudgetProvider extends ChangeNotifier {
       final results = await Future.wait<Object?>([
         _service.loadBudget(uid),
         for (final category in FinancialCategory.values)
-          _service.loadEntries(uid, category),
+          _service.loadEntriesPage(uid, category),
       ]);
       if (_uid != uid) return;
 
@@ -434,10 +513,13 @@ class BudgetProvider extends ChangeNotifier {
       }
 
       for (var index = 0; index < FinancialCategory.values.length; index++) {
-        _entries[FinancialCategory.values[index]] =
-            results[index + 1] as List<FinancialEntry>;
+        final category = FinancialCategory.values[index];
+        final page = results[index + 1] as EntriesPage;
+        _entries[category] = page.entries;
+        _entryPages[category] = page;
+        _liveEntryIds[category] = page.entries.map((entry) => entry.id).toSet();
       }
-      final migrated = _migrateBudgetSchemaIfNeeded();
+      final migrated = await _migrateBudgetSchemaIfNeeded();
       _startRealtimeSync(uid);
       if (migrated) {
         unawaited(() async {
@@ -486,7 +568,7 @@ class BudgetProvider extends ChangeNotifier {
       final results = await Future.wait<Object?>([
         _service.loadBudget(uid, serverOnly: true),
         for (final category in FinancialCategory.values)
-          _service.loadEntries(uid, category, serverOnly: true),
+          _service.loadEntriesPage(uid, category, serverOnly: true),
       ]);
       if (_uid != uid) return;
 
@@ -545,17 +627,20 @@ class BudgetProvider extends ChangeNotifier {
             }
           }
         }
-        _migrateBudgetSchemaIfNeeded();
+        await _migrateBudgetSchemaIfNeeded();
       }
 
       for (var index = 0; index < FinancialCategory.values.length; index++) {
         final category = FinancialCategory.values[index];
-        final remote = results[index + 1] as List<FinancialEntry>;
+        final page = results[index + 1] as EntriesPage;
+        final remote = page.entries;
         _entries[category] = _mergeEntriesWithPending(
           category,
           remote,
           confirmPending: true,
         );
+        _entryPages[category] = page;
+        _liveEntryIds[category] = remote.map((entry) => entry.id).toSet();
       }
       errorMessage = null;
       notifyListeners();
@@ -632,23 +717,26 @@ class BudgetProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> receiveSalary() async {
+  Future<void> receiveSalary({
+    double? amount,
+    String title = 'Received salary',
+  }) async {
     _requireUid();
-    if (monthlySalary <= 0) {
+    final salary = amount ?? monthlySalary;
+    if (salary <= 0) {
       throw StateError('Set a monthly salary before receiving it.');
     }
 
-    final salary = monthlySalary;
     final requestId = _api.newRequestId();
     errorMessage = null;
     _budgetMutationDepth++;
     try {
-      await _api.receiveSalary(requestId: requestId);
+      await _api.receiveSalary(requestId: requestId, amount: amount);
       availableBalance += salary;
       _distributeAddedFunds(salary);
       _recordDistributedCredits(
         requestId: requestId,
-        title: 'Received salary',
+        title: title,
         amount: salary,
       );
       notifyListeners();
@@ -1184,12 +1272,16 @@ class BudgetProvider extends ChangeNotifier {
     for (final entries in _entries.values) {
       entries.clear();
     }
+    for (final category in FinancialCategory.values) {
+      _entryPages[category] = null;
+      _liveEntryIds[category]!.clear();
+    }
   }
 
   /// Migrates to schema 3 independent envelopes.
   /// v1: pot − used → spendable AB, then seed envelopes.
   /// v2: AB×% live → seed stored remainings from AB × %.
-  bool _migrateBudgetSchemaIfNeeded() {
+  Future<bool> _migrateBudgetSchemaIfNeeded() async {
     final missingRemainings =
         availableBalance > 0.001 && totalRemainingBalance < 0.001;
     if (budgetSchemaVersion >= currentBudgetSchemaVersion &&
@@ -1198,15 +1290,22 @@ class BudgetProvider extends ChangeNotifier {
     }
 
     if (budgetSchemaVersion < 2) {
+      final uid = _requireUid();
+      final usedAmounts = await Future.wait(
+        FinancialCategory.values.map(
+          (category) => _service.sumNonRefundEntries(uid, category),
+        ),
+      );
       var legacySpendable = 0.0;
-      for (final category in FinancialCategory.values) {
+      for (var index = 0; index < FinancialCategory.values.length; index++) {
+        final category = FinancialCategory.values[index];
         final pct = switch (category) {
           FinancialCategory.bills => billsPercentage,
           FinancialCategory.savings => savingsPercentage,
           FinancialCategory.personal => personalPercentage,
         };
         final allocated = availableBalance * (pct / 100);
-        legacySpendable += allocated - totalUsedFor(category);
+        legacySpendable += allocated - usedAmounts[index];
       }
       availableBalance = legacySpendable.clamp(0, double.infinity);
       _clearForfeited();
@@ -1422,11 +1521,23 @@ class BudgetProvider extends ChangeNotifier {
       _realtimeSubscriptions.add(
         _service.watchEntries(uid, category).listen((snapshot) {
           if (_uid != uid) return;
-          _entries[category] = _mergeEntriesWithPending(
-            category,
-            snapshot.entries,
-            confirmPending: !snapshot.hasPendingWrites,
-          );
+          final priorLiveIds = _liveEntryIds[category]!;
+          final nextLiveIds = snapshot.entries.map((entry) => entry.id).toSet();
+          final hasNewLiveEntries = nextLiveIds
+              .difference(priorLiveIds)
+              .isNotEmpty;
+          final pagedEntries = _entries[category]!
+              .where(
+                (entry) =>
+                    !priorLiveIds.contains(entry.id) ||
+                    (hasNewLiveEntries && !nextLiveIds.contains(entry.id)),
+              )
+              .toList();
+          _entries[category] = _mergeEntriesWithPending(category, [
+            ...snapshot.entries,
+            ...pagedEntries,
+          ], confirmPending: !snapshot.hasPendingWrites);
+          _liveEntryIds[category] = nextLiveIds;
           notifyListeners();
         }, onError: (_) => _handleRealtimeError(uid)),
       );

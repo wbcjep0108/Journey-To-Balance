@@ -22,6 +22,7 @@ import '../savings/savings_goal_page.dart';
 import 'budget_planner_page.dart';
 import 'home_money_dialogs.dart';
 import 'monthly_spending_dashboard_page.dart';
+import 'thirteenth_month_screen.dart';
 import 'wallet_page.dart';
 
 class HomePage extends StatefulWidget {
@@ -599,11 +600,11 @@ class _HomePageState extends State<HomePage> {
                 child: WeeklySpendingCard(),
               ),
               const Padding(
-                padding: EdgeInsets.fromLTRB(28, 16, 28, 8),
-                child: _QuickActionsRow(),
+                padding: EdgeInsets.fromLTRB(0, 10, 0, 8),
+                child: QuickActionRow(),
               ),
               const Padding(
-                padding: EdgeInsets.fromLTRB(16, 40, 16, 12),
+                padding: EdgeInsets.fromLTRB(16, 8, 16, 12),
                 child: ForeignExchangeCard(),
               ),
             ],
@@ -765,48 +766,89 @@ class _HomePlannerCard extends StatelessWidget {
   }
 }
 
-class _QuickActionsRow extends StatelessWidget {
-  const _QuickActionsRow();
+class QuickActionRow extends StatelessWidget {
+  const QuickActionRow({super.key, this.buttonSize = 64});
+
+  final double buttonSize;
 
   @override
   Widget build(BuildContext context) {
     final planner = context.watch<PlannerProvider>();
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: [
-        const _SavingsProgressAction(),
-        _FilledIconAction(
-          icon: Icons.account_balance_outlined,
-          label: 'Loan',
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(builder: (_) => const TotalLoanPage()),
-            );
-          },
-        ),
-        _FilledIconAction(
-          icon: Icons.calendar_month_outlined,
-          label: 'Calendar',
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => const MonthlySpendingDashboardPage(),
-              ),
-            );
-          },
-        ),
-        _PlannerAction(
-          progress: planner.progress,
-          hasPlan: planner.hasPlan,
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => const BudgetPlannerPage(),
-              ),
-            );
-          },
-        ),
-      ],
+    final actions = <Widget>[
+      _SavingsProgressAction(size: buttonSize),
+      _FilledIconAction(
+        size: buttonSize,
+        icon: Icons.account_balance_outlined,
+        label: 'Loan',
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: (_) => const TotalLoanPage()),
+          );
+        },
+      ),
+      _FilledIconAction(
+        size: buttonSize,
+        icon: Icons.calendar_month_outlined,
+        label: 'Calendar',
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => const MonthlySpendingDashboardPage(),
+            ),
+          );
+        },
+      ),
+      _PlannerAction(
+        size: buttonSize,
+        progress: planner.progress,
+        hasPlan: planner.hasPlan,
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: (_) => const BudgetPlannerPage()),
+          );
+        },
+      ),
+      _FilledIconAction(
+        size: buttonSize,
+        icon: Icons.card_giftcard_rounded,
+        label: '13th Month Pay Calculator',
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => const ThirteenthMonthScreen(),
+            ),
+          );
+        },
+      ),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final count = actions.length;
+        final fits =
+            count * buttonSize + (count - 1) * 12 + 2 * 20 <=
+            constraints.maxWidth;
+
+        return SizedBox(
+          height: buttonSize + 8,
+          child: fits
+              ? Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: actions,
+                  ),
+                )
+              : ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  itemCount: actions.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 12),
+                  itemBuilder: (_, index) => actions[index],
+                ),
+        );
+      },
     );
   }
 }
@@ -816,11 +858,13 @@ class _PlannerAction extends StatelessWidget {
     required this.progress,
     required this.hasPlan,
     required this.onTap,
+    this.size = 64,
   });
 
   final double progress;
   final bool hasPlan;
   final VoidCallback onTap;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
@@ -833,32 +877,54 @@ class _PlannerAction extends StatelessWidget {
         ? (progress <= 0 ? 0.001 : progress.clamp(0.0, 1.0))
         : 0.0;
 
-    return Semantics(
-      label: 'Budget Planner',
-      button: true,
-      child: SizedBox(
-        width: 74,
-        height: 74,
-        child: InkResponse(
-          onTap: onTap,
-          radius: 37,
-          customBorder: const CircleBorder(),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              SizedBox(
-                width: 74,
-                height: 74,
-                child: CircularProgressIndicator(
+    return Tooltip(
+      message: 'Budget Planner',
+      child: Semantics(
+        label: 'Budget Planner',
+        button: true,
+        child: SizedBox(
+          width: size,
+          height: size,
+          child: InkResponse(
+            onTap: onTap,
+            radius: size / 2,
+            customBorder: const CircleBorder(),
+            child: Stack(
+              fit: StackFit.expand,
+              alignment: Alignment.center,
+              children: [
+                CircularProgressIndicator(
                   value: ringProgress,
-                  strokeWidth: 10.5,
+                  strokeWidth: 8,
                   strokeCap: StrokeCap.round,
                   backgroundColor: const Color(0xFF121212),
                   color: statusColor,
                 ),
-              ),
-              const _PlannerIconCircle(),
-            ],
+                Center(
+                  child: Container(
+                    width: size - 16,
+                    height: size - 16,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.08),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    padding: const EdgeInsets.all(8),
+                    child: const Icon(
+                      Icons.event_note_outlined,
+                      size: 26,
+                      color: Color(0xFF121212),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -866,37 +932,10 @@ class _PlannerAction extends StatelessWidget {
   }
 }
 
-class _PlannerIconCircle extends StatelessWidget {
-  const _PlannerIconCircle();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 54,
-      height: 54,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 10,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.all(12),
-      child: const Icon(
-        Icons.event_note_outlined,
-        size: 30,
-        color: Color(0xFF121212),
-      ),
-    );
-  }
-}
-
 class _SavingsProgressAction extends StatefulWidget {
-  const _SavingsProgressAction();
+  const _SavingsProgressAction({this.size = 64});
+
+  final double size;
 
   @override
   State<_SavingsProgressAction> createState() => _SavingsProgressActionState();
@@ -907,35 +946,36 @@ class _SavingsProgressActionState extends State<_SavingsProgressAction> {
   Widget build(BuildContext context) {
     final budget = context.watch<BudgetProvider>();
     final progress = budget.savingsGoalProgress;
+    final size = widget.size;
 
-    return Semantics(
-      button: true,
-      label: 'Savings Goal',
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: () {
-            Navigator.of(context)
-                .push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const SavingsGoalPage(),
-                  ),
-                )
-                .then((_) {
-                  if (mounted) setState(() {});
-                });
-          },
-          child: SizedBox(
-            width: 74,
-            height: 74,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                SizedBox(
-                  width: 74,
-                  height: 74,
-                  child: TweenAnimationBuilder<double>(
+    return Tooltip(
+      message: 'Savings Goal',
+      child: Semantics(
+        button: true,
+        label: 'Savings Goal',
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: () {
+              Navigator.of(context)
+                  .push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const SavingsGoalPage(),
+                    ),
+                  )
+                  .then((_) {
+                    if (mounted) setState(() {});
+                  });
+            },
+            child: SizedBox(
+              width: size,
+              height: size,
+              child: Stack(
+                fit: StackFit.expand,
+                alignment: Alignment.center,
+                children: [
+                  TweenAnimationBuilder<double>(
                     key: ValueKey(progress.toStringAsFixed(4)),
                     tween: Tween<double>(begin: 0, end: progress),
                     duration: const Duration(milliseconds: 700),
@@ -943,36 +983,38 @@ class _SavingsProgressActionState extends State<_SavingsProgressAction> {
                     builder: (context, value, _) {
                       return CircularProgressIndicator(
                         value: value <= 0 ? 0.001 : value,
-                        strokeWidth: 10.5,
+                        strokeWidth: 8,
                         strokeCap: StrokeCap.round,
                         backgroundColor: const Color(0xFF121212),
                         color: const Color(0xFFD6C4A3),
                       );
                     },
                   ),
-                ),
-                Container(
-                  width: 54,
-                  height: 54,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.08),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
+                  Center(
+                    child: Container(
+                      width: size - 16,
+                      height: size - 16,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.08),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
-                    ],
+                      padding: const EdgeInsets.all(8),
+                      child: const Icon(
+                        Icons.savings_outlined,
+                        size: 26,
+                        color: Color(0xFF121212),
+                      ),
+                    ),
                   ),
-                  padding: const EdgeInsets.all(12),
-                  child: const Icon(
-                    Icons.savings_outlined,
-                    size: 30,
-                    color: const Color(0xFF121212),
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -986,38 +1028,43 @@ class _FilledIconAction extends StatelessWidget {
     required this.icon,
     required this.label,
     this.onTap,
+    this.size = 64,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback? onTap;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: label,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: onTap,
-          child: Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              color: const Color(0xFF121212),
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.12),
-                  blurRadius: 12,
-                  offset: const Offset(0, 5),
-                ),
-              ],
+    return Tooltip(
+      message: label,
+      child: Semantics(
+        button: true,
+        label: label,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: onTap,
+            child: Container(
+              width: size,
+              height: size,
+              decoration: BoxDecoration(
+                color: const Color(0xFF121212),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.12),
+                    blurRadius: 12,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
+              ),
+              alignment: Alignment.center,
+              child: Icon(icon, color: Colors.white, size: 28),
             ),
-            alignment: Alignment.center,
-            child: Icon(icon, color: Colors.white, size: 28),
           ),
         ),
       ),

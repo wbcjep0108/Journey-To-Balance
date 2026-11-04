@@ -1,17 +1,53 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../models/financial_entry.dart';
 import '../providers/budget_provider.dart';
 import '../providers/currency_provider.dart';
 import '../screens/home/daily_spending_page.dart';
 
-class WeeklySpendingCard extends StatelessWidget {
+class WeeklySpendingCard extends StatefulWidget {
   const WeeklySpendingCard({super.key});
 
   @override
+  State<WeeklySpendingCard> createState() => _WeeklySpendingCardState();
+}
+
+class _WeeklySpendingCardState extends State<WeeklySpendingCard> {
+  Map<FinancialCategory, List<FinancialEntry>> _entries = {
+    for (final category in FinancialCategory.values) category: [],
+  };
+  bool _started = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started) return;
+    _started = true;
+    unawaited(_loadWeek());
+  }
+
+  Future<void> _loadWeek() async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final monday = today.subtract(Duration(days: today.weekday - 1));
+    try {
+      final entries = await context.read<BudgetProvider>().loadEntriesInRange(
+        startInclusive: monday,
+        endExclusive: monday.add(const Duration(days: 7)),
+      );
+      if (!mounted) return;
+      setState(() => _entries = entries);
+    } catch (_) {}
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final days = context.watch<BudgetProvider>().weeklySpending;
+    final budget = context.watch<BudgetProvider>();
+    final days = budget.weeklySpendingForEntries(_entries);
     final maxAmount = days.fold<double>(
       0,
       (max, day) => day.amount > max ? day.amount : max,
@@ -66,10 +102,7 @@ class WeeklySpendingCard extends StatelessWidget {
                 for (var i = 0; i < days.length; i++) ...[
                   if (i > 0) const SizedBox(width: 8),
                   Expanded(
-                    child: _DayBar(
-                      day: days[i],
-                      maxAmount: maxAmount,
-                    ),
+                    child: _DayBar(day: days[i], maxAmount: maxAmount),
                   ),
                 ],
               ],
@@ -140,9 +173,7 @@ class _DayBar extends StatelessWidget {
 
   void _openDay(BuildContext context) {
     Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => DailySpendingPage(day: day.date),
-      ),
+      MaterialPageRoute<void>(builder: (_) => DailySpendingPage(day: day.date)),
     );
   }
 

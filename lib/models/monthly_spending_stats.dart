@@ -3,7 +3,6 @@ import 'package:intl/intl.dart';
 
 import '../models/financial_entry.dart';
 import '../models/spend_category_option.dart';
-import '../providers/budget_provider.dart';
 
 enum SpendingIntensity { none, minimal, average, significant }
 
@@ -44,8 +43,8 @@ class MonthlySpendingStats {
   final List<CategoryBreakdown> breakdown;
   final Map<DateTime, SpendingIntensity> intensityByDay;
 
-  factory MonthlySpendingStats.fromBudget({
-    required BudgetProvider budget,
+  factory MonthlySpendingStats.fromEntries({
+    required Map<FinancialCategory, List<FinancialEntry>> entries,
     required DateTime month,
   }) {
     final year = month.year;
@@ -61,7 +60,7 @@ class MonthlySpendingStats {
     final spendingTotals = <(FinancialCategory, String), double>{};
 
     for (final category in FinancialCategory.values) {
-      for (final entry in budget.entriesFor(category)) {
+      for (final entry in entries[category] ?? const <FinancialEntry>[]) {
         if (entry.isRefund) continue;
         final local = entry.createdAt.toLocal();
         if (local.year != year || local.month != monthIndex) continue;
@@ -92,9 +91,7 @@ class MonthlySpendingStats {
       }
     }
 
-    final spendingDays = dailyTotals.entries
-        .where((e) => e.value > 0)
-        .toList();
+    final spendingDays = dailyTotals.entries.where((e) => e.value > 0).toList();
     final lowestDays = <DateTime>[];
     if (spendingDays.isNotEmpty) {
       var minAmount = spendingDays.first.value;
@@ -128,19 +125,20 @@ class MonthlySpendingStats {
     breakdown.sort((a, b) => b.amount.compareTo(a.amount));
 
     final intensityByDay = <DateTime, SpendingIntensity>{};
-    final positiveAmounts =
-        spendingDays.map((e) => e.value).toList()..sort();
+    final positiveAmounts = spendingDays.map((e) => e.value).toList()..sort();
     double? t1;
     double? t2;
     if (positiveAmounts.length >= 3) {
-      t1 = positiveAmounts[(positiveAmounts.length / 3).floor().clamp(
-        0,
-        positiveAmounts.length - 1,
-      )];
-      t2 = positiveAmounts[((positiveAmounts.length * 2) / 3).floor().clamp(
-        0,
-        positiveAmounts.length - 1,
-      )];
+      t1 =
+          positiveAmounts[(positiveAmounts.length / 3).floor().clamp(
+            0,
+            positiveAmounts.length - 1,
+          )];
+      t2 =
+          positiveAmounts[((positiveAmounts.length * 2) / 3).floor().clamp(
+            0,
+            positiveAmounts.length - 1,
+          )];
     } else if (positiveAmounts.length == 2) {
       t1 = positiveAmounts.first;
       t2 = positiveAmounts.last;

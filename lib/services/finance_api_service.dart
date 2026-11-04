@@ -151,8 +151,14 @@ class FinanceApiService implements PasswordResetApi {
     }
   }
 
-  Future<Map<String, dynamic>> receiveSalary({required String requestId}) {
-    return _post('/api/finance/receive-salary', {'requestId': requestId});
+  Future<Map<String, dynamic>> receiveSalary({
+    required String requestId,
+    double? amount,
+  }) {
+    return _post('/api/finance/receive-salary', {
+      'requestId': requestId,
+      'amount': ?amount,
+    });
   }
 
   Future<Map<String, dynamic>> addMoney({

@@ -1,21 +1,20 @@
-import 'dart:async';
-
 import 'package:flutter/foundation.dart';
 
-import '../services/wallet_firestore_service.dart';
+import '../services/wallet_repository.dart';
 
 /// Cash-on-hand amount, synced across devices via the user's wallet document
 /// (`users/{uid}/wallet/data`). Independent of Available Balance.
 class WalletCashProvider extends ChangeNotifier {
-  WalletCashProvider({WalletFirestoreService? service})
-    : _service = service ?? WalletFirestoreService();
+  WalletCashProvider(this._repository) {
+    _repository.addListener(_syncFromRepository);
+    _syncFromRepository();
+  }
 
-  final WalletFirestoreService _service;
+  final WalletRepository _repository;
 
   String? _uid;
   double _amount = 0;
   bool _loaded = false;
-  StreamSubscription<WalletSnapshot>? _sub;
 
   double get amount => _amount;
   bool get isLoaded => _loaded;
@@ -32,35 +31,21 @@ class WalletCashProvider extends ChangeNotifier {
     _loaded = false;
     notifyListeners();
 
-    try {
-      final wallet = await _service.load(uid);
-      _amount = wallet.cashAmount;
-    } catch (_) {
-      _amount = 0;
-    }
+    await _repository.loadForUser(uid);
+    _syncFromRepository();
+  }
 
-    _loaded = true;
+  void _syncFromRepository() {
+    _uid = _repository.uid;
+    final next = _repository.wallet.cashAmount;
+    final loaded = _repository.isLoaded;
+    if (next == _amount && loaded == _loaded) return;
+    _amount = next;
+    _loaded = loaded;
     notifyListeners();
-
-    _subscribe(uid);
   }
 
-  void _subscribe(String uid) {
-    _sub?.cancel();
-    _sub = _service.watch(uid).listen((snapshot) {
-      // Ignore local pending writes so our own optimistic value isn't clobbered
-      // by an intermediate echo before the server value settles.
-      if (snapshot.hasPendingWrites) return;
-      final next = snapshot.wallet.cashAmount;
-      if (next == _amount) return;
-      _amount = next;
-      notifyListeners();
-    });
-  }
-
-  Future<void> setAmount(double amount) async {
-    await setAmountVerified(amount);
-  }
+  Future<bool> setAmount(double amount) => setAmountVerified(amount);
 
   Future<bool> setAmountVerified(double amount) async {
     final next = amount < 0 ? 0.0 : amount;
@@ -68,22 +53,18 @@ class WalletCashProvider extends ChangeNotifier {
     _amount = next;
     notifyListeners();
 
-    final uid = _uid;
-    if (uid == null) return false;
-    try {
-      await _service.saveCashAmount(uid, next);
-      return (_amount - next).abs() < 0.001;
-    } catch (_) {
+    if (_uid == null) return false;
+    final saved = await _repository.saveCashAmount(next);
+    if (!saved) {
       _amount = previous;
       notifyListeners();
       return false;
     }
+    return (_amount - next).abs() < 0.001;
   }
 
   /// Resets to the signed-out state and stops listening.
   Future<void> clear() async {
-    await _sub?.cancel();
-    _sub = null;
     _uid = null;
     _amount = 0;
     _loaded = true;
@@ -92,7 +73,7 @@ class WalletCashProvider extends ChangeNotifier {
 
   @override
   void dispose() {
-    _sub?.cancel();
+    _repository.removeListener(_syncFromRepository);
     super.dispose();
   }
 }

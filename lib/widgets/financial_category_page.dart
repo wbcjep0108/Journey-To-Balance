@@ -70,6 +70,8 @@ class _FinancialCategoryPageState extends State<FinancialCategoryPage> {
     final sectionTitle = widget.sectionTitle;
     final icon = widget.icon;
     final entries = budget.entriesFor(category);
+    final hasMoreEntries = budget.hasMoreEntries(category);
+    final isLoadingMore = budget.isLoadingMoreEntries(category);
     final allocatedBalance = budget.allocationFor(category);
     final currency = context.watch<CurrencyProvider>();
     final percentage = switch (category) {
@@ -206,24 +208,37 @@ class _FinancialCategoryPageState extends State<FinancialCategoryPage> {
                                     ),
                                   ),
                                 ),
-                                if (olderEntries.isNotEmpty)
+                                if (olderEntries.isNotEmpty || hasMoreEntries)
                                   _ViewMoreButton(
-                                    onPressed: () {
-                                      setState(() => _showOlderEntries = true);
-                                    },
+                                    isLoading: isLoadingMore,
+                                    onPressed: () => _showMoreEntries(
+                                      budget,
+                                      revealOnly: olderEntries.isNotEmpty,
+                                    ),
                                   ),
                               ],
                             )
                           : Column(
                               children: [
                                 _buildGroupedHistory(context, visibleEntries),
-                                if (olderEntries.isNotEmpty &&
+                                if ((olderEntries.isNotEmpty ||
+                                        hasMoreEntries) &&
                                     !_showOlderEntries) ...[
                                   const SizedBox(height: 22),
                                   _ViewMoreButton(
-                                    onPressed: () {
-                                      setState(() => _showOlderEntries = true);
-                                    },
+                                    isLoading: isLoadingMore,
+                                    onPressed: () => _showMoreEntries(
+                                      budget,
+                                      revealOnly: olderEntries.isNotEmpty,
+                                    ),
+                                  ),
+                                ] else if (_showOlderEntries &&
+                                    hasMoreEntries) ...[
+                                  const SizedBox(height: 22),
+                                  _ViewMoreButton(
+                                    isLoading: isLoadingMore,
+                                    onPressed: () =>
+                                        budget.loadMoreEntries(category),
                                   ),
                                 ],
                               ],
@@ -237,6 +252,14 @@ class _FinancialCategoryPageState extends State<FinancialCategoryPage> {
         ),
       ),
     );
+  }
+
+  Future<void> _showMoreEntries(
+    BudgetProvider budget, {
+    required bool revealOnly,
+  }) async {
+    setState(() => _showOlderEntries = true);
+    if (!revealOnly) await budget.loadMoreEntries(widget.category);
   }
 
   Widget _buildGroupedHistory(
@@ -424,27 +447,33 @@ class _FinancialCategoryPageState extends State<FinancialCategoryPage> {
 }
 
 class _ViewMoreButton extends StatelessWidget {
-  const _ViewMoreButton({required this.onPressed});
+  const _ViewMoreButton({required this.onPressed, required this.isLoading});
 
   final VoidCallback onPressed;
+  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
     return Center(
       child: TextButton(
-        onPressed: onPressed,
+        onPressed: isLoading ? null : onPressed,
         style: TextButton.styleFrom(
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         ),
-        child: const Text(
-          'View more',
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0.2,
-          ),
-        ),
+        child: isLoading
+            ? const SizedBox.square(
+                dimension: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Text(
+                'View more',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.2,
+                ),
+              ),
       ),
     );
   }

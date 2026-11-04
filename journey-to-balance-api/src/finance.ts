@@ -244,16 +244,18 @@ export async function handleFinance(
     return withProtection(env, uid, "receiveSalary", requestId, async () => {
       const userDoc = await client.getUserDoc(uid);
       const budget = loadBudget(userDoc);
-      if (budget.monthlySalary <= 0) {
+      const isCustomPayout = body.amount != null;
+      if (!isCustomPayout && budget.monthlySalary <= 0) {
         throw conflict("Set a monthly salary before receiving it.");
       }
-      const amount = budget.monthlySalary;
+      const amount = isCustomPayout ?
+        requirePositiveAmount(body.amount) : budget.monthlySalary;
       budget.availableBalance += amount;
       distributeAddedFunds(budget, amount);
       const createdAt = new Date();
       const credits = allocationCreditEntries({
         requestId,
-        title: "Received salary",
+        title: isCustomPayout ? "Received 13th month pay" : "Received salary",
         createdAt,
         billsAdd: amount * (budget.billsPercentage / 100),
         savingsAdd: amount * (budget.savingsPercentage / 100),

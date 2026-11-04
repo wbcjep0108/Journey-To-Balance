@@ -57,7 +57,16 @@ class WalletSnapshot {
 /// Unlike the budget (which mutates via a Cloudflare Worker), wallet data is
 /// self-owned state written directly by the client, guarded by Firestore rules
 /// that allow the owner to read/write only their own wallet document.
-class WalletFirestoreService {
+abstract class WalletDataSource {
+  Future<WalletDocument> load(String uid, {bool serverOnly = false});
+  Stream<WalletSnapshot> watch(String uid);
+  Future<void> saveCashAmount(String uid, double cashAmount);
+  Future<void> saveCurrency(String uid, String currencyCode);
+  Future<void> saveCards(String uid, List<WalletCardModel> cards);
+  Future<void> saveLoans(String uid, List<LoanEntry> loans);
+}
+
+class WalletFirestoreService implements WalletDataSource {
   WalletFirestoreService({FirebaseFirestore? firestore})
     : _firestore = firestore ?? FirebaseFirestore.instance;
 
@@ -86,7 +95,9 @@ class WalletFirestoreService {
       for (final item in rawCards) {
         if (item is Map) {
           try {
-            cards.add(WalletCardModel.fromJson(Map<String, dynamic>.from(item)));
+            cards.add(
+              WalletCardModel.fromJson(Map<String, dynamic>.from(item)),
+            );
           } catch (_) {
             // Skip malformed card entries rather than failing the whole load.
           }
@@ -151,6 +162,7 @@ class WalletFirestoreService {
 
   /// One-shot load of the wallet document. Returns [WalletDocument.empty] when
   /// the user has no wallet document yet.
+  @override
   Future<WalletDocument> load(String uid, {bool serverOnly = false}) async {
     final snapshot = serverOnly
         ? await _wallet(uid).get(const GetOptions(source: Source.server))
@@ -159,6 +171,7 @@ class WalletFirestoreService {
   }
 
   /// Realtime stream of the wallet document for cross-device sync.
+  @override
   Stream<WalletSnapshot> watch(String uid) {
     return _wallet(uid).snapshots().map((snapshot) {
       return WalletSnapshot(
@@ -185,6 +198,7 @@ class WalletFirestoreService {
   }
 
   /// Merge-write only the cash amount. Never overwrites cards/loans/currency.
+  @override
   Future<void> saveCashAmount(String uid, double cashAmount) {
     final next = cashAmount < 0 ? 0.0 : cashAmount;
     return _wallet(uid).set({
@@ -194,6 +208,7 @@ class WalletFirestoreService {
   }
 
   /// Merge-write only the preferred currency code.
+  @override
   Future<void> saveCurrency(String uid, String currencyCode) {
     return _wallet(uid).set({
       'currency': currencyCode,
@@ -202,11 +217,13 @@ class WalletFirestoreService {
   }
 
   /// Merge-write the full cards list (add/edit/delete happen in the provider).
+  @override
   Future<void> saveCards(String uid, List<WalletCardModel> cards) {
     return _wallet(uid).set(_cardsPayload(cards), SetOptions(merge: true));
   }
 
   /// Merge-write the full loans list (add/edit/delete happen in the provider).
+  @override
   Future<void> saveLoans(String uid, List<LoanEntry> loans) {
     return _wallet(uid).set(_loansPayload(loans), SetOptions(merge: true));
   }

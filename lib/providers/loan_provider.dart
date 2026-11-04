@@ -4,20 +4,21 @@ import 'package:flutter/foundation.dart';
 
 import '../models/loan_entry.dart';
 import '../services/notification_service.dart';
-import '../services/wallet_firestore_service.dart';
+import '../services/wallet_repository.dart';
 
 /// Loans, synced across devices via the user's wallet document
 /// (`users/{uid}/wallet/data`).
 class LoanProvider extends ChangeNotifier {
-  LoanProvider({WalletFirestoreService? service})
-    : _service = service ?? WalletFirestoreService();
+  LoanProvider(this._repository) {
+    _repository.addListener(_syncFromRepository);
+    _syncFromRepository();
+  }
 
-  final WalletFirestoreService _service;
+  final WalletRepository _repository;
 
   String? _uid;
   List<LoanEntry> _loans = [];
   bool _loaded = false;
-  StreamSubscription<WalletSnapshot>? _sub;
 
   List<LoanEntry> get loans => List.unmodifiable(_loans);
   bool get isLoaded => _loaded;
@@ -59,28 +60,16 @@ class LoanProvider extends ChangeNotifier {
     _loaded = false;
     notifyListeners();
 
-    try {
-      final wallet = await _service.load(uid);
-      _loans = _sorted(wallet.loans);
-    } catch (_) {
-      _loans = [];
-    }
-
-    _loaded = true;
-    notifyListeners();
-    unawaited(NotificationService.instance.syncLoans(_loans));
-
-    _subscribe(uid);
+    await _repository.loadForUser(uid);
+    _syncFromRepository();
   }
 
-  void _subscribe(String uid) {
-    _sub?.cancel();
-    _sub = _service.watch(uid).listen((snapshot) {
-      if (snapshot.hasPendingWrites) return;
-      _loans = _sorted(snapshot.wallet.loans);
-      notifyListeners();
-      unawaited(NotificationService.instance.syncLoans(_loans));
-    });
+  void _syncFromRepository() {
+    _uid = _repository.uid;
+    _loans = _sorted(_repository.wallet.loans);
+    _loaded = _repository.isLoaded;
+    notifyListeners();
+    unawaited(NotificationService.instance.syncLoans(_loans));
   }
 
   List<LoanEntry> _sorted(List<LoanEntry> loans) {
@@ -89,14 +78,14 @@ class LoanProvider extends ChangeNotifier {
     return next;
   }
 
-  Future<void> addLoan({
+  Future<bool> addLoan({
     required String name,
     required double amount,
     required DateTime monthlyDueDate,
     required DateTime finalPaymentDate,
   }) async {
     final trimmed = name.trim();
-    if (trimmed.isEmpty || amount <= 0 || _uid == null) return;
+    if (trimmed.isEmpty || amount <= 0 || _uid == null) return false;
 
     final loan = LoanEntry(
       id: 'loan_${DateTime.now().microsecondsSinceEpoch}',
@@ -116,16 +105,16 @@ class LoanProvider extends ChangeNotifier {
     final previous = _loans;
     _loans = _sorted([..._loans, loan]);
     notifyListeners();
-    await _persist(previous);
+    return _persist(previous);
   }
 
-  Future<void> markInstallmentPaid({
+  Future<bool> markInstallmentPaid({
     required String loanId,
     required DateTime dueDate,
     required bool paid,
   }) async {
     final index = _loans.indexWhere((loan) => loan.id == loanId);
-    if (index < 0) return;
+    if (index < 0) return false;
     final current = _loans[index];
     final previous = _loans;
     _loans = [
@@ -136,34 +125,31 @@ class LoanProvider extends ChangeNotifier {
           _loans[i],
     ];
     notifyListeners();
-    await _persist(previous);
+    return _persist(previous);
   }
 
-  Future<void> deleteLoan(String id) async {
+  Future<bool> deleteLoan(String id) async {
     final previous = _loans;
     _loans = _loans.where((loan) => loan.id != id).toList();
     notifyListeners();
-    await _persist(previous);
+    return _persist(previous);
   }
 
-  Future<void> _persist(List<LoanEntry> previous) async {
-    final uid = _uid;
-    if (uid == null) return;
-    try {
-      await _service.saveLoans(uid, _loans);
-    } catch (_) {
+  Future<bool> _persist(List<LoanEntry> previous) async {
+    if (_uid == null) return false;
+    final saved = await _repository.saveLoans(_loans);
+    if (!saved) {
       _loans = previous;
       notifyListeners();
       unawaited(NotificationService.instance.syncLoans(_loans));
-      return;
+      return false;
     }
     unawaited(NotificationService.instance.syncLoans(_loans));
+    return true;
   }
 
   /// Resets to the signed-out state and stops listening.
   Future<void> clear() async {
-    await _sub?.cancel();
-    _sub = null;
     _uid = null;
     _loans = [];
     _loaded = true;
@@ -173,7 +159,7 @@ class LoanProvider extends ChangeNotifier {
 
   @override
   void dispose() {
-    _sub?.cancel();
+    _repository.removeListener(_syncFromRepository);
     super.dispose();
   }
 }

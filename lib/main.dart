@@ -14,6 +14,7 @@ import 'providers/currency_provider.dart';
 import 'providers/loan_provider.dart';
 import 'providers/notification_prefs_provider.dart';
 import 'providers/planner_provider.dart';
+import 'providers/thirteenth_month_provider.dart';
 import 'providers/wallet_cards_provider.dart';
 import 'providers/wallet_cash_provider.dart';
 import 'screens/auth/login_screen.dart';
@@ -26,6 +27,7 @@ import 'screens/splash/welcome_transition.dart';
 import 'services/finance_api_service.dart';
 import 'services/firestore_finance_service.dart';
 import 'services/wallet_firestore_service.dart';
+import 'services/wallet_repository.dart';
 import 'services/wallet_migration_service.dart';
 import 'services/notification_router.dart';
 import 'services/notification_service.dart';
@@ -51,6 +53,10 @@ void main() async {
         Provider(create: (_) => FirestoreFinanceService()),
         Provider(create: (_) => PlannerFirestoreService()),
         Provider(create: (_) => WalletFirestoreService()),
+        ChangeNotifierProvider(
+          create: (context) =>
+              WalletRepository(context.read<WalletFirestoreService>()),
+        ),
         Provider(
           create: (context) => WalletMigrationService(
             firestore: context.read<WalletFirestoreService>(),
@@ -65,13 +71,12 @@ void main() async {
           ),
         ),
         ChangeNotifierProvider(
-          create: (context) =>
-              LoanProvider(service: context.read<WalletFirestoreService>()),
+          create: (context) => LoanProvider(context.read<WalletRepository>()),
         ),
         ChangeNotifierProvider(create: (_) => AppLockProvider()),
         ChangeNotifierProvider(
           create: (context) =>
-              CurrencyProvider(service: context.read<WalletFirestoreService>()),
+              CurrencyProvider(context.read<WalletRepository>()),
         ),
         ChangeNotifierProvider<NotificationPrefsProvider>(
           key: const ValueKey('notification-prefs-provider'),
@@ -86,15 +91,20 @@ void main() async {
             context.read<NotificationPrefsProvider>(),
           ),
         ),
-        ChangeNotifierProvider(
-          create: (context) => WalletCashProvider(
-            service: context.read<WalletFirestoreService>(),
+        ChangeNotifierProvider<ThirteenthMonthProvider>(
+          key: const ValueKey('thirteenth-month-provider'),
+          create: (context) => ThirteenthMonthProvider(
+            context.read<PlannerFirestoreService>(),
+            context.read<BudgetProvider>(),
           ),
         ),
         ChangeNotifierProvider(
-          create: (context) => WalletCardsProvider(
-            service: context.read<WalletFirestoreService>(),
-          ),
+          create: (context) =>
+              WalletCashProvider(context.read<WalletRepository>()),
+        ),
+        ChangeNotifierProvider(
+          create: (context) =>
+              WalletCardsProvider(context.read<WalletRepository>()),
         ),
         ChangeNotifierProvider(create: (_) => LogoutTransitionController()),
       ],
@@ -371,19 +381,15 @@ class _UserDataGateState extends State<_UserDataGate> {
         );
       }
       if (!mounted) return;
-      // Wallet data (cash, cards, currency, loans) now syncs from Firestore
-      // under users/{uid}/wallet. Loaded in parallel; each provider also opens
-      // a realtime listener so changes on another device appear automatically.
-      await Future.wait<void>([
-        context.read<LoanProvider>().loadForUser(widget.uid),
-        context.read<CurrencyProvider>().loadForUser(widget.uid),
-        context.read<WalletCashProvider>().loadForUser(widget.uid),
-        context.read<WalletCardsProvider>().loadForUser(widget.uid),
-      ]);
+      // One shared repository reads and listens to users/{uid}/wallet/data.
+      // The four wallet-facing providers consume that shared snapshot.
+      await context.read<WalletRepository>().loadForUser(widget.uid);
       if (!mounted) return;
       await context.read<NotificationPrefsProvider>().load();
       if (!mounted) return;
       await context.read<PlannerProvider>().loadForUser(widget.uid);
+      if (!mounted) return;
+      await context.read<ThirteenthMonthProvider>().loadForUser(widget.uid);
       if (!mounted) return;
       final error = context.read<BudgetProvider>().errorMessage;
       final loans = context.read<LoanProvider>().loans;
