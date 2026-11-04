@@ -4,12 +4,13 @@ Journey to Balance is a Flutter personal-finance app for recording income, bills
 
 ## Features
 
-- Email/password and Google sign-in, with account verification and password reset.
+- Email/password and Google sign-in, with account verification, password reset, and secure self-service account deletion.
 - PIN lock with optional biometric authentication and a PIN-reset flow.
 - Income, balance, and percentage-based budget allocation for bills, savings, and personal spending.
 - Add, edit, and delete categorized financial transactions with budget-limit checks.
 - Savings goals and contributions from budget categories.
 - Budget planner, daily and monthly spending views, and local notifications/reminders.
+- 13th Month Pay Calculator with Philippine tax rules (₱90,000 exemption ceiling), other benefits integration, planner autosave, and direct allocation deposit into wallet or cards.
 - Wallet tracking for cash, cards, currencies, and loans, synchronized across devices.
 - Currency conversion using fetched exchange rates.
 
@@ -48,19 +49,19 @@ Other notable packages include `intl` for formatting, `crypto` for security-rela
 ├── journey-to-balance-api/          Cloudflare Worker API project
 │   └── src/                         Worker routes, finance logic, auth, rate limits, and tests
 ├── lib/                             Flutter application source
-│   ├── models/                      Budget, transaction, loan, currency, and planner models
-│   ├── providers/                   Application state and Firestore-backed providers
+│   ├── models/                      Budget, transaction, loan, currency, planner, and 13th-month models
+│   ├── providers/                   Application state, 13th-month, and Firestore-backed providers
 │   ├── screens/                     Feature screens
-│   │   ├── account/                 Account, currency, notification, and security settings
+│   │   ├── account/                 Account, currency, notification, and security settings (including account deletion)
 │   │   ├── auth/                    Login, PIN, and forgot-PIN screens
 │   │   ├── bills/                   Bills screen
-│   │   ├── home/                    Home, planner, spending, and wallet screens
+│   │   ├── home/                    Home, planner, 13th-month pay, spending, and wallet screens
 │   │   ├── loans/                   Loan screens
 │   │   ├── navigation/              Bottom navigation
 │   │   ├── personal/                Personal-spending screen
 │   │   ├── savings/                 Savings and savings-goal screens
 │   │   └── splash/                  Splash and welcome transition
-│   ├── services/                    Firebase, Worker API, notifications, and device services
+│   ├── services/                    Firebase, Worker API, 13th-month calculator, notifications, and device services
 │   ├── widgets/                     Shared UI components and dialogs
 │   ├── firebase_options.dart        Generated Firebase platform configuration
 │   └── main.dart                    App entry point and provider setup
@@ -77,7 +78,7 @@ Other notable packages include `intl` for formatting, `crypto` for security-rela
 
 ## Architecture overview
 
-The Flutter app initializes Firebase, observes Firebase Authentication state, and uses providers to coordinate UI and synced data. Users sign in with Firebase Authentication, then the app loads its budget, planner, and wallet state from Firestore. Financial mutations such as receiving salary, changing allocations, and managing transactions go through the Cloudflare Worker, which verifies the Firebase ID token, rate-limits operations with a Durable Object, and writes atomically to Firestore using a service account. The Worker also supports the authenticated PIN-reset flow and requires email-provider configuration for sending reset codes. Firestore rules let an owner read their data; direct client writes are limited to the planner and `users/{uid}/wallet/{docId}`, while transaction and budget writes are Worker-only. The Firestore layout includes `users/{uid}` for the budget and planner map, `users/{uid}/bills`, `users/{uid}/savings`, and `users/{uid}/personal` for financial entries, `users/{uid}/wallet/data` for wallet state, and a denied `users/{uid}/security` area. Firebase Functions contains a separate callable implementation of protected finance operations, but the current Flutter client calls the Worker instead.
+The Flutter app initializes Firebase, observes Firebase Authentication state, and uses providers to coordinate UI and synced data. Users sign in with Firebase Authentication, then the app loads its budget, planner, and wallet state from Firestore. Financial mutations such as receiving salary or 13th-month payouts, changing allocations, and managing transactions go through the Cloudflare Worker, which verifies the Firebase ID token, rate-limits operations with a Durable Object, and writes atomically to Firestore using a service account. The Worker also supports the authenticated PIN-reset flow, accepts optional custom payout amounts for salary/13th-month credits, and provides a protected account-deletion endpoint (`POST /api/auth/delete-account`) that requires freshly reauthenticated tokens, purges the user's Firestore tree and Worker state, and removes the Firebase Authentication user. Firestore rules let an owner read their data; direct client writes are limited to the planner map (including `thirteenthMonth` draft data) and `users/{uid}/wallet/{docId}`, while transaction and budget writes are Worker-only. The Firestore layout includes `users/{uid}` for the budget and planner map, `users/{uid}/bills`, `users/{uid}/savings`, and `users/{uid}/personal` for financial entries, `users/{uid}/wallet/data` for wallet state, and a denied `users/{uid}/security` area. Firebase Functions contains a separate callable implementation of protected finance operations, but the current Flutter client calls the Worker instead.
 
 ## Getting started
 
