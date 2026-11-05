@@ -20,11 +20,27 @@ class BankCardPickerTile extends StatelessWidget {
     required this.selected,
     required this.onTap,
     this.alreadyAdded = false,
+    this.count = 0,
+    this.canRemoveQueued = false,
+    this.onRemoveQueued,
   });
 
   final String iconAsset;
   final bool selected;
+
+  /// Legacy flag (checkmark). Superseded by [count] when it is > 0.
   final bool alreadyAdded;
+
+  /// Total cards of this bank (owned + queued this session). Shows an "xN"
+  /// badge when > 0.
+  final int count;
+
+  /// Whether a minus affordance should appear (a card is queued this session).
+  final bool canRemoveQueued;
+
+  /// Removes the most recently queued card of this bank (session-only).
+  final VoidCallback? onRemoveQueued;
+
   final VoidCallback onTap;
 
   @override
@@ -60,7 +76,31 @@ class BankCardPickerTile extends StatelessWidget {
                   ),
                 ),
               ),
-              if (alreadyAdded)
+              if (count > 0)
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF111827),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      'x$count',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        height: 1,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                )
+              else if (alreadyAdded)
                 const Positioned(
                   right: 8,
                   top: 8,
@@ -75,6 +115,37 @@ class BankCardPickerTile extends StatelessWidget {
                         Icons.check_rounded,
                         size: 14,
                         color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              if (canRemoveQueued)
+                Positioned(
+                  left: 8,
+                  top: 8,
+                  child: Semantics(
+                    button: true,
+                    label: 'Remove queued card',
+                    child: GestureDetector(
+                      onTap: onRemoveQueued,
+                      child: Container(
+                        width: 24,
+                        height: 24,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.2),
+                              blurRadius: 4,
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.remove_rounded,
+                          size: 16,
+                          color: Color(0xFF111827),
+                        ),
                       ),
                     ),
                   ),

@@ -151,12 +151,19 @@ class _AccountPageState extends State<AccountPage> {
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final horizontalPadding = screenWidth < 360 ? 12.0 : 20.0;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF1F2F4),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 132),
+          padding: EdgeInsets.fromLTRB(
+            horizontalPadding,
+            20,
+            horizontalPadding,
+            132,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -186,32 +193,55 @@ class _AccountPageState extends State<AccountPage> {
                 ),
               ),
               const SizedBox(height: 14),
-              Row(
-                children: [
-                  _AboutLink(
-                    label: 'About Journey to Balance',
-                    onPressed: _openAbout,
+              Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 440),
+                  child: AccountLegalFooter(
+                    onAbout: _openAbout,
+                    onTermsOfService: _openTermsOfService,
+                    onPrivacyPolicy: _openPrivacyPolicy,
                   ),
-                  const Spacer(),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _AboutLink(
-                        label: 'Terms of Service',
-                        onPressed: _openTermsOfService,
-                      ),
-                      const SizedBox(width: 4),
-                      _AboutLink(
-                        label: 'Privacy Policy',
-                        onPressed: _openPrivacyPolicy,
-                      ),
-                    ],
-                  ),
-                ],
+                ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Responsive legal links shown below the account card.
+///
+/// A [Wrap] keeps every link reachable on compact screens and when the user
+/// increases the system text size.
+class AccountLegalFooter extends StatelessWidget {
+  const AccountLegalFooter({
+    super.key,
+    required this.onAbout,
+    required this.onTermsOfService,
+    required this.onPrivacyPolicy,
+  });
+
+  final VoidCallback onAbout;
+  final VoidCallback onTermsOfService;
+  final VoidCallback onPrivacyPolicy;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        runAlignment: WrapAlignment.center,
+        spacing: 8,
+        runSpacing: 2,
+        children: [
+          _AboutLink(label: 'About Journey to Balance', onPressed: onAbout),
+          _AboutLink(label: 'Terms of Service', onPressed: onTermsOfService),
+          _AboutLink(label: 'Privacy Policy', onPressed: onPrivacyPolicy),
+        ],
       ),
     );
   }

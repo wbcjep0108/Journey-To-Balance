@@ -45,6 +45,25 @@ class WalletCashProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Sets the cash amount in memory only, without persisting. Used by the
+  /// savings flow's optimistic updates: the Worker writes the wallet document
+  /// (with a version precondition) and the realtime snapshot then replaces this
+  /// local value. Persisting here would double-write and conflict. Returns the
+  /// previous amount so the caller can restore it on error.
+  double applyInMemoryAmount(double amount) {
+    final previous = _amount;
+    _amount = amount < 0 ? 0.0 : amount;
+    notifyListeners();
+    return previous;
+  }
+
+  /// Restores a previously captured cash amount in memory only (error rollback
+  /// companion to [applyInMemoryAmount]).
+  void restoreInMemoryAmount(double amount) {
+    _amount = amount < 0 ? 0.0 : amount;
+    notifyListeners();
+  }
+
   Future<bool> setAmount(double amount) => setAmountVerified(amount);
 
   Future<bool> setAmountVerified(double amount) async {

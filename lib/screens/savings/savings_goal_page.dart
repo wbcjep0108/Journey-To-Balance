@@ -365,11 +365,12 @@ class _SavingsGoalPageState extends State<SavingsGoalPage> {
                   ),
                   const SizedBox(height: 16),
                   const Text(
-                    'The Savings Goal is completely up to you. You can save the money '
-                    'wherever you prefer, such as your wallet, bank account, e-wallet, '
-                    'or any other place you use to keep your savings.\n\n'
-                    'This feature only helps you set a goal and track your savings '
-                    'progress. It does not store or transfer your money.',
+                    'The Savings Goal is completely up to you. You choose which '
+                    'wallet or cards the money comes from and where it is saved.\n\n'
+                    'When you add to your goal, the app moves the amount between '
+                    'those balances: it is deducted from the places you take it '
+                    'from and added to the places you save it into. Undoing a '
+                    'contribution reverses those balance changes.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontFamily: 'Inter',
@@ -464,7 +465,7 @@ Future<bool?> showContributeToGoalModal({
     barrierColor: Colors.black.withValues(alpha: 0.45),
     transitionDuration: const Duration(milliseconds: 120),
     pageBuilder: (context, animation, secondaryAnimation) {
-      return withBarrierBlur(_ContributeToGoalModal(category: category));
+      return withBarrierBlur(SavingsContributionModal(category: category));
     },
     transitionBuilder: (context, animation, secondaryAnimation, child) {
       final curved = CurvedAnimation(
@@ -482,79 +483,234 @@ Future<bool?> showContributeToGoalModal({
   );
 }
 
-class _ContributeToGoalModal extends StatefulWidget {
-  const _ContributeToGoalModal({required this.category});
+String _savingsConfirmSummary({
+  required CurrencyProvider currency,
+  required double total,
+  required SavingsTransferValidation validation,
+  required String sourceNames,
+  required String destinationNames,
+  required String effect,
+}) {
+  if (total <= 0) return 'Enter a contribution amount';
+  if (validation.sourceCents == 0) return 'Select where money comes from';
+  if (!validation.sourcesWithinBalance) {
+    return 'Fix insufficient source balance';
+  }
+  final totalCents = moneyToCents(total);
+  if (validation.sourceCents < totalCents) {
+    return 'Assign ${currency.formatAmount(centsToMoney(totalCents - validation.sourceCents))} in Take from';
+  }
+  if (validation.sourceCents > totalCents) {
+    return 'Reduce Take from by ${currency.formatAmount(centsToMoney(validation.sourceCents - totalCents))}';
+  }
+  if (validation.destinationCents == 0 || destinationNames.isEmpty) {
+    return 'Select where to save';
+  }
+  if (!validation.destinationsMatch) return 'Select where to save';
+  return effect;
+}
+
+/// Builds the net per-location balance effect line, e.g.
+/// "Wallet -PHP 1,000.00, BDO +PHP 1,000.00". A location that appears on both
+/// sides nets out and is omitted.
+String savingsBalanceEffectSummary({
+  required CurrencyProvider currency,
+  required List<SavingsTransferPart> sources,
+  required List<SavingsTransferPart> destinations,
+}) {
+  final order = <String>[];
+  final names = <String, String>{};
+  final deltaCents = <String, int>{};
+  void add(SavingsTransferPart part, int sign) {
+    final id = part.locationId;
+    if (!deltaCents.containsKey(id)) {
+      order.add(id);
+      names[id] = part.displayName;
+    }
+    deltaCents[id] = (deltaCents[id] ?? 0) + sign * moneyToCents(part.amount);
+  }
+
+  for (final part in sources) {
+    add(part, -1);
+  }
+  for (final part in destinations) {
+    add(part, 1);
+  }
+
+  final pieces = <String>[];
+  for (final id in order) {
+    final cents = deltaCents[id] ?? 0;
+    if (cents == 0) continue;
+    final sign = cents > 0 ? '+' : '-';
+    pieces.add(
+      '${names[id]} $sign${currency.formatAmount(centsToMoney(cents.abs()))}',
+    );
+  }
+  return pieces.join(', ');
+}
+
+class SavingsContributionModal extends StatefulWidget {
+  const SavingsContributionModal({super.key, required this.category});
 
   final FinancialCategory category;
 
   @override
-  State<_ContributeToGoalModal> createState() => _ContributeToGoalModalState();
+  State<SavingsContributionModal> createState() =>
+      _SavingsContributionModalState();
 }
 
-class _ContributeToGoalModalState extends State<_ContributeToGoalModal> {
-  static const _walletSourceId = 'wallet';
+class _SavingsContributionModalState extends State<SavingsContributionModal> {
+  static const _walletId = 'wallet';
 
-  final _controller = TextEditingController();
-  String _fundingSourceId = _walletSourceId;
+  final _totalController = TextEditingController();
+  final _sourceControllers = <String, TextEditingController>{};
+  final _destinationControllers = <String, TextEditingController>{};
+  final Set<String> _sourceIds = {};
+  final Set<String> _destinationIds = {};
+  bool _defaultsInitialized = false;
   bool _saving = false;
 
-  String _fundingSourceLabel(String sourceId, List<WalletCardModel> cards) {
-    if (sourceId == _walletSourceId) return 'Wallet';
-    for (final card in cards) {
-      if (card.id == sourceId) return card.bankLabel;
-    }
-    return 'Card';
+  @override
+  void initState() {
+    super.initState();
+    _sourceControllers[_walletId] = TextEditingController();
+    _totalController.addListener(_handleTotalChanged);
   }
 
-  double _fundingSourceBalance(
-    String sourceId,
-    double walletAmount,
+  void _ensureDefaults(List<WalletCardModel> cards, double walletAmount) {
+    if (_defaultsInitialized) return;
+    _defaultsInitialized = true;
+    final positiveCard = cards.where((card) => card.amount > 0).firstOrNull;
+    final sourceId = walletAmount > 0 ? _walletId : positiveCard?.id;
+    if (sourceId != null) {
+      _sourceIds.add(sourceId);
+      _sourceControllers[sourceId] = TextEditingController();
+    }
+    final destinationId = cards
+        .where((card) => card.id != sourceId)
+        .firstOrNull
+        ?.id;
+    if (destinationId != null) {
+      _destinationIds.add(destinationId);
+      _destinationControllers[destinationId] = TextEditingController();
+    } else if (sourceId != _walletId) {
+      _destinationIds.add(_walletId);
+      _destinationControllers[_walletId] = TextEditingController();
+    }
+  }
+
+  void _handleTotalChanged() {
+    _autoFill(_sourceIds, _sourceControllers);
+    _autoFill(_destinationIds, _destinationControllers);
+    if (mounted) setState(() {});
+  }
+
+  void _autoFill(
+    Set<String> selectedIds,
+    Map<String, TextEditingController> controllers,
+  ) {
+    final total = double.tryParse(_totalController.text) ?? 0;
+    final parts = splitSavingsAmount(total, selectedIds.length);
+    for (var index = 0; index < selectedIds.length; index++) {
+      final id = selectedIds.elementAt(index);
+      controllers.putIfAbsent(id, TextEditingController.new).text =
+          parts.isEmpty ? '' : parts[index].toStringAsFixed(2);
+    }
+  }
+
+  void _toggleLocation({
+    required bool isSource,
+    required String id,
+    required bool selected,
+  }) {
+    final ids = isSource ? _sourceIds : _destinationIds;
+    final oppositeIds = isSource ? _destinationIds : _sourceIds;
+    final controllers = isSource ? _sourceControllers : _destinationControllers;
+    if (selected && oppositeIds.contains(id)) return;
+    setState(() {
+      if (selected) {
+        ids.add(id);
+        controllers.putIfAbsent(id, TextEditingController.new);
+      } else {
+        ids.remove(id);
+      }
+      _autoFill(ids, controllers);
+    });
+  }
+
+  void _useFullSourceAmount(String id) {
+    final total = double.tryParse(_totalController.text) ?? 0;
+    setState(() {
+      _sourceControllers.putIfAbsent(id, TextEditingController.new).text =
+          total > 0 ? total.toStringAsFixed(2) : '';
+    });
+  }
+
+  List<SavingsTransferPart> _parts(
+    Set<String> selectedIds,
+    Map<String, TextEditingController> controllers,
     List<WalletCardModel> cards,
   ) {
-    if (sourceId == _walletSourceId) return walletAmount;
-    for (final card in cards) {
-      if (card.id == sourceId) return card.amount;
-    }
-    return 0;
+    return [
+      if (selectedIds.contains(_walletId))
+        SavingsTransferPart(
+          locationType: 'wallet',
+          cardName: 'Wallet',
+          amount: double.tryParse(controllers[_walletId]?.text ?? '') ?? 0,
+        ),
+      for (final card in cards)
+        if (selectedIds.contains(card.id))
+          SavingsTransferPart(
+            locationType: 'card',
+            cardId: card.id,
+            cardName: _cardLabels(cards)[card.id] ?? card.displayName,
+            amount: double.tryParse(controllers[card.id]?.text ?? '') ?? 0,
+          ),
+    ];
   }
+
+  /// Disambiguated display labels for [cards], keyed by id.
+  Map<String, String> _cardLabels(List<WalletCardModel> cards) =>
+      walletCardDisplayLabels(cards);
 
   @override
   void dispose() {
-    _controller.dispose();
+    _totalController
+      ..removeListener(_handleTotalChanged)
+      ..dispose();
+    for (final controller in {
+      ..._sourceControllers.values,
+      ..._destinationControllers.values,
+    }) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
   Future<void> _confirm() async {
     if (_saving) return;
     final budget = context.read<BudgetProvider>();
-    final wallet = context.read<WalletCashProvider>();
-    final cardsProvider = context.read<WalletCardsProvider>();
-    final cards = cardsProvider.cards;
-    final amount = double.tryParse(_controller.text) ?? 0;
-    if (amount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter an amount greater than zero.')),
-      );
-      return;
-    }
-    final fundingBalance = _fundingSourceBalance(
-      _fundingSourceId,
-      wallet.amount,
+    final walletAmount = context.read<WalletCashProvider>().amount;
+    final cards = context.read<WalletCardsProvider>().cards;
+    final amount = centsToMoney(
+      moneyToCents(double.tryParse(_totalController.text) ?? 0),
+    );
+    final sources = _parts(_sourceIds, _sourceControllers, cards);
+    final destinations = _parts(
+      _destinationIds,
+      _destinationControllers,
       cards,
     );
-    final fundingLabel = _fundingSourceLabel(_fundingSourceId, cards);
-    if (amount > fundingBalance + 0.001) {
-      final symbol = context.read<CurrencyProvider>().symbol;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Only $symbol${NumberFormat('#,##0.##').format(fundingBalance)} '
-            'is available in $fundingLabel.',
-          ),
-        ),
-      );
-      return;
-    }
+    final validation = validateSavingsTransfer(
+      total: amount,
+      sources: sources,
+      destinations: destinations,
+      balancesByLocationId: {
+        _walletId: walletAmount,
+        for (final card in cards) card.id: card.amount,
+      },
+    );
+    if (!validation.canConfirm) return;
     if (amount > budget.remainingFor(widget.category) + 0.001) {
       final symbol = context.read<CurrencyProvider>().symbol;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -568,33 +724,62 @@ class _ContributeToGoalModalState extends State<_ContributeToGoalModal> {
       return;
     }
 
+    // Reject up front if a selected TO card vanished since the modal opened
+    // (e.g. deleted on another device). The Worker also enforces this.
+    final cardIds = {for (final card in cards) card.id};
+    SavingsTransferPart? missingDestination;
+    for (final part in destinations) {
+      if (!part.isWallet && !cardIds.contains(part.cardId)) {
+        missingDestination = part;
+        break;
+      }
+    }
+    if (missingDestination != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${missingDestination.cardName} is no longer available. '
+            'Choose a different card to save into.',
+          ),
+        ),
+      );
+      return;
+    }
+
     final category = widget.category;
     final messenger = ScaffoldMessenger.of(context);
     final symbol = context.read<CurrencyProvider>().symbol;
+    final walletCashProvider = context.read<WalletCashProvider>();
+    final walletCardsProvider = context.read<WalletCardsProvider>();
     final previousCurrent = budget.savingsGoalCurrent;
     final goalTarget = budget.savingsGoalTarget;
     FocusManager.instance.primaryFocus?.unfocus();
     setState(() => _saving = true);
 
+    // Snapshot wallet/card balances so we can restore them if the write fails.
+    final previousWalletCash = walletCashProvider.amount;
+    final previousCards = walletCardsProvider.cards;
+    _applyBalanceDeltasInMemory(
+      walletCash: walletCashProvider,
+      walletCards: walletCardsProvider,
+      sources: sources,
+      destinations: destinations,
+    );
+
     try {
       // Optimistic update BEFORE closing so the page already shows new totals.
       await budget.contributeToSavingsGoal(
         source: category,
-        fundingSourceId: _fundingSourceId,
-        fundingSourceLabel: fundingLabel,
+        fundingSourceId: sources.length == 1
+            ? sources.first.locationId
+            : 'multiple',
+        fundingSourceLabel: sources.length == 1
+            ? sources.first.displayName
+            : '${sources.first.displayName} + ${sources.length - 1} more',
+        savingsSources: sources,
+        savingsDestinations: destinations,
         amount: amount,
       );
-      if (_fundingSourceId == _walletSourceId) {
-        await wallet.setAmount(wallet.amount - amount);
-      } else {
-        final card = cardsProvider.cardById(_fundingSourceId);
-        if (card != null) {
-          await cardsProvider.setCardAmount(
-            cardId: card.id,
-            amount: card.amount - amount,
-          );
-        }
-      }
       final justCompleted =
           previousCurrent < goalTarget - 0.001 &&
           budget.savingsGoalCurrent >= goalTarget - 0.001;
@@ -605,17 +790,69 @@ class _ContributeToGoalModalState extends State<_ContributeToGoalModal> {
           ..showSnackBar(
             SnackBar(
               content: Text(
-                '$symbol${NumberFormat('#,##0.##').format(amount)} added to your savings goal from $fundingLabel.',
+                '$symbol${NumberFormat('#,##0.##').format(amount)} added to your savings goal.',
               ),
             ),
           );
       }
     } catch (error) {
+      // Roll back the in-memory optimistic balance changes (not persisted).
+      walletCashProvider.restoreInMemoryAmount(previousWalletCash);
+      walletCardsProvider.restoreInMemoryCards(previousCards);
       if (mounted) setState(() => _saving = false);
       if (isFinanceRateLimitError(error)) return;
       messenger.showSnackBar(
         const SnackBar(content: Text('Could not add to savings goal.')),
       );
+    }
+  }
+
+  /// Applies FROM debits and TO credits to the wallet/card providers in memory
+  /// only (no Firestore write). The Worker performs the authoritative wallet
+  /// write with a version precondition; the realtime snapshot then replaces
+  /// this local state. Persisting here would double-write and conflict.
+  static void _applyBalanceDeltasInMemory({
+    required WalletCashProvider walletCash,
+    required WalletCardsProvider walletCards,
+    required List<SavingsTransferPart> sources,
+    required List<SavingsTransferPart> destinations,
+  }) {
+    final cardDeltaCents = <String, int>{};
+    var walletDeltaCents = 0;
+    for (final part in sources) {
+      if (part.isWallet) {
+        walletDeltaCents -= moneyToCents(part.amount);
+      } else {
+        cardDeltaCents[part.cardId!] =
+            (cardDeltaCents[part.cardId!] ?? 0) - moneyToCents(part.amount);
+      }
+    }
+    for (final part in destinations) {
+      if (part.isWallet) {
+        walletDeltaCents += moneyToCents(part.amount);
+      } else {
+        cardDeltaCents[part.cardId!] =
+            (cardDeltaCents[part.cardId!] ?? 0) + moneyToCents(part.amount);
+      }
+    }
+
+    if (walletDeltaCents != 0) {
+      walletCash.applyInMemoryAmount(
+        centsToMoney(moneyToCents(walletCash.amount) + walletDeltaCents),
+      );
+    }
+    if (cardDeltaCents.isNotEmpty) {
+      final nextAmounts = <String, double>{};
+      for (final card in walletCards.cards) {
+        final delta = cardDeltaCents[card.id];
+        if (delta == null) continue;
+        nextAmounts[card.id] = centsToMoney(
+          moneyToCents(card.amount) + delta,
+        );
+      }
+      if (nextAmounts.isNotEmpty) {
+        walletCards.applyInMemoryCardAmounts(nextAmounts);
+      }
     }
   }
 
@@ -625,13 +862,68 @@ class _ContributeToGoalModalState extends State<_ContributeToGoalModal> {
     final preferred = context.watch<CurrencyProvider>();
     final walletAmount = context.watch<WalletCashProvider>().amount;
     final cards = context.watch<WalletCardsProvider>().cards;
+    _ensureDefaults(cards, walletAmount);
+    final availableIds = {_walletId, ...cards.map((card) => card.id)};
+    _sourceIds.removeWhere((id) => !availableIds.contains(id));
+    _destinationIds.removeWhere((id) => !availableIds.contains(id));
+    _sourceControllers.putIfAbsent(_walletId, TextEditingController.new);
+    final total = centsToMoney(
+      moneyToCents(double.tryParse(_totalController.text) ?? 0),
+    );
+    final sources = _parts(_sourceIds, _sourceControllers, cards);
+    final destinations = _parts(
+      _destinationIds,
+      _destinationControllers,
+      cards,
+    );
+    final validation = validateSavingsTransfer(
+      total: total,
+      sources: sources,
+      destinations: destinations,
+      balancesByLocationId: {
+        _walletId: walletAmount,
+        for (final card in cards) card.id: card.amount,
+      },
+    );
+    final sourceAssigned = centsToMoney(validation.sourceCents);
+    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+    final bottomInset = keyboardInset > 0 ? keyboardInset + 8 : 16.0;
+    final maxModalHeight = MediaQuery.sizeOf(context).height - bottomInset - 16;
+    final modalHeight = maxModalHeight.clamp(280.0, 692.0).toDouble();
+    final title = budget.savingsGoalTitle.trim().isEmpty
+        ? 'Savings Goal'
+        : budget.savingsGoalTitle.trim();
     final remaining = budget.remainingFor(widget.category);
     final remainingLabel = NumberFormat.currency(
       locale: preferred.currency.locale,
       symbol: preferred.symbol,
       decimalDigits: remaining % 1 == 0 ? 0 : 2,
     ).format(remaining);
-    final title = 'From ${SavingsGoalPage.categoryLabel(widget.category)}';
+    final categoryLabel = SavingsGoalPage.categoryLabel(widget.category);
+    final remainingAfter = (remaining - total)
+        .clamp(0, double.infinity)
+        .toDouble();
+    final categoryChange =
+        '$categoryLabel: ${preferred.formatAmount(remaining)} to '
+        '${preferred.formatAmount(remainingAfter)}';
+    final sourceNames = sources.map((part) => part.displayName).join(' + ');
+    final destinationNames = destinations
+        .map((part) => part.displayName)
+        .join(' + ');
+    final canConfirm = validation.canConfirm && !_saving;
+    final balanceEffect = savingsBalanceEffectSummary(
+      currency: preferred,
+      sources: sources,
+      destinations: destinations,
+    );
+    final footerText = _savingsConfirmSummary(
+      currency: preferred,
+      total: total,
+      validation: validation,
+      sourceNames: sourceNames,
+      destinationNames: destinationNames,
+      effect: balanceEffect,
+    );
 
     return Center(
       child: Material(
@@ -645,12 +937,16 @@ class _ContributeToGoalModalState extends State<_ContributeToGoalModal> {
           child: Focus(
             autofocus: true,
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 28),
+              padding: EdgeInsets.fromLTRB(12, 16, 12, bottomInset),
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 360),
+                constraints: BoxConstraints(
+                  maxWidth: 400,
+                  maxHeight: modalHeight,
+                ),
                 child: Container(
+                  height: modalHeight,
                   width: double.infinity,
-                  padding: const EdgeInsets.fromLTRB(24, 28, 24, 18),
+                  clipBehavior: Clip.antiAlias,
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(24),
@@ -663,80 +959,175 @@ class _ContributeToGoalModalState extends State<_ContributeToGoalModal> {
                     ],
                   ),
                   child: Column(
-                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        title,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF121212),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 30,
+                                  ),
+                                  child: Text(
+                                    'Add to "$title"',
+                                    textAlign: TextAlign.center,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 19,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFF121212),
+                                    ),
+                                  ),
+                                ),
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: IconButton(
+                                    key: const ValueKey(
+                                      'close-contribution-modal',
+                                    ),
+                                    onPressed: _saving
+                                        ? null
+                                        : () => Navigator.pop(context),
+                                    visualDensity: VisualDensity.compact,
+                                    iconSize: 19,
+                                    icon: const Icon(Icons.close_rounded),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Text(
+                              '$remainingLabel available in $categoryLabel',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF6B7280),
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              categoryChange,
+                              key: const ValueKey('budget-category-change'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF3F444C),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        remainingLabel,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF121212),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          keyboardDismissBehavior:
+                              ScrollViewKeyboardDismissBehavior.onDrag,
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _AmountField(
+                                label: 'Total contribution',
+                                controller: _totalController,
+                                enabled: !_saving,
+                              ),
+                              const SizedBox(height: 8),
+                              SavingsTransferSection(
+                                title: 'Take from',
+                                selectedIds: _sourceIds,
+                                oppositeSelectedIds: _destinationIds,
+                                controllers: _sourceControllers,
+                                walletAmount: walletAmount,
+                                cards: cards,
+                                enabled: !_saving,
+                                assignedAmount: sourceAssigned,
+                                totalAmount: total,
+                                sumMatches: validation.sourcesMatch,
+                                showBalances: true,
+                                onToggle: (id, selected) => _toggleLocation(
+                                  isSource: true,
+                                  id: id,
+                                  selected: selected,
+                                ),
+                                onUseFullAmount: _useFullSourceAmount,
+                                onAmountChanged: (_) => setState(() {}),
+                              ),
+                              const SizedBox(
+                                height: 20,
+                                child: Icon(
+                                  Icons.keyboard_arrow_down_rounded,
+                                  size: 20,
+                                  color: Color(0xFF6B7280),
+                                ),
+                              ),
+                              SavingsTransferSection(
+                                title: 'Save into',
+                                selectedIds: _destinationIds,
+                                oppositeSelectedIds: _sourceIds,
+                                controllers: _destinationControllers,
+                                walletAmount: walletAmount,
+                                cards: cards,
+                                enabled: !_saving,
+                                assignedAmount: centsToMoney(
+                                  validation.destinationCents,
+                                ),
+                                totalAmount: total,
+                                sumMatches: validation.destinationsMatch,
+                                showBalances: false,
+                                amountEditable: false,
+                                onToggle: (id, selected) => _toggleLocation(
+                                  isSource: false,
+                                  id: id,
+                                  selected: selected,
+                                ),
+                                onAmountChanged: (_) => setState(() {}),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Available in ${SavingsGoalPage.categoryLabel(widget.category)}',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.grey.shade500,
+                      Container(
+                        key: const ValueKey('pinned-confirm-bar'),
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.vertical(
+                            bottom: Radius.circular(24),
+                          ),
+                          border: Border(
+                            top: BorderSide(color: Color(0xFFE5E7EB)),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 16),
-                      const Text(
-                        'How much would you like to save today?',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF121212),
-                          height: 1.35,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              footerText,
+                              key: const ValueKey('confirm-summary'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF3F444C),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            _ConfirmButton(
+                              key: const ValueKey('contribution-confirm'),
+                              label: 'Confirm',
+                              isLoading: _saving,
+                              onPressed: canConfirm ? _confirm : null,
+                            ),
+                          ],
                         ),
-                      ),
-                      const SizedBox(height: 24),
-                      _SavingsFundingSourceField(
-                        value: _fundingSourceId,
-                        walletAmount: walletAmount,
-                        cards: cards,
-                        enabled: !_saving,
-                        onChanged: (value) {
-                          if (value != null) {
-                            setState(() => _fundingSourceId = value);
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      _AmountField(
-                        label: 'Amount',
-                        controller: _controller,
-                        enabled: !_saving,
-                      ),
-                      const SizedBox(height: 28),
-                      _ConfirmButton(
-                        label: 'Confirm',
-                        isLoading: _saving,
-                        onPressed: _confirm,
-                      ),
-                      _CancelButton(
-                        onPressed: _saving
-                            ? null
-                            : () => Navigator.pop(context),
                       ),
                     ],
                   ),
@@ -796,7 +1187,7 @@ class _GoalHeader extends StatelessWidget {
               child: const Icon(
                 Icons.savings_outlined,
                 size: 230,
-                color: const Color(0xFF9CA3AF),
+                color: Color(0xFF9CA3AF),
               ),
             ),
           ),
@@ -1053,6 +1444,13 @@ class _RecentActivityList extends StatelessWidget {
     BuildContext context,
     FinancialEntry entry,
   ) async {
+    // New transfers are reversed atomically by the Worker. The legacy
+    // restoration below remains for entries created by older app versions
+    // that deducted one funding account on the client.
+    if (entry.savingsSources.isNotEmpty &&
+        entry.savingsDestinations.isNotEmpty) {
+      return null;
+    }
     final sourceId = entry.fundingSourceId;
     if (sourceId == null || sourceId.isEmpty) return null;
 
@@ -1089,31 +1487,73 @@ class _RecentActivityList extends StatelessWidget {
     );
     if (!authorized || !context.mounted) return false;
 
-    try {
-      await context.read<BudgetProvider>().deleteEntry(
-        item.category,
-        item.entry,
+    final entry = item.entry;
+    final isAtomicTransfer =
+        entry.savingsSources.isNotEmpty &&
+        entry.savingsDestinations.isNotEmpty;
+    final walletCashProvider = context.read<WalletCashProvider>();
+    final walletCardsProvider = context.read<WalletCardsProvider>();
+
+    // For a new atomic transfer, optimistically reverse the balances in memory
+    // (credit FROM, debit TO) so the wallet screen updates immediately. The
+    // Worker performs the authoritative reversal with a version precondition.
+    final previousWalletCash = walletCashProvider.amount;
+    final previousCards = walletCardsProvider.cards;
+    if (isAtomicTransfer) {
+      _SavingsContributionModalState._applyBalanceDeltasInMemory(
+        walletCash: walletCashProvider,
+        walletCards: walletCardsProvider,
+        // Swap sides: undo credits the original FROM and debits the original TO.
+        sources: entry.savingsDestinations,
+        destinations: entry.savingsSources,
       );
-      final restoredAccount = await _restoreFundingSource(context, item.entry);
+    }
+
+    try {
+      final result = await context.read<BudgetProvider>().deleteEntry(
+        item.category,
+        entry,
+      );
+      if (!context.mounted) return false;
+      // Legacy single-source entries still restore via persisting setters.
+      final restoredAccount = isAtomicTransfer
+          ? null
+          : await _restoreFundingSource(context, entry);
+      final rawFallbacks = result?['fallbacks'];
+      final fallbacks = rawFallbacks is List
+          ? rawFallbacks.map((item) => item.toString()).toList()
+          : const <String>[];
+      // A fallback means a TO card was deleted, so its reversal went to Wallet.
+      final fallbackText = fallbacks.isNotEmpty ? ' ${fallbacks.join(' ')}' : '';
       if (context.mounted) {
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
           ..showSnackBar(
             SnackBar(
               content: Text(
-                '${context.read<CurrencyProvider>().formatAmount(item.entry.amount)} '
+                '${context.read<CurrencyProvider>().formatAmount(entry.amount)} '
                 'returned to ${SavingsGoalPage.categoryLabel(item.category)}'
-                '${restoredAccount == null ? '.' : ' and $restoredAccount.'}',
+                '${restoredAccount == null ? '.' : ' and $restoredAccount.'}'
+                '$fallbackText',
               ),
             ),
           );
       }
       return true;
     } catch (error) {
+      // Roll back the in-memory optimistic reversal (not persisted).
+      if (isAtomicTransfer) {
+        walletCashProvider.restoreInMemoryAmount(previousWalletCash);
+        walletCardsProvider.restoreInMemoryCards(previousCards);
+      }
       if (isFinanceRateLimitError(error)) return false;
       if (context.mounted) {
+        final message = isFinanceConflictError(error)
+            ? 'Could not undo this contribution. A destination may no longer '
+                  'have enough balance to reverse it.'
+            : 'Could not undo this contribution.';
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not undo this contribution.')),
+          SnackBar(content: Text(message)),
         );
       }
       return false;
@@ -1246,6 +1686,24 @@ class _RecentActivityList extends StatelessWidget {
                               color: Colors.grey.shade500,
                             ),
                           ),
+                          if (items[i].entry.savingsSources.isNotEmpty &&
+                              items[i]
+                                  .entry
+                                  .savingsDestinations
+                                  .isNotEmpty) ...[
+                            const SizedBox(height: 3),
+                            Text(
+                              savingsTransferSummary(context, items[i].entry),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -1271,74 +1729,518 @@ class _RecentActivityList extends StatelessWidget {
   }
 }
 
-class _SavingsFundingSourceField extends StatelessWidget {
-  const _SavingsFundingSourceField({
-    required this.value,
+enum SavingsAssignmentStatus { empty, partial, matched, over }
+
+SavingsAssignmentStatus savingsAssignmentStatus({
+  required double assignedAmount,
+  required double totalAmount,
+}) {
+  final assigned = moneyToCents(assignedAmount);
+  final total = moneyToCents(totalAmount);
+  if (assigned <= 0 || total <= 0) return SavingsAssignmentStatus.empty;
+  if (assigned == total) return SavingsAssignmentStatus.matched;
+  return assigned < total
+      ? SavingsAssignmentStatus.partial
+      : SavingsAssignmentStatus.over;
+}
+
+class SavingsTransferSection extends StatefulWidget {
+  const SavingsTransferSection({
+    super.key,
+    required this.title,
+    required this.selectedIds,
+    required this.controllers,
     required this.walletAmount,
     required this.cards,
     required this.enabled,
-    required this.onChanged,
+    required this.assignedAmount,
+    required this.totalAmount,
+    required this.sumMatches,
+    required this.showBalances,
+    this.amountEditable = true,
+    this.oppositeSelectedIds = const <String>{},
+    required this.onToggle,
+    required this.onAmountChanged,
+    this.onUseFullAmount,
   });
 
-  final String value;
+  final String title;
+  final Set<String> selectedIds;
+  final Map<String, TextEditingController> controllers;
   final double walletAmount;
   final List<WalletCardModel> cards;
   final bool enabled;
-  final ValueChanged<String?> onChanged;
+  final double assignedAmount;
+  final double totalAmount;
+  final bool sumMatches;
+  final bool showBalances;
+  final bool amountEditable;
+  final Set<String> oppositeSelectedIds;
+  final void Function(String id, bool selected) onToggle;
+  final ValueChanged<String> onAmountChanged;
+  final ValueChanged<String>? onUseFullAmount;
+
+  @override
+  State<SavingsTransferSection> createState() => _SavingsTransferSectionState();
+}
+
+class _SavingsTransferSectionState extends State<SavingsTransferSection> {
+  bool _showAll = false;
 
   @override
   Widget build(BuildContext context) {
     final currency = context.watch<CurrencyProvider>();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Take money from',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w800,
-            color: Color(0xFF121212),
+    final isSource = widget.amountEditable;
+    final locations = <_SavingsLocation>[
+      _SavingsLocation(
+        id: 'wallet',
+        label: 'Wallet',
+        balance: widget.walletAmount,
+        icon: const Icon(Icons.account_balance_wallet_outlined, size: 20),
+      ),
+      for (final card in widget.cards)
+        _SavingsLocation(
+          id: card.id,
+          label: walletCardDisplayLabels(widget.cards)[card.id] ??
+              card.displayName,
+          balance: card.amount,
+          icon: Image.asset(
+            card.iconAsset,
+            width: 20,
+            height: 20,
+            errorBuilder: (_, _, _) =>
+                const Icon(Icons.credit_card_outlined, size: 20),
           ),
         ),
-        const SizedBox(height: 8),
-        DropdownButtonFormField<String>(
-          value: value,
-          onChanged: enabled ? onChanged : null,
-          dropdownColor: Colors.white,
-          isExpanded: true,
-          decoration: InputDecoration(
-            filled: true,
-            fillColor: const Color(0xFFF3F4F6),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 14,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide.none,
+    ];
+    final visible = _showAll || locations.length <= 4
+        ? locations
+        : <_SavingsLocation>[
+            ...locations.take(3),
+            ...locations
+                .skip(3)
+                .where((location) => widget.selectedIds.contains(location.id)),
+          ];
+    final uniqueVisible = <String, _SavingsLocation>{
+      for (final location in visible) location.id: location,
+    }.values.toList();
+    final status = savingsAssignmentStatus(
+      assignedAmount: widget.assignedAmount,
+      totalAmount: widget.totalAmount,
+    );
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isSource ? const Color(0xFFF3F4F6) : Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: isSource
+            ? null
+            : Border.all(color: const Color(0xFF121212), width: 1),
+      ),
+      padding: const EdgeInsets.all(8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 1, 4, 5),
+            child: Row(
+              children: [
+                Icon(
+                  isSource
+                      ? Icons.call_made_rounded
+                      : Icons.call_received_rounded,
+                  size: 18,
+                  color: const Color(0xFF121212),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  widget.title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF121212),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                if (isSource)
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: _SourceAssignmentStatus(
+                        status: status,
+                        assignedAmount: widget.assignedAmount,
+                        totalAmount: widget.totalAmount,
+                      ),
+                    ),
+                  )
+                else if (widget.selectedIds.length > 1)
+                  Expanded(
+                    child: Text(
+                      'Split equally - ${currency.formatAmount(_firstSelectedAmount())} each',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF6B7280),
+                      ),
+                    ),
+                  )
+                else
+                  const Spacer(),
+              ],
             ),
           ),
-          items: [
-            DropdownMenuItem<String>(
-              value: 'wallet',
-              child: Text(
-                'Wallet  •  ${currency.formatAmount(walletAmount)}',
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.w700),
+          for (var index = 0; index < uniqueVisible.length; index++) ...[
+            if (index > 0) const SizedBox(height: 8),
+            _SavingsTransferLocationTile(
+              sectionTitle: widget.title,
+              id: uniqueVisible[index].id,
+              icon: uniqueVisible[index].icon,
+              label: uniqueVisible[index].label,
+              balance: uniqueVisible[index].balance,
+              isSource: isSource,
+              oppositeUsed: widget.oppositeSelectedIds.contains(
+                uniqueVisible[index].id,
               ),
+              selected: widget.selectedIds.contains(uniqueVisible[index].id),
+              controller: widget.controllers[uniqueVisible[index].id],
+              enabled: widget.enabled,
+              onToggle: widget.onToggle,
+              onAmountChanged: widget.onAmountChanged,
+              onUseFullAmount: widget.onUseFullAmount,
             ),
-            for (final card in cards)
-              DropdownMenuItem<String>(
-                value: card.id,
-                child: Text(
-                  '${card.bankLabel}  •  ${currency.formatAmount(card.amount)}',
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
+          ],
+          if (!_showAll && locations.length > 4) ...[
+            const SizedBox(height: 6),
+            InkWell(
+              key: ValueKey('show-all-${widget.title}'),
+              onTap: () => setState(() => _showAll = true),
+              borderRadius: BorderRadius.circular(10),
+              child: SizedBox(
+                height: 34,
+                child: Center(
+                  child: Text(
+                    'Show all (${locations.length})',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF3F444C),
+                    ),
+                  ),
                 ),
               ),
+            ),
           ],
+        ],
+      ),
+    );
+  }
+
+  double _firstSelectedAmount() {
+    if (widget.selectedIds.isEmpty) return 0;
+    return double.tryParse(
+          widget.controllers[widget.selectedIds.first]?.text ?? '',
+        ) ??
+        0;
+  }
+}
+
+class _SavingsLocation {
+  const _SavingsLocation({
+    required this.id,
+    required this.label,
+    required this.balance,
+    required this.icon,
+  });
+
+  final String id;
+  final String label;
+  final double balance;
+  final Widget icon;
+}
+
+class _SourceAssignmentStatus extends StatelessWidget {
+  const _SourceAssignmentStatus({
+    required this.status,
+    required this.assignedAmount,
+    required this.totalAmount,
+  });
+
+  final SavingsAssignmentStatus status;
+  final double assignedAmount;
+  final double totalAmount;
+
+  @override
+  Widget build(BuildContext context) {
+    final currency = context.watch<CurrencyProvider>();
+    final difference = centsToMoney(
+      (moneyToCents(totalAmount) - moneyToCents(assignedAmount)).abs(),
+    );
+    final (text, color) = switch (status) {
+      SavingsAssignmentStatus.empty => (
+        '${currency.formatAmount(totalAmount)} left',
+        const Color(0xFF9CA3AF),
+      ),
+      SavingsAssignmentStatus.partial => (
+        '${currency.formatAmount(difference)} left',
+        const Color(0xFFF59E0B),
+      ),
+      SavingsAssignmentStatus.matched => (
+        currency.formatAmount(totalAmount),
+        const Color(0xFF121212),
+      ),
+      SavingsAssignmentStatus.over => (
+        '${currency.formatAmount(difference)} over',
+        const Color(0xFFDC2626),
+      ),
+    };
+    return Row(
+      key: ValueKey('source-status-${status.name}'),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (status == SavingsAssignmentStatus.matched) ...[
+          const Icon(Icons.check_rounded, size: 15, color: Color(0xFF121212)),
+          const SizedBox(width: 2),
+        ],
+        Flexible(
+          child: Text(
+            text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
+          ),
         ),
       ],
+    );
+  }
+}
+
+String savingsTransferSummary(BuildContext context, FinancialEntry entry) {
+  final currency = context.read<CurrencyProvider>();
+  String side(List<SavingsTransferPart> parts) => parts
+      .map(
+        (part) => '${part.displayName} ${currency.formatAmount(part.amount)}',
+      )
+      .join(' + ');
+  return 'From ${side(entry.savingsSources)} to ${side(entry.savingsDestinations)}';
+}
+
+class _SavingsTransferLocationTile extends StatelessWidget {
+  const _SavingsTransferLocationTile({
+    required this.sectionTitle,
+    required this.id,
+    required this.icon,
+    required this.label,
+    required this.balance,
+    required this.isSource,
+    required this.oppositeUsed,
+    required this.selected,
+    required this.controller,
+    required this.enabled,
+    required this.onToggle,
+    required this.onAmountChanged,
+    required this.onUseFullAmount,
+  });
+
+  final String sectionTitle;
+  final String id;
+  final Widget icon;
+  final String label;
+  final double balance;
+  final bool isSource;
+  final bool oppositeUsed;
+  final bool selected;
+  final TextEditingController? controller;
+  final bool enabled;
+  final void Function(String id, bool selected) onToggle;
+  final ValueChanged<String> onAmountChanged;
+  final ValueChanged<String>? onUseFullAmount;
+
+  @override
+  Widget build(BuildContext context) {
+    final currency = context.watch<CurrencyProvider>();
+    final enteredAmount = double.tryParse(controller?.text ?? '') ?? 0;
+    final insufficient = isSource && selected && enteredAmount > balance;
+    final zeroBalance = isSource && balance <= 0;
+    final canToggle = enabled && !oppositeUsed && (!zeroBalance || selected);
+    final dimmed = oppositeUsed || zeroBalance || insufficient || !selected;
+    final oppositeLabel = isSource ? 'Used as destination' : 'Used as source';
+
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 120),
+      opacity: dimmed ? 0.58 : 1,
+      child: Column(
+        children: [
+          AnimatedContainer(
+            key: ValueKey('transfer-row-$sectionTitle-$id'),
+            duration: const Duration(milliseconds: 120),
+            decoration: BoxDecoration(
+              color: selected ? Colors.white : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+              border: selected
+                  ? Border.all(color: const Color(0xFF121212))
+                  : null,
+            ),
+            child: Column(
+              children: [
+                InkWell(
+                  onTap: canToggle ? () => onToggle(id, !selected) : null,
+                  borderRadius: BorderRadius.circular(12),
+                  child: SizedBox(
+                    height: 44,
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 36,
+                          child: Checkbox(
+                            key: ValueKey(
+                              'transfer-checkbox-$sectionTitle-$id',
+                            ),
+                            value: selected,
+                            onChanged: canToggle
+                                ? (value) => onToggle(id, value ?? false)
+                                : null,
+                            activeColor: const Color(0xFF121212),
+                            checkColor: Colors.white,
+                            visualDensity: VisualDensity.compact,
+                            materialTapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        ),
+                        SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: Center(child: icon),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            oppositeUsed
+                                ? oppositeLabel
+                                : insufficient
+                                ? '${currency.formatAmount(balance)} - Insufficient'
+                                : isSource
+                                ? currency.formatAmount(balance)
+                                : selected && controller != null
+                                ? currency.formatAmount(enteredAmount)
+                                : '',
+                            key: insufficient
+                                ? ValueKey('insufficient-$id')
+                                : null,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: insufficient
+                                  ? const Color(0xFFDC2626)
+                                  : const Color(0xFF6B7280),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                    ),
+                  ),
+                ),
+                if (selected && isSource && controller != null)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(40, 0, 8, 7),
+                    child: Row(
+                      children: [
+                        TextButton(
+                          key: ValueKey('use-full-$id'),
+                          onPressed: enabled
+                              ? () => onUseFullAmount?.call(id)
+                              : null,
+                          style: TextButton.styleFrom(
+                            foregroundColor: const Color(0xFF3F444C),
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            minimumSize: const Size(0, 32),
+                          ),
+                          child: const Text(
+                            'Use full amount',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: SizedBox(
+                            height: 36,
+                            child: TextField(
+                              controller: controller,
+                              enabled: enabled,
+                              onChanged: onAmountChanged,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                              inputFormatters: [
+                                FilteringTextInputFormatter.allow(
+                                  RegExp(r'^\d*\.?\d{0,2}'),
+                                ),
+                              ],
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                              ),
+                              decoration: InputDecoration(
+                                prefixText: '${currency.symbol} ',
+                                hintText: 'Amount',
+                                isDense: true,
+                                filled: true,
+                                fillColor: Colors.white,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 9,
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: const BorderSide(
+                                    color: Color(0xFF9CA3AF),
+                                  ),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: const BorderSide(
+                                    color: Color(0xFF121212),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1367,25 +2269,15 @@ class _AmountField extends StatelessWidget {
             color: Color(0xFF121212),
           ),
         ),
-        const SizedBox(height: 8),
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(999),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.06),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
+        const SizedBox(height: 5),
+        SizedBox(
+          height: 48,
           child: TextField(
             controller: controller,
             enabled: enabled,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+              FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
             ],
             style: const TextStyle(
               fontSize: 16,
@@ -1394,16 +2286,26 @@ class _AmountField extends StatelessWidget {
             ),
             decoration: InputDecoration(
               prefixText: '${context.watch<CurrencyProvider>().symbol} ',
+              hintText: '0.00',
               prefixStyle: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
                 color: Color(0xFF121212),
               ),
               contentPadding: const EdgeInsets.symmetric(
-                horizontal: 20,
-                vertical: 16,
+                horizontal: 14,
+                vertical: 13,
               ),
-              border: InputBorder.none,
+              filled: true,
+              fillColor: const Color(0xFFF9FAFB),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: Color(0xFF9CA3AF)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: Color(0xFF121212)),
+              ),
             ),
           ),
         ),
@@ -1476,6 +2378,7 @@ class _TextField extends StatelessWidget {
 
 class _ConfirmButton extends StatefulWidget {
   const _ConfirmButton({
+    super.key,
     required this.label,
     required this.onPressed,
     this.isLoading = false,

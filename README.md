@@ -8,10 +8,10 @@ Journey to Balance is a Flutter personal-finance app for recording income, bills
 - PIN lock with optional biometric authentication and a PIN-reset flow.
 - Income, balance, and percentage-based budget allocation for bills, savings, and personal spending.
 - Add, edit, and delete categorized financial transactions with budget-limit checks.
-- Savings goals and contributions from budget categories.
+- Savings goals with contributions from budget categories that move real balances between the wallet and chosen cards, with a centavo-safe split and a fully reversible undo.
 - Budget planner, daily and monthly spending views, and local notifications/reminders.
 - 13th Month Pay Calculator with Philippine tax rules (₱90,000 exemption ceiling), other benefits integration, planner autosave, and direct allocation deposit into wallet or cards.
-- Wallet tracking for cash, cards, currencies, and loans, synchronized across devices.
+- Wallet tracking for cash, cards, currencies, and loans, synchronized across devices, including multiple cards of the same bank each with an editable nickname and independent balance.
 - Currency conversion using fetched exchange rates.
 
 ## Tech stack

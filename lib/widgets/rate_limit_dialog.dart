@@ -13,6 +13,12 @@ import 'barrier_blur.dart';
 bool isFinanceRateLimitError(Object error) =>
     FinanceApiException.isRateLimitError(error);
 
+/// Returns true when [error] is a Worker finance conflict (HTTP 409), such as
+/// an undo that can no longer be reversed because a destination balance is too
+/// low, or a version precondition failing when another device changed state.
+bool isFinanceConflictError(Object error) =>
+    error is FinanceApiException && error.statusCode == 409;
+
 String rateLimitDialogMessage(RateLimitInfo info) {
   String? message;
   if (info.code == 'daily-rate-limit-exceeded') {

@@ -91,9 +91,19 @@ class BudgetProvider extends ChangeNotifier {
 
   List<FinancialEntry> _mergeEntriesWithPending(
     FinancialCategory category,
-    List<FinancialEntry> remote, {
+    List<FinancialEntry> remoteInput, {
     required bool confirmPending,
   }) {
+    // The caller may concatenate overlapping lists (e.g. live snapshot +
+    // locally cached paged entries). De-duplicate by id up front so a single
+    // entry can never produce two rows (which would crash the UI with a
+    // "Duplicate keys found" error). The first occurrence wins, preserving the
+    // live snapshot copy when present.
+    final seenRemoteIds = <String>{};
+    final remote = [
+      for (final entry in remoteInput)
+        if (seenRemoteIds.add(entry.id)) entry,
+    ];
     final previous = _entries[category]!;
     final previousById = {for (final entry in previous) entry.id: entry};
     final pendingLocals = previous
@@ -131,6 +141,16 @@ class BudgetProvider extends ChangeNotifier {
             mergedEntry = mergedEntry.copyWith(
               fundingSourceId: localSource,
               fundingSourceLabel: previousById[entry.id]?.fundingSourceLabel,
+            );
+          }
+          final localSources =
+              previousById[entry.id]?.savingsSources ?? const [];
+          final localDestinations =
+              previousById[entry.id]?.savingsDestinations ?? const [];
+          if (mergedEntry.savingsSources.isEmpty && localSources.isNotEmpty) {
+            mergedEntry = mergedEntry.copyWith(
+              savingsSources: localSources,
+              savingsDestinations: localDestinations,
             );
           }
           return mergedEntry;
@@ -1071,6 +1091,8 @@ class BudgetProvider extends ChangeNotifier {
     required FinancialCategory source,
     required String fundingSourceId,
     required String fundingSourceLabel,
+    required List<SavingsTransferPart> savingsSources,
+    required List<SavingsTransferPart> savingsDestinations,
     required double amount,
   }) async {
     final uid = _requireUid();
@@ -1091,6 +1113,8 @@ class BudgetProvider extends ChangeNotifier {
       iconAsset: 'material:savings',
       fundingSourceId: fundingSourceId,
       fundingSourceLabel: fundingSourceLabel,
+      savingsSources: savingsSources,
+      savingsDestinations: savingsDestinations,
     );
     final key = _entryKey(source, entry.id);
     final requestId = _api.newRequestId();
@@ -1112,6 +1136,10 @@ class BudgetProvider extends ChangeNotifier {
         source: source.collection,
         fundingSourceId: fundingSourceId,
         fundingSourceLabel: fundingSourceLabel,
+        savingsSources: savingsSources.map((part) => part.toMap()).toList(),
+        savingsDestinations: savingsDestinations
+            .map((part) => part.toMap())
+            .toList(),
         amount: amount,
         entryId: entry.id,
         createdAtMs: entry.createdAt.millisecondsSinceEpoch,
@@ -1139,7 +1167,7 @@ class BudgetProvider extends ChangeNotifier {
   /// stays in history as a green refund credit.
   /// When [refund] is false, only the transaction is removed — balances stay
   /// as they are.
-  Future<void> deleteEntry(
+  Future<Map<String, dynamic>?> deleteEntry(
     FinancialCategory category,
     FinancialEntry entry, {
     bool refund = true,
@@ -1147,7 +1175,7 @@ class BudgetProvider extends ChangeNotifier {
     _requireUid();
     final list = _entries[category]!;
     final index = list.indexWhere((item) => item.id == entry.id);
-    if (index < 0) return;
+    if (index < 0) return null;
 
     // Already-refunded rows can only be deleted from history.
     final shouldRefund = refund && !entry.isRefund;
@@ -1157,6 +1185,47 @@ class BudgetProvider extends ChangeNotifier {
     final isGoalContribution = entry.title == savingsGoalEntryTitle;
     final key = _entryKey(category, entry.id);
     final requestId = _api.newRequestId();
+
+    final isAtomicSavingsTransfer =
+        isGoalContribution &&
+        entry.savingsSources.isNotEmpty &&
+        entry.savingsDestinations.isNotEmpty;
+
+    if (shouldRefund && isAtomicSavingsTransfer) {
+      list.removeAt(index);
+      availableBalance = previous['availableBalance']! + entry.amount;
+      _adjustRemaining(category, entry.amount);
+      savingsGoalCurrent = (previousGoalCurrent - entry.amount).clamp(
+        0,
+        double.infinity,
+      );
+      _lockSavingsGoal();
+      _pendingDeleteKeys.add(key);
+      errorMessage = null;
+      notifyListeners();
+
+      try {
+        final result = await _api.deleteTransaction(
+          category: category.collection,
+          entryId: entry.id,
+          refund: true,
+          requestId: requestId,
+        );
+        return result;
+      } catch (error) {
+        list.insert(index, previousEntry);
+        _restoreRemainings(previous);
+        savingsGoalCurrent = previousGoalCurrent;
+        _pendingDeleteKeys.remove(key);
+        _lockSavingsGoal();
+        _reportMutationFailure(
+          error,
+          fallback: 'The savings transfer could not be undone.',
+          rateLimitAction: 'Savings Goal',
+        );
+        rethrow;
+      }
+    }
 
     if (shouldRefund) {
       final refunded = entry.copyWith(isRefund: true);
@@ -1199,7 +1268,7 @@ class BudgetProvider extends ChangeNotifier {
           );
         }
       }());
-      return;
+      return null;
     }
 
     list.removeAt(index);
@@ -1226,6 +1295,7 @@ class BudgetProvider extends ChangeNotifier {
         );
       }
     }());
+    return null;
   }
 
   Future<void> reset() async {

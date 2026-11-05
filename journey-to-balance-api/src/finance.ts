@@ -25,6 +25,12 @@ import {
   normalizeTransactionIconAsset,
   withTransactionIcon,
 } from "./transactionIcons";
+import {
+  applySavingsTransfer,
+  parseSavingsTransferPayload,
+  reverseSavingsTransfer,
+  SavingsTransferPayload,
+} from "./savingsTransfer";
 import type {UserGate} from "./UserGate";
 
 const EPS = 0.001;
@@ -435,6 +441,10 @@ export async function handleFinance(
       const fundingSourceLabel =
         typeof previous.fundingSourceLabel === "string" ?
           previous.fundingSourceLabel.trim() : "";
+      const savingsSources = Array.isArray(previous.savingsSources) ?
+        previous.savingsSources : undefined;
+      const savingsDestinations = Array.isArray(previous.savingsDestinations) ?
+        previous.savingsDestinations : undefined;
       return saveBudget(client, uid, budget, {
         category,
         entryId,
@@ -445,6 +455,8 @@ export async function handleFinance(
           isRefund: false,
           ...(fundingSourceId ? {fundingSourceId} : {}),
           ...(fundingSourceLabel ? {fundingSourceLabel} : {}),
+          ...(savingsSources ? {savingsSources} : {}),
+          ...(savingsDestinations ? {savingsDestinations} : {}),
         }, nextIcon),
       }).then((result) => ({...result, entryId}));
     });
@@ -468,6 +480,70 @@ export async function handleFinance(
       const isRefund = entry.isRefund === true;
       const isGoal = entry.title === SAVINGS_GOAL_ENTRY_TITLE;
       const shouldRefund = refund && !isRefund;
+      const transfer = isGoal ?
+        parseSavingsTransferPayload(entry, amount) :
+        undefined;
+
+      if (shouldRefund && transfer) {
+        const [userVersion, walletVersion, entryVersion] = await Promise.all([
+          client.getUserDocVersioned(uid),
+          client.getWalletDocVersioned(uid),
+          client.getEntryVersioned(uid, category, entryId),
+        ]);
+        if (!entryVersion.exists) {
+          return {
+            budget: budgetToFirestore(loadBudget(userVersion.data)),
+            deleted: true,
+            refunded: false,
+          };
+        }
+        const currentEntry = entryVersion.data;
+        const currentAmount = typeof currentEntry.amount === "number" ?
+          currentEntry.amount : 0;
+        if (currentEntry.isRefund === true ||
+            currentEntry.title !== SAVINGS_GOAL_ENTRY_TITLE) {
+          throw conflict("This savings transfer changed. Refresh and try again.");
+        }
+        const currentTransfer = parseSavingsTransferPayload(
+          currentEntry,
+          currentAmount,
+        );
+        if (!currentTransfer) {
+          throw conflict("This savings transfer changed. Refresh and try again.");
+        }
+        const currentBudget = loadBudget(userVersion.data);
+        currentBudget.availableBalance += currentAmount;
+        adjustRemaining(currentBudget, category, currentAmount);
+        currentBudget.savingsGoalCurrent = Math.max(
+          0,
+          currentBudget.savingsGoalCurrent - currentAmount,
+        );
+        const reversed = reverseSavingsTransfer(
+          walletVersion.data,
+          currentTransfer,
+        );
+        const budgetPayload = budgetToFirestore(currentBudget);
+        budgetPayload.updatedAt = new Date().toISOString();
+        await client.commitSavingsTransfer({
+          uid,
+          userData: {...userVersion.data, budget: budgetPayload},
+          userVersion,
+          walletData: reversed.wallet,
+          walletVersion,
+          entry: {
+            category,
+            entryId,
+            delete: true,
+            expectedUpdateTime: entryVersion.updateTime,
+          },
+        });
+        return {
+          budget: budgetPayload,
+          deleted: true,
+          refunded: true,
+          fallbacks: reversed.fallbacks,
+        };
+      }
 
       if (shouldRefund) {
         budget.availableBalance += amount;
@@ -529,6 +605,7 @@ export async function handleFinance(
       "fundingSourceLabel",
     );
     const amount = requirePositiveAmount(body.amount);
+    const transfer = parseSavingsTransferPayload(body, amount);
     const entryId = typeof body.entryId === "string" ? body.entryId.trim() : "";
     if (!entryId) throw badRequest("Invalid entryId.");
     const createdAtMs =
@@ -540,30 +617,58 @@ export async function handleFinance(
       "contributeToSavingsGoal",
       requestId,
       async () => {
-        const userDoc = await client.getUserDoc(uid);
-        const budget = loadBudget(userDoc);
-        if (amount > remainingFor(budget, source) + EPS) {
-          throw conflict("Amount exceeds the available category balance.");
-        }
         const existing = await client.getEntry(uid, source, entryId);
         if (existing) {
-          return {budget: budgetToFirestore(budget), entryId};
+          const userDoc = await client.getUserDoc(uid);
+          return {budget: budgetToFirestore(loadBudget(userDoc)), entryId};
+        }
+        const userVersion = await client.getUserDocVersioned(uid);
+        const budget = loadBudget(
+          userVersion.exists ? userVersion.data : null,
+        );
+        if (amount > remainingFor(budget, source) + EPS) {
+          throw conflict("Amount exceeds the available category balance.");
         }
         budget.availableBalance = Math.max(0, budget.availableBalance - amount);
         adjustRemaining(budget, source, -amount);
         budget.savingsGoalCurrent += amount;
+        const entryData = {
+          title: SAVINGS_GOAL_ENTRY_TITLE,
+          amount,
+          createdAt: new Date(createdAtMs),
+          isRefund: false,
+          iconAsset: "material:savings",
+          fundingSourceId,
+          fundingSourceLabel,
+          ...(transfer ? {
+            savingsSources: transfer.sources,
+            savingsDestinations: transfer.destinations,
+          } : {}),
+        };
+
+        if (transfer) {
+          const walletVersion = await client.getWalletDocVersioned(uid);
+          const nextWallet = applySavingsTransfer(
+            walletVersion.data,
+            transfer,
+          );
+          const budgetPayload = budgetToFirestore(budget);
+          budgetPayload.updatedAt = new Date().toISOString();
+          await client.commitSavingsTransfer({
+            uid,
+            userData: {...userVersion.data, budget: budgetPayload},
+            userVersion,
+            walletData: nextWallet,
+            walletVersion,
+            entry: {category: source, entryId, data: entryData},
+          });
+          return {budget: budgetPayload, entryId};
+        }
+
         return saveBudget(client, uid, budget, {
           category: source,
           entryId,
-          data: {
-            title: SAVINGS_GOAL_ENTRY_TITLE,
-            amount,
-            createdAt: new Date(createdAtMs),
-            isRefund: false,
-            iconAsset: "material:savings",
-            fundingSourceId,
-            fundingSourceLabel,
-          },
+          data: entryData,
         }).then((result) => ({...result, entryId}));
       },
     );

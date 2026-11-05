@@ -1,6 +1,6 @@
 import {importPKCS8, SignJWT} from "jose";
 
-import {ApiError, internal} from "./errors";
+import {ApiError, conflict, internal} from "./errors";
 
 export interface ServiceAccount {
   client_email: string;
@@ -135,7 +135,14 @@ type FirestoreValue =
   | {doubleValue: number}
   | {stringValue: string}
   | {timestampValue: string}
+  | {arrayValue: {values?: FirestoreValue[]}}
   | {mapValue: {fields: Record<string, FirestoreValue>}};
+
+export type VersionedDocument = {
+  data: Record<string, unknown>;
+  updateTime?: string;
+  exists: boolean;
+};
 
 function encodeFields(value: Record<string, unknown>): Record<string, FirestoreValue> {
   const fields: Record<string, FirestoreValue> = {};
@@ -158,6 +165,9 @@ function encodeValue(value: unknown): FirestoreValue {
   if (value instanceof Date) {
     return {timestampValue: value.toISOString()};
   }
+  if (Array.isArray(value)) {
+    return {arrayValue: {values: value.map(encodeValue)}};
+  }
   if (typeof value === "object") {
     return {mapValue: {fields: encodeFields(value as Record<string, unknown>)}};
   }
@@ -172,6 +182,9 @@ function decodeValue(value: FirestoreValue | undefined): unknown {
   if ("doubleValue" in value) return value.doubleValue;
   if ("stringValue" in value) return value.stringValue;
   if ("timestampValue" in value) return value.timestampValue;
+  if ("arrayValue" in value) {
+    return (value.arrayValue.values ?? []).map(decodeValue);
+  }
   if ("mapValue" in value) {
     const out: Record<string, unknown> = {};
     const fields = value.mapValue.fields ?? {};
@@ -206,20 +219,45 @@ export class FirestoreClient {
     });
   }
 
-  async getUserDoc(uid: string): Promise<Record<string, unknown> | null> {
-    const name = this.docPath(uid);
+  private async getVersionedDocument(name: string): Promise<VersionedDocument> {
     const url = `https://firestore.googleapis.com/v1/${name}`;
     const res = await this.authedFetch(url);
-    if (res.status === 404) return null;
+    if (res.status === 404) return {data: {}, exists: false};
     if (!res.ok) {
       console.error("Firestore get failed", await res.text());
-      throw internal("Could not load budget data.");
+      throw internal("Could not load financial data.");
     }
     const doc = (await res.json()) as {
       fields?: Record<string, FirestoreValue>;
+      updateTime?: string;
     };
-    return (decodeValue({mapValue: {fields: doc.fields ?? {}}}) ??
-      {}) as Record<string, unknown>;
+    return {
+      data: (decodeValue({mapValue: {fields: doc.fields ?? {}}}) ??
+        {}) as Record<string, unknown>,
+      updateTime: doc.updateTime,
+      exists: true,
+    };
+  }
+
+  getUserDocVersioned(uid: string): Promise<VersionedDocument> {
+    return this.getVersionedDocument(this.docPath(uid));
+  }
+
+  getWalletDocVersioned(uid: string): Promise<VersionedDocument> {
+    return this.getVersionedDocument(this.docPath(uid, "wallet", "data"));
+  }
+
+  getEntryVersioned(
+    uid: string,
+    category: string,
+    entryId: string,
+  ): Promise<VersionedDocument> {
+    return this.getVersionedDocument(this.docPath(uid, category, entryId));
+  }
+
+  async getUserDoc(uid: string): Promise<Record<string, unknown> | null> {
+    const doc = await this.getUserDocVersioned(uid);
+    return doc.exists ? doc.data : null;
   }
 
   async getEntry(
@@ -227,19 +265,8 @@ export class FirestoreClient {
     category: string,
     entryId: string,
   ): Promise<Record<string, unknown> | null> {
-    const name = this.docPath(uid, category, entryId);
-    const url = `https://firestore.googleapis.com/v1/${name}`;
-    const res = await this.authedFetch(url);
-    if (res.status === 404) return null;
-    if (!res.ok) {
-      console.error("Firestore get entry failed", await res.text());
-      throw internal("Could not load transaction.");
-    }
-    const doc = (await res.json()) as {
-      fields?: Record<string, FirestoreValue>;
-    };
-    return (decodeValue({mapValue: {fields: doc.fields ?? {}}}) ??
-      {}) as Record<string, unknown>;
+    const doc = await this.getEntryVersioned(uid, category, entryId);
+    return doc.exists ? doc.data : null;
   }
 
   async getSubDoc(
@@ -452,6 +479,81 @@ export class FirestoreClient {
     if (!res.ok) {
       console.error("Firestore commit failed", await res.text());
       throw internal("Could not save financial changes.");
+    }
+  }
+
+  /**
+   * Atomically writes budget, wallet balances, and a savings entry mutation.
+   * Version preconditions make validation fail safely if another device edits
+   * either document between the read and commit.
+   */
+  async commitSavingsTransfer(options: {
+    uid: string;
+    userData: Record<string, unknown>;
+    userVersion: VersionedDocument;
+    walletData: Record<string, unknown>;
+    walletVersion: VersionedDocument;
+    entry: {
+      category: string;
+      entryId: string;
+      data?: Record<string, unknown>;
+      delete?: boolean;
+      expectedUpdateTime?: string;
+    };
+  }): Promise<void> {
+    const precondition = (version: VersionedDocument) =>
+      version.exists && version.updateTime
+        ? {updateTime: version.updateTime}
+        : {exists: false};
+    const userName = this.docPath(options.uid);
+    const walletName = this.docPath(options.uid, "wallet", "data");
+    const entryName = this.docPath(
+      options.uid,
+      options.entry.category,
+      options.entry.entryId,
+    );
+    const writes: unknown[] = [
+      {
+        update: {name: userName, fields: encodeFields(options.userData)},
+        currentDocument: precondition(options.userVersion),
+      },
+      {
+        update: {name: walletName, fields: encodeFields(options.walletData)},
+        currentDocument: precondition(options.walletVersion),
+      },
+    ];
+    if (options.entry.delete) {
+      writes.push({
+        delete: entryName,
+        currentDocument: options.entry.expectedUpdateTime ?
+          {updateTime: options.entry.expectedUpdateTime} :
+          {exists: true},
+      });
+    } else {
+      writes.push({
+        update: {
+          name: entryName,
+          fields: encodeFields(options.entry.data ?? {}),
+        },
+        currentDocument: {exists: false},
+      });
+    }
+
+    const url = `https://firestore.googleapis.com/v1/projects/${this.projectId}/databases/(default)/documents:commit`;
+    const res = await this.authedFetch(url, {
+      method: "POST",
+      body: JSON.stringify({writes}),
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      console.error("Firestore savings transfer commit failed", body);
+      if (res.status === 409 || body.includes("ABORTED") ||
+          body.includes("FAILED_PRECONDITION")) {
+        throw conflict(
+          "Balances changed on another device. Review the amounts and try again.",
+        );
+      }
+      throw internal("Could not save the savings transfer.");
     }
   }
 }

@@ -12,6 +12,7 @@ import '../../providers/wallet_cash_provider.dart';
 import '../../widgets/allocation_confirm_dialog.dart';
 import '../../widgets/barrier_blur.dart';
 import '../../widgets/bank_card_picker.dart';
+import '../../widgets/card_nickname_editor.dart';
 import '../../widgets/sensitive_action_auth.dart';
 
 Future<bool> _confirmWalletFunding({
@@ -193,40 +194,53 @@ class _WalletPageState extends State<WalletPage> {
   }
 
   Future<void> _applyCardSheetChanges({
-    required Set<String> toRemove,
-    required String? toAdd,
+    required List<String> toAdd,
   }) async {
     final provider = context.read<WalletCardsProvider>();
-    final cash = context.read<WalletCashProvider>().amount;
-    var removedAmount = 0.0;
-    for (final iconAsset in toRemove) {
-      removedAmount += provider.cards
-          .where((c) => c.iconAsset == iconAsset)
-          .fold<double>(0, (sum, c) => sum + c.amount);
-      await provider.removeByIconAsset(iconAsset);
-    }
 
-    if (toAdd != null && !provider.hasIcon(toAdd)) {
-      await provider.addCard(iconAsset: toAdd);
+    // Create one new card per queued icon (duplicates allowed). Each new card
+    // gets a suggested nickname, then we open the nickname editor so the user
+    // can rename it right away (e.g. "Wife's MariBank").
+    final newCardIds = <String>[];
+    for (final iconAsset in toAdd) {
+      final suggestion = provider.suggestedNicknameFor(iconAsset);
+      final id = await provider.addCardReturningId(
+        iconAsset: iconAsset,
+        nickname: suggestion,
+      );
+      if (id != null) newCardIds.add(id);
+      if (!mounted) return;
     }
 
     if (!mounted) return;
     setState(() {
-      if (toAdd != null && provider.cards.isNotEmpty) {
+      if (newCardIds.isNotEmpty && provider.cards.isNotEmpty) {
         _selectedIndex = provider.cards.length - 1;
       } else {
         _clampSelectedIndex(provider.cards.length);
       }
     });
 
-    final nextTotal = provider.combinedTotal(cash);
-    if (removedAmount > 0.001 ||
-        (context.read<BudgetProvider>().availableBalance - nextTotal).abs() >
-            0.001) {
-      try {
-        await context.read<BudgetProvider>().updateAvailableBalance(nextTotal);
-      } catch (_) {}
+    // New cards start at zero balance, so Available Balance is unchanged; no
+    // reallocation needed. Offer the nickname editor for each new card.
+    for (final id in newCardIds) {
+      if (!mounted) return;
+      await _promptCardNickname(id);
     }
+  }
+
+  /// Opens the single-field nickname editor for the card [cardId].
+  Future<void> _promptCardNickname(String cardId) async {
+    final provider = context.read<WalletCardsProvider>();
+    final card = provider.cardById(cardId);
+    if (card == null) return;
+    final result = await showCardNicknameEditor(
+      context: context,
+      currentNickname: card.nickname,
+      bankLabel: card.bankLabel,
+    );
+    if (result == null || !mounted) return;
+    await provider.renameCard(cardId: cardId, nickname: result.value);
   }
 
   Future<void> _showAddCardSheet() async {
@@ -235,13 +249,24 @@ class _WalletPageState extends State<WalletPage> {
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (sheetContext) {
-        String? pendingAdd;
-        final pendingRemove = <String>{};
+        // Icons queued to be added THIS session (duplicates allowed). Existing
+        // cards are never deleted from the picker.
+        final pendingAdds = <String>[];
         return StatefulBuilder(
           builder: (context, setSheetState) {
             final wallet = context.watch<WalletCardsProvider>();
-            final addedIcons = wallet.cards.map((c) => c.iconAsset).toSet();
-            final canDone = pendingAdd != null || pendingRemove.isNotEmpty;
+            final ownedCount = <String, int>{};
+            for (final card in wallet.cards) {
+              ownedCount[card.iconAsset] =
+                  (ownedCount[card.iconAsset] ?? 0) + 1;
+            }
+            int queuedCount(String iconAsset) =>
+                pendingAdds.where((i) => i == iconAsset).length;
+            int totalCount(String iconAsset) =>
+                (ownedCount[iconAsset] ?? 0) + queuedCount(iconAsset);
+            final atCap = wallet.cards.length + pendingAdds.length >=
+                kWalletMaxCards;
+            final canDone = pendingAdds.isNotEmpty;
             return withBarrierBlur(
               SafeArea(
                 child: Padding(
@@ -293,31 +318,34 @@ class _WalletPageState extends State<WalletPage> {
                               for (final iconAsset in bankCardIconAssets)
                                 BankCardPickerTile(
                                   iconAsset: iconAsset,
-                                  selected:
-                                      pendingAdd == iconAsset ||
-                                      (addedIcons.contains(iconAsset) &&
-                                          !pendingRemove.contains(iconAsset)),
-                                  alreadyAdded:
-                                      addedIcons.contains(iconAsset) &&
-                                      !pendingRemove.contains(iconAsset),
+                                  selected: totalCount(iconAsset) > 0,
+                                  count: totalCount(iconAsset),
+                                  // Minus removes only a card queued THIS
+                                  // session; existing cards are untouched.
+                                  canRemoveQueued: queuedCount(iconAsset) > 0,
                                   onTap: () {
-                                    if (addedIcons.contains(iconAsset)) {
-                                      setSheetState(() {
-                                        if (pendingRemove.contains(iconAsset)) {
-                                          pendingRemove.remove(iconAsset);
-                                        } else {
-                                          pendingRemove.add(iconAsset);
-                                        }
-                                        if (pendingAdd == iconAsset) {
-                                          pendingAdd = null;
-                                        }
-                                      });
+                                    if (atCap) {
+                                      ScaffoldMessenger.of(sheetContext)
+                                        ..hideCurrentSnackBar()
+                                        ..showSnackBar(
+                                          const SnackBar(
+                                            content: Text(
+                                              'You have reached the maximum '
+                                              'number of cards.',
+                                            ),
+                                          ),
+                                        );
                                       return;
                                     }
+                                    setSheetState(() => pendingAdds.add(iconAsset));
+                                  },
+                                  onRemoveQueued: () {
                                     setSheetState(() {
-                                      pendingAdd = pendingAdd == iconAsset
-                                          ? null
-                                          : iconAsset;
+                                      final index =
+                                          pendingAdds.lastIndexOf(iconAsset);
+                                      if (index >= 0) {
+                                        pendingAdds.removeAt(index);
+                                      }
                                     });
                                   },
                                 ),
@@ -354,75 +382,17 @@ class _WalletPageState extends State<WalletPage> {
                                   onPressed: !canDone
                                       ? null
                                       : () async {
-                                          final pageContext = this.context;
                                           final nav = Navigator.of(
                                             sheetContext,
                                           );
-                                          if (pendingRemove.isNotEmpty) {
-                                            final cardsProvider = pageContext
-                                                .read<WalletCardsProvider>();
-                                            final cash = pageContext
-                                                .read<WalletCashProvider>()
-                                                .amount;
-                                            final budget = pageContext
-                                                .read<BudgetProvider>();
-                                            final removing = cardsProvider.cards
-                                                .where(
-                                                  (card) => pendingRemove
-                                                      .contains(card.iconAsset),
-                                                )
-                                                .toList();
-                                            final nextTotal =
-                                                cash +
-                                                cardsProvider.cards
-                                                    .where(
-                                                      (card) => !pendingRemove
-                                                          .contains(
-                                                            card.iconAsset,
-                                                          ),
-                                                    )
-                                                    .fold<double>(
-                                                      0,
-                                                      (sum, card) =>
-                                                          sum + card.amount,
-                                                    );
-
-                                            final warned =
-                                                await AllocationConfirmDialog.showDeleteCardsWarning(
-                                                  context: pageContext,
-                                                  cardsToRemove: [
-                                                    for (final card in removing)
-                                                      (
-                                                        card.bankLabel,
-                                                        card.amount,
-                                                      ),
-                                                  ],
-                                                  currentAvailable:
-                                                      budget.availableBalance,
-                                                  nextAvailable: nextTotal,
-                                                );
-                                            if (warned != true) return;
-                                            if (!mounted) return;
-
-                                            final authorized =
-                                                await showSensitiveActionAuth(
-                                                  context: pageContext,
-                                                  title: 'Confirm delete card',
-                                                  description:
-                                                      'Enter your PIN or use fingerprint to delete the card, remove its amount, and update your available balance.',
-                                                );
-                                            if (authorized != true) return;
-                                          }
-
+                                          final queued = List<String>.from(
+                                            pendingAdds,
+                                          );
+                                          nav.pop();
                                           if (!mounted) return;
                                           await _applyCardSheetChanges(
-                                            toRemove: Set<String>.from(
-                                              pendingRemove,
-                                            ),
-                                            toAdd: pendingAdd,
+                                            toAdd: queued,
                                           );
-                                          if (!mounted) return;
-                                          nav.pop();
                                         },
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: const Color(0xFF121212),
@@ -681,10 +651,7 @@ class _WalletTransferDialogState extends State<_WalletTransferDialog> {
 
   String _labelFor(String id, List<WalletCardModel> cards) {
     if (id == _walletId) return 'Wallet';
-    for (final card in cards) {
-      if (card.id == id) return card.bankLabel;
-    }
-    return 'Card';
+    return walletCardDisplayLabels(cards)[id] ?? 'Card';
   }
 
   double _balanceFor(
@@ -1072,6 +1039,7 @@ class _StackedCardDeck extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final labels = walletCardDisplayLabels(cards);
     return LayoutBuilder(
       builder: (context, constraints) {
         final visible = math.min(_maxVisible, cards.length);
@@ -1129,6 +1097,7 @@ class _StackedCardDeck extends StatelessWidget {
                       iconAsset: card.iconAsset,
                       currencySymbol: currencySymbol,
                       amount: card.amount,
+                      label: labels[card.id] ?? card.displayName,
                       isFront: isFront,
                       onTap: () {
                         if (isFront) {
@@ -1153,6 +1122,7 @@ class _WalletCardPreview extends StatelessWidget {
     required this.iconAsset,
     required this.currencySymbol,
     required this.amount,
+    required this.label,
     required this.isFront,
     required this.onTap,
   });
@@ -1160,6 +1130,7 @@ class _WalletCardPreview extends StatelessWidget {
   final String iconAsset;
   final String currencySymbol;
   final double amount;
+  final String label;
   final bool isFront;
   final VoidCallback onTap;
 
@@ -1195,13 +1166,29 @@ class _WalletCardPreview extends StatelessWidget {
                     ),
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-                      child: Text(
-                        '$currencySymbol${NumberFormat('#,##0').format(amount)}',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w900,
-                          color: Colors.white,
-                        ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '$currencySymbol${NumberFormat('#,##0').format(amount)}',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white,
+                            ),
+                          ),
+                          Text(
+                            label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -1340,12 +1327,111 @@ class _BankCardPopupState extends State<_BankCardPopup> {
     }
   }
 
+  Future<void> _rename() async {
+    if (_saving) return;
+    final cards = context.read<WalletCardsProvider>();
+    final card = cards.cardById(widget.cardId);
+    if (card == null) return;
+    final result = await showCardNicknameEditor(
+      context: context,
+      currentNickname: card.nickname,
+      bankLabel: card.bankLabel,
+    );
+    if (result == null || !mounted) return;
+    await cards.renameCard(cardId: widget.cardId, nickname: result.value);
+  }
+
+  Future<void> _delete() async {
+    if (_saving) return;
+    final cards = context.read<WalletCardsProvider>();
+    final card = cards.cardById(widget.cardId);
+    if (card == null) return;
+    final currency = context.read<CurrencyProvider>();
+    final cash = context.read<WalletCashProvider>().amount;
+    final label = cards.displayLabelFor(widget.cardId);
+
+    // Loans are not linked to a specific card in this app (they are standalone
+    // entries in the wallet document), so deleting a card never affects loans.
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) => withBarrierBlur(
+        AlertDialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          title: const Text(
+            'Delete card',
+            style: TextStyle(fontWeight: FontWeight.w800),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Delete "$label"?'),
+              const SizedBox(height: 8),
+              Text('Balance: ${currency.formatAmount(card.amount)}'),
+              const Text('Linked loans: none'),
+              const SizedBox(height: 8),
+              const Text(
+                'Its balance will be removed and your available balance '
+                'updated.',
+                style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFFE11D48),
+              ),
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final authorized = await showSensitiveActionAuth(
+      context: context,
+      title: 'Confirm delete card',
+      description:
+          'Enter your PIN or use fingerprint to delete the card, remove its '
+          'amount, and update your available balance.',
+    );
+    if (authorized != true || !mounted) return;
+
+    setState(() => _saving = true);
+    try {
+      await cards.removeById(widget.cardId);
+      if (!mounted) return;
+      await context.read<BudgetProvider>().updateAvailableBalance(
+        cards.combinedTotal(cash),
+      );
+      if (!mounted) return;
+      widget.onDismiss();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not delete card: $e')),
+      );
+      setState(() => _saving = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final currency = context.watch<CurrencyProvider>();
-    final cardAmount =
-        context.watch<WalletCardsProvider>().cardById(widget.cardId)?.amount ??
-        0;
+    final walletCards = context.watch<WalletCardsProvider>();
+    final cardAmount = walletCards.cardById(widget.cardId)?.amount ?? 0;
+    final cardLabel = walletCards.displayLabelFor(widget.cardId);
     final amountLabel = NumberFormat('#,##0').format(cardAmount);
 
     return GestureDetector(
@@ -1480,11 +1566,21 @@ class _BankCardPopupState extends State<_BankCardPopup> {
                                     ],
                                   ),
                                   const SizedBox(height: 2),
+                                  Text(
+                                    cardLabel,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
                                   const Text(
                                     'Remaining money',
                                     style: TextStyle(
                                       color: Colors.white70,
-                                      fontSize: 12,
+                                      fontSize: 11,
                                       fontWeight: FontWeight.w500,
                                     ),
                                   ),
@@ -1493,12 +1589,64 @@ class _BankCardPopupState extends State<_BankCardPopup> {
                             ),
                           ),
                         ),
+                        if (!_editing)
+                          Positioned(
+                            right: 12,
+                            top: 10,
+                            child: Row(
+                              children: [
+                                _CardActionButton(
+                                  icon: Icons.drive_file_rename_outline_rounded,
+                                  tooltip: 'Rename card',
+                                  onTap: _saving ? null : _rename,
+                                ),
+                                const SizedBox(width: 6),
+                                _CardActionButton(
+                                  icon: Icons.delete_outline_rounded,
+                                  tooltip: 'Delete card',
+                                  onTap: _saving ? null : _delete,
+                                ),
+                              ],
+                            ),
+                          ),
                       ],
                     ),
                   ),
                 ),
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Small translucent icon button used on the card popup for rename/delete.
+class _CardActionButton extends StatelessWidget {
+  const _CardActionButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.black.withValues(alpha: 0.42),
+        shape: const CircleBorder(),
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          child: Padding(
+            padding: const EdgeInsets.all(6),
+            child: Icon(icon, size: 16, color: Colors.white),
           ),
         ),
       ),

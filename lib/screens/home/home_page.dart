@@ -112,7 +112,7 @@ class _HomePageState extends State<HomePage> {
       builder: (_) => withBarrierBlur(
         MoneyDepositSourceDialog(
           hostContext: context,
-          title: 'Where did the salary go?',
+          title: 'Where should the salary go?',
           description: 'Choose the wallet or card that received your salary.',
         ),
       ),
@@ -829,20 +829,25 @@ class QuickActionRow extends StatelessWidget {
             count * buttonSize + (count - 1) * 12 + 2 * 20 <=
             constraints.maxWidth;
 
+        // Progress rings and button shadows paint slightly outside their
+        // nominal size. Keep them away from the horizontal viewport's clip
+        // edge so they remain intact while the row is being dragged.
         return SizedBox(
-          height: buttonSize + 8,
+          height: buttonSize + 20,
           child: fits
               ? Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: actions,
+                  child: Center(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: actions,
+                    ),
                   ),
                 )
               : ListView.separated(
                   scrollDirection: Axis.horizontal,
                   physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
                   itemCount: actions.length,
                   separatorBuilder: (_, _) => const SizedBox(width: 12),
                   itemBuilder: (_, index) => actions[index],

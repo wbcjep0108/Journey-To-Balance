@@ -165,6 +165,9 @@ class _BottomNavScreenState extends State<BottomNavScreen>
   Widget build(BuildContext context) {
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
     final indicatorDuration = reduceMotion ? Duration.zero : _indicatorDuration;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final navigationInset = screenWidth < 360 ? 12.0 : 20.0;
+    final navigationBottom = screenWidth < 360 ? 12.0 : 24.0;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -179,9 +182,9 @@ class _BottomNavScreenState extends State<BottomNavScreen>
             animation: _pageCurve,
           ),
           Positioned(
-            left: 20,
-            right: 20,
-            bottom: 24,
+            left: navigationInset,
+            right: navigationInset,
+            bottom: navigationBottom,
             child: SafeArea(
               child: FadeTransition(
                 opacity: _entranceOpacity,
@@ -313,67 +316,78 @@ class _AnimatedNavigationBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 72,
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(40),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 24,
-            spreadRadius: 2,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final travelDistance = constraints.maxWidth - _itemSize;
-          final indicatorLeft =
-              travelDistance * selectedIndex / (destinations.length - 1);
+    return LayoutBuilder(
+      builder: (context, outerConstraints) {
+        final destinationsWidth = _itemSize * destinations.length;
+        final availableSidePadding =
+            (outerConstraints.maxWidth - destinationsWidth) / 2;
+        final horizontalPadding = availableSidePadding
+            .clamp(8.0, 20.0)
+            .toDouble();
 
-          return Stack(
-            alignment: Alignment.centerLeft,
-            children: [
-              AnimatedPositioned(
-                left: indicatorLeft,
-                top: 14,
-                width: _itemSize,
-                height: _itemSize,
-                duration: indicatorDuration,
-                curve: Curves.easeOutCubic,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF121212).withValues(alpha: 0.09),
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.08),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  for (var index = 0; index < destinations.length; index++)
-                    _AnimatedNavItem(
-                      destination: destinations[index],
-                      selected: selectedIndex == index,
-                      reduceMotion: reduceMotion,
-                      onTap: () => onSelected(index),
-                    ),
-                ],
+        return Container(
+          height: 72,
+          padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(40),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.08),
+                blurRadius: 24,
+                spreadRadius: 2,
+                offset: const Offset(0, 8),
               ),
             ],
-          );
-        },
-      ),
+          ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final travelDistance = constraints.maxWidth - _itemSize;
+              final indicatorLeft =
+                  travelDistance * selectedIndex / (destinations.length - 1);
+
+              return Stack(
+                alignment: Alignment.centerLeft,
+                children: [
+                  AnimatedPositioned(
+                    left: indicatorLeft,
+                    top: 14,
+                    width: _itemSize,
+                    height: _itemSize,
+                    duration: indicatorDuration,
+                    curve: Curves.easeOutCubic,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF121212).withValues(alpha: 0.09),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.08),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      for (var index = 0; index < destinations.length; index++)
+                        _AnimatedNavItem(
+                          destination: destinations[index],
+                          selected: selectedIndex == index,
+                          reduceMotion: reduceMotion,
+                          onTap: () => onSelected(index),
+                        ),
+                    ],
+                  ),
+                ],
+              );
+            },
+          ),
+        );
+      },
     );
   }
 }

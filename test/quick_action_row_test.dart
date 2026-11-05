@@ -37,10 +37,7 @@ Widget _buildTestWidget(double width) {
       ],
       child: Scaffold(
         body: Center(
-          child: SizedBox(
-            width: width,
-            child: const QuickActionRow(),
-          ),
+          child: SizedBox(width: width, child: const QuickActionRow()),
         ),
       ),
     ),
@@ -48,29 +45,36 @@ Widget _buildTestWidget(double width) {
 }
 
 void main() {
-  testWidgets('QuickActionRow layout and responsiveness at widths 320, 360, and 430', (
-    tester,
-  ) async {
-    // Width 320: cannot fit all 5 buttons (5 * 64 + 4 * 12 + 40 = 408 > 320) -> should be scrollable (ListView)
-    await tester.pumpWidget(_buildTestWidget(320));
-    await tester.pumpAndSettle();
-    expect(tester.takeException(), isNull);
-    expect(find.byType(ListView), findsOneWidget);
-    expect(find.byType(Row), findsNothing);
+  testWidgets(
+    'QuickActionRow layout and responsiveness at widths 320, 360, and 430',
+    (tester) async {
+      // Width 320: cannot fit all 5 buttons (5 * 64 + 4 * 12 + 40 = 408 > 320) -> should be scrollable (ListView)
+      await tester.pumpWidget(_buildTestWidget(320));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byType(ListView), findsOneWidget);
+      expect(find.byType(Row), findsNothing);
 
-    // Width 360: 408 > 360 -> should also be scrollable (ListView)
-    await tester.pumpWidget(_buildTestWidget(360));
-    await tester.pumpAndSettle();
-    expect(tester.takeException(), isNull);
-    expect(find.byType(ListView), findsOneWidget);
-    expect(find.byType(Row), findsNothing);
+      final scrollViewport = tester.getRect(find.byType(ListView));
+      final firstProgressRing = tester.getRect(
+        find.byType(CircularProgressIndicator).first,
+      );
+      expect(firstProgressRing.top, scrollViewport.top + 8);
+      expect(firstProgressRing.bottom, scrollViewport.bottom - 12);
 
-    // Width 430: 408 <= 430 -> fits, so it should render as a non-scrollable Row with spaceBetween
-    await tester.pumpWidget(_buildTestWidget(430));
-    await tester.pumpAndSettle();
-    expect(tester.takeException(), isNull);
-    expect(find.byType(Row), findsOneWidget);
-    expect(find.byType(ListView), findsNothing);
-  });
+      // Width 360: 408 > 360 -> should also be scrollable (ListView)
+      await tester.pumpWidget(_buildTestWidget(360));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byType(ListView), findsOneWidget);
+      expect(find.byType(Row), findsNothing);
+
+      // Width 430: 408 <= 430 -> fits, so it should render as a non-scrollable Row with spaceBetween
+      await tester.pumpWidget(_buildTestWidget(430));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byType(Row), findsOneWidget);
+      expect(find.byType(ListView), findsNothing);
+    },
+  );
 }
-
