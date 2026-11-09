@@ -34,7 +34,7 @@ service cloud.firestore {
           'billsEnabled', 'billsAmount',
           'savingsEnabled', 'savingsAmount',
           'personalEnabled', 'personalAmount',
-          'total', 'createdAt', 'alertEligible', 'thirteenthMonth'
+          'total', 'createdAt', 'alertEligible', 'thirteenthMonth', 'endDate'
         ]) &&
         planner.id is string &&
         planner.id.size() > 0 &&
@@ -44,6 +44,9 @@ service cloud.firestore {
         planner.startAt is timestamp &&
         planner.endAt is timestamp &&
         planner.endAt > planner.startAt &&
+        (!planner.keys().hasAny(['endDate']) ||
+          (planner.endDate is timestamp &&
+            planner.endDate >= planner.startAt)) &&
         planner.createdAt is timestamp &&
         (
           (
@@ -153,7 +156,7 @@ service cloud.firestore {
           'billsEnabled', 'billsAmount',
           'savingsEnabled', 'savingsAmount',
           'personalEnabled', 'personalAmount',
-          'total', 'createdAt', 'alertEligible', 'thirteenthMonth'
+          'total', 'createdAt', 'alertEligible', 'thirteenthMonth', 'endDate'
         ]) &&
         (hasBudgetPlan(planner) ||
           planner.keys().hasAny(['thirteenthMonth'])) &&

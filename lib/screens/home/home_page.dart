@@ -750,6 +750,17 @@ class _HomePlannerCard extends StatelessWidget {
                       color: Color(0xFF121212),
                     ),
                   ),
+                  if (plannerPerDayAmount(plan) != null) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      'About ${currency.formatAmount(plannerPerDayAmount(plan)!)} per day',
+                      key: const ValueKey('home-planner-per-day'),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF747C89),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   PlannerProgressBar(
                     progress: progress,

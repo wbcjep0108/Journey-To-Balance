@@ -39,6 +39,41 @@ extension PlannerPeriodX on PlannerPeriod {
   }
 }
 
+/// Longest Day plan in calendar days. Use the Week period for 7 days.
+const int kPlannerMaxDayRange = 6;
+
+/// Number of calendar days from [start] to [end], both inclusive.
+int plannerRangeDays(DateTime start, DateTime end) {
+  final first = DateTime.utc(start.year, start.month, start.day);
+  final last = DateTime.utc(end.year, end.month, end.day);
+  return last.difference(first).inDays + 1;
+}
+
+/// The last day, inclusive, of a Day plan that covers [days] days from [start].
+DateTime plannerDayRangeEnd(DateTime start, int days) =>
+    DateTime(start.year, start.month, start.day + days - 1);
+
+/// Whether a Day plan from [start] to [end] is allowed. A missing [end] means
+/// a one-day plan. [end] cannot be before [start], and the range cannot
+/// exceed [kPlannerMaxDayRange] days.
+bool isPlannerDayRangeValid(DateTime start, DateTime? end) {
+  if (end == null) return true;
+  final days = plannerRangeDays(start, end);
+  return days >= 1 && days <= kPlannerMaxDayRange;
+}
+
+/// The exclusive end boundary for a plan, in the device timezone.
+DateTime plannerEndExclusive(
+  PlannerPeriod period,
+  DateTime start,
+  DateTime? endDate,
+) {
+  if (period == PlannerPeriod.day && endDate != null) {
+    return DateTime(endDate.year, endDate.month, endDate.day + 1);
+  }
+  return period.endExclusive(start);
+}
+
 class BudgetPlan {
   const BudgetPlan({
     required this.id,
@@ -48,6 +83,7 @@ class BudgetPlan {
     required this.amounts,
     required this.createdAt,
     required this.alertEligible,
+    this.endDate,
   });
 
   final String id;
@@ -58,6 +94,10 @@ class BudgetPlan {
   final DateTime createdAt;
   final bool alertEligible;
 
+  /// Last day, inclusive, of a multi-day Day plan. Null means a one-day plan.
+  /// Ignored for Week and Month plans.
+  final DateTime? endDate;
+
   Set<FinancialCategory> get enabledCategories => amounts.entries
       .where((entry) => entry.value > 0)
       .map((entry) => entry.key)
@@ -67,7 +107,35 @@ class BudgetPlan {
 
   DateTime get localStart => DateUtils.dateOnly(start.toLocal());
 
-  DateTime get localEndExclusive => period.endExclusive(localStart);
+  /// Last day, inclusive, of a multi-day Day plan as a local date, or null for
+  /// a one-day plan. An end date that is not after the start, or that makes
+  /// the range longer than [kPlannerMaxDayRange] days, is ignored.
+  DateTime? get localEndDate {
+    final end = endDate;
+    if (end == null || period != PlannerPeriod.day) return null;
+    final last = DateUtils.dateOnly(end.toLocal());
+    if (!last.isAfter(localStart) ||
+        !isPlannerDayRangeValid(localStart, last)) {
+      return null;
+    }
+    return last;
+  }
+
+  bool get isMultiDay => localEndDate != null;
+
+  DateTime get localEndExclusive =>
+      plannerEndExclusive(period, localStart, localEndDate);
+
+  /// Number of calendar days the plan covers.
+  int get dayCount {
+    final first = localStart;
+    final end = localEndExclusive;
+    return DateTime.utc(
+      end.year,
+      end.month,
+      end.day,
+    ).difference(DateTime.utc(first.year, first.month, first.day)).inDays;
+  }
 
   bool get hasEnded => !DateTime.now().isBefore(localEndExclusive);
 
@@ -79,6 +147,11 @@ class BudgetPlan {
       'period': period.name,
       'startAt': Timestamp.fromDate(start),
       'endAt': Timestamp.fromDate(endExclusive),
+      // The planner map is saved with merge: true, so a one-day plan must
+      // remove any endDate left by an earlier multi-day plan.
+      'endDate': localEndDate != null
+          ? Timestamp.fromDate(localEndDate!)
+          : FieldValue.delete(),
       'billsEnabled': amounts.containsKey(FinancialCategory.bills),
       'billsAmount': amounts[FinancialCategory.bills] ?? 0,
       'savingsEnabled': amounts.containsKey(FinancialCategory.savings),
@@ -93,13 +166,38 @@ class BudgetPlan {
 
   factory BudgetPlan.fromFirestore(Map<String, dynamic> data) {
     final periodName = data['period'] as String?;
-    final period = PlannerPeriod.values.firstWhere(
-      (value) => value.name == periodName,
-      orElse: () => PlannerPeriod.day,
-    );
+    final recognized = PlannerPeriod.values
+        .where((value) => value.name == periodName)
+        .firstOrNull;
+    final period = recognized ?? PlannerPeriod.day;
     final startAt = data['startAt'];
     final endAt = data['endAt'];
     final createdAt = data['createdAt'];
+
+    // Only a recognized Day plan can carry an end date. A stale value left by
+    // an older app build is dropped when it disagrees with the stored endAt,
+    // is not after the start, or spans more than the allowed range.
+    DateTime? endDate;
+    final rawEndDate = data['endDate'];
+    if (recognized == PlannerPeriod.day &&
+        startAt is Timestamp &&
+        rawEndDate is Timestamp) {
+      final first = DateUtils.dateOnly(startAt.toDate().toLocal());
+      final candidate = DateUtils.dateOnly(rawEndDate.toDate().toLocal());
+      final expectedExclusive = DateTime(
+        candidate.year,
+        candidate.month,
+        candidate.day + 1,
+      );
+      final storedExclusive = endAt is Timestamp
+          ? DateUtils.dateOnly(endAt.toDate().toLocal())
+          : expectedExclusive;
+      if (candidate.isAfter(first) &&
+          isPlannerDayRangeValid(first, candidate) &&
+          storedExclusive == expectedExclusive) {
+        endDate = candidate;
+      }
+    }
     final amounts = <FinancialCategory, double>{};
     if (data['billsEnabled'] == true) {
       amounts[FinancialCategory.bills] =
@@ -127,6 +225,7 @@ class BudgetPlan {
       createdAt: (createdAt is Timestamp ? createdAt.toDate() : DateTime.now())
           .toLocal(),
       alertEligible: data['alertEligible'] == true,
+      endDate: endDate,
     );
   }
 }
@@ -150,6 +249,7 @@ bool plannerDraftDiffers(BudgetPlan draft, BudgetPlan? saved) {
   if (saved == null) return draft.amounts.isNotEmpty;
   if (draft.period != saved.period ||
       draft.localStart != saved.localStart ||
+      draft.localEndDate != saved.localEndDate ||
       draft.amounts.length != saved.amounts.length) {
     return true;
   }
@@ -217,7 +317,10 @@ String plannerFriendlyDate(DateTime value, {DateTime? now}) {
 String plannerPeriodSummary(BudgetPlan plan) {
   final start = DateFormat('MMM d').format(plan.localStart);
   if (plan.period == PlannerPeriod.day) {
-    return '$start - ${plan.period.planLabel}';
+    final last = plan.localEndDate;
+    if (last == null) return '$start - ${plan.period.planLabel}';
+    final end = DateFormat('MMM d').format(last);
+    return '$start - $end - ${plan.dayCount}-day plan';
   }
   final end = DateFormat(
     'MMM d',
@@ -236,8 +339,20 @@ String plannerStatusLabel(BudgetPlan plan, double spent, {DateTime? now}) {
   return plannerPeriodSummary(plan);
 }
 
+/// "About X per day" figure for a multi-day plan, or null for other plans.
+double? plannerPerDayAmount(BudgetPlan plan) {
+  if (!plan.isMultiDay || plan.total <= 0) return null;
+  return plan.total / plan.dayCount;
+}
+
 String plannerAlertPlanLabel(BudgetPlan plan, {DateTime? now}) {
   final current = DateUtils.dateOnly(now ?? DateTime.now());
+  final last = plan.localEndDate;
+  if (last != null) {
+    final format = DateFormat('MMM d');
+    return 'This plan - ${format.format(plan.localStart)} - '
+        '${format.format(last)}';
+  }
   return switch (plan.period) {
     PlannerPeriod.day =>
       '${current == plan.localStart ? "Today's" : "Daily"} plan - '

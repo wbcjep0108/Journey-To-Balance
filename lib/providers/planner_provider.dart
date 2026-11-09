@@ -114,11 +114,15 @@ class PlannerProvider extends ChangeNotifier {
     }
   }
 
+  /// Saves a new plan. [endDate] is the last day, inclusive, of a multi-day
+  /// Day plan; leave it null for a one-day plan. It is ignored for Week and
+  /// Month plans.
   Future<void> savePlan({
     required PlannerPeriod period,
     required DateTime start,
     required Set<FinancialCategory> enabled,
     required Map<FinancialCategory, double> amounts,
+    DateTime? endDate,
   }) async {
     final uid = _uid;
     if (uid == null) throw StateError('Planner is not connected to a user.');
@@ -127,6 +131,22 @@ class PlannerProvider extends ChangeNotifier {
     }
 
     final normalizedStart = DateUtils.dateOnly(start);
+    DateTime? normalizedEnd;
+    if (period == PlannerPeriod.day && endDate != null) {
+      final candidate = DateUtils.dateOnly(endDate);
+      if (!isPlannerDayRangeValid(normalizedStart, candidate)) {
+        throw ArgumentError(
+          'A Day plan covers 1 to $kPlannerMaxDayRange days and cannot end '
+          'before it starts. Use Week for 7 days.',
+        );
+      }
+      if (candidate.isAfter(normalizedStart)) normalizedEnd = candidate;
+    }
+    final endExclusive = plannerEndExclusive(
+      period,
+      normalizedStart,
+      normalizedEnd,
+    );
     final selectedAmounts = <FinancialCategory, double>{
       for (final category in enabled) category: amounts[category]!,
     };
@@ -134,10 +154,11 @@ class PlannerProvider extends ChangeNotifier {
       id: _service.createPlanId(uid),
       period: period,
       start: normalizedStart,
-      endExclusive: period.endExclusive(normalizedStart),
+      endExclusive: endExclusive,
       amounts: selectedAmounts,
       createdAt: DateTime.now(),
       alertEligible: true,
+      endDate: normalizedEnd,
     );
     final initialSpent = await _loadSpentFor(initial);
     final next = BudgetPlan(
@@ -148,6 +169,7 @@ class PlannerProvider extends ChangeNotifier {
       amounts: initial.amounts,
       createdAt: initial.createdAt,
       alertEligible: initialSpent <= initial.total,
+      endDate: initial.endDate,
     );
 
     final previous = _plan;

@@ -36,6 +36,10 @@ class _BudgetPlannerPageState extends State<BudgetPlannerPage> {
 
   PlannerPeriod _period = PlannerPeriod.day;
   late DateTime _start;
+
+  /// Last day of a multi-day Day plan. Null means one day (Until equals the
+  /// start date). Always null for Week and Month.
+  DateTime? _until;
   bool _initialized = false;
   Map<FinancialCategory, List<FinancialEntry>> _draftEntries = {
     for (final category in FinancialCategory.values) category: [],
@@ -61,6 +65,7 @@ class _BudgetPlannerPageState extends State<BudgetPlannerPage> {
     if (plan != null) {
       _period = plan.period;
       _start = plan.start;
+      _until = plan.period == PlannerPeriod.day ? plan.localEndDate : null;
       _enabled.addAll(plan.enabledCategories);
       for (final entry in plan.amounts.entries) {
         _controllers[entry.key]!.text = _editableAmount(entry.value);
@@ -93,9 +98,25 @@ class _BudgetPlannerPageState extends State<BudgetPlannerPage> {
 
   double get _total => plannerTotal(_enabled, _amounts);
 
+  DateTime get _startDay => DateUtils.dateOnly(_start);
+
+  /// The end date that applies to the current period: only Day plans have one.
+  DateTime? get _endDate => _period == PlannerPeriod.day ? _until : null;
+
+  /// Days covered by the Day range (1 when there is no Until date).
+  int get _dayLength {
+    final end = _endDate;
+    return end == null ? 1 : plannerRangeDays(_startDay, end);
+  }
+
+  void _applyDayLength(int days) {
+    _until = days <= 1 ? null : plannerDayRangeEnd(_startDay, days);
+  }
+
   bool get _canSave {
     final today = DateUtils.dateOnly(DateTime.now());
     return !_start.isBefore(today) &&
+        isPlannerDayRangeValid(_startDay, _endDate) &&
         isPlannerDraftValid(_enabled, _amounts) &&
         !context.read<PlannerProvider>().isSaving;
   }
@@ -103,11 +124,12 @@ class _BudgetPlannerPageState extends State<BudgetPlannerPage> {
   BudgetPlan get _draftPlan => BudgetPlan(
     id: 'draft',
     period: _period,
-    start: DateUtils.dateOnly(_start),
-    endExclusive: _period.endExclusive(_start),
+    start: _startDay,
+    endExclusive: plannerEndExclusive(_period, _startDay, _endDate),
     amounts: {for (final category in _enabled) category: _amounts[category]!},
     createdAt: DateTime.now(),
     alertEligible: true,
+    endDate: _endDate,
   );
 
   double _draftSpent() {
@@ -128,7 +150,17 @@ class _BudgetPlannerPageState extends State<BudgetPlannerPage> {
   }
 
   void _setPeriod(PlannerPeriod period) {
-    setState(() => _period = period);
+    if (period == _period) return;
+    // Week and Month have no Until date, and Day always starts at one day.
+    setState(() {
+      _period = period;
+      _until = null;
+    });
+    unawaited(_refreshDraftEntries());
+  }
+
+  void _setDayLength(int days) {
+    setState(() => _applyDayLength(days));
     unawaited(_refreshDraftEntries());
   }
 
@@ -144,7 +176,30 @@ class _BudgetPlannerPageState extends State<BudgetPlannerPage> {
       builder: appDatePickerBuilder,
     );
     if (picked != null && mounted) {
-      setState(() => _start = DateUtils.dateOnly(picked));
+      // Moving the start date keeps the Day range the same length.
+      final length = _dayLength;
+      setState(() {
+        _start = DateUtils.dateOnly(picked);
+        _applyDayLength(length);
+      });
+      unawaited(_refreshDraftEntries());
+    }
+  }
+
+  Future<void> _pickUntil() async {
+    final first = _startDay;
+    final last = plannerDayRangeEnd(first, kPlannerMaxDayRange);
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _until ?? first,
+      firstDate: first,
+      lastDate: last,
+      helpText: 'Choose plan end date',
+      builder: appDatePickerBuilder,
+    );
+    if (picked != null && mounted) {
+      final day = DateUtils.dateOnly(picked);
+      setState(() => _until = day.isAfter(first) ? day : null);
       unawaited(_refreshDraftEntries());
     }
   }
@@ -207,6 +262,7 @@ class _BudgetPlannerPageState extends State<BudgetPlannerPage> {
       await planner.savePlan(
         period: _period,
         start: _start,
+        endDate: _endDate,
         enabled: Set.of(_enabled),
         amounts: _amounts,
       );
@@ -274,6 +330,7 @@ class _BudgetPlannerPageState extends State<BudgetPlannerPage> {
       setState(() {
         _enabled.clear();
         _period = PlannerPeriod.day;
+        _until = null;
         _start = DateTime(now.year, now.month, now.day + 1);
         for (final controller in _controllers.values) {
           controller.clear();
@@ -296,6 +353,7 @@ class _BudgetPlannerPageState extends State<BudgetPlannerPage> {
   Widget build(BuildContext context) {
     final planner = context.watch<PlannerProvider>();
     final currency = context.watch<CurrencyProvider>();
+    final budget = context.watch<BudgetProvider>();
     final draftPlan = _draftPlan;
     final total = _total;
     final spent = _draftSpent();
@@ -330,6 +388,9 @@ class _BudgetPlannerPageState extends State<BudgetPlannerPage> {
                 spent: spent,
                 progress: progress,
                 totalLabel: currency.formatAmount(total),
+                perDayLabel: plannerPerDayAmount(draftPlan) == null
+                    ? null
+                    : 'About ${currency.formatAmount(plannerPerDayAmount(draftPlan)!)} per day',
                 isPreview: hasUnsavedDraft,
                 isEmpty: _enabled.isEmpty,
               ),
@@ -338,15 +399,42 @@ class _BudgetPlannerPageState extends State<BudgetPlannerPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const _SectionTitle('Period'),
-                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        const _SectionTitle('Period'),
+                        const SizedBox(width: 2),
+                        Semantics(
+                          button: true,
+                          label: 'About budget periods',
+                          excludeSemantics: true,
+                          onTap: () => _showPeriodInfo(context),
+                          child: IconButton(
+                            key: const ValueKey('planner-period-info'),
+                            tooltip: 'About budget periods',
+                            onPressed: () => _showPeriodInfo(context),
+                            visualDensity: VisualDensity.compact,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(
+                              minWidth: 40,
+                              minHeight: 40,
+                            ),
+                            icon: const Icon(
+                              Icons.info_outline_rounded,
+                              size: 20,
+                              color: Color(0xFF737983),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
                     Row(
                       children: [
                         for (final period in PlannerPeriod.values) ...[
                           if (period.index > 0) const SizedBox(width: 8),
                           Expanded(
-                            child: _PeriodButton(
-                              period: period,
+                            child: _ChipButton(
+                              label: period.label,
                               selected: _period == period,
                               onTap: () => _setPeriod(period),
                             ),
@@ -354,32 +442,36 @@ class _BudgetPlannerPageState extends State<BudgetPlannerPage> {
                         ],
                       ],
                     ),
-                    const SizedBox(height: 14),
-                    InkWell(
-                      onTap: _pickDate,
-                      borderRadius: BorderRadius.circular(30),
-                      child: Container(
-                        height: 56,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: const Color(0xFFE1E4E8)),
-                          borderRadius: BorderRadius.circular(30),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.calendar_today_outlined, size: 22),
-                            const SizedBox(width: 14),
-                            Text(
-                              plannerFriendlyDate(_start),
-                              style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w500,
-                                color: Color(0xFF121212),
-                              ),
-                            ),
-                          ],
-                        ),
+                    const SizedBox(height: 10),
+                    Text(
+                      _periodHelp[_period]!,
+                      key: const ValueKey('planner-period-help'),
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 13,
+                        height: 1.4,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF737983),
                       ),
+                    ),
+                    const SizedBox(height: 14),
+                    _DatePill(
+                      key: const ValueKey('planner-start-date'),
+                      text: plannerFriendlyDate(_start),
+                      semanticsLabel:
+                          'Start date, ${plannerFriendlyDate(_start)}. '
+                          'Double tap to change.',
+                      onTap: _pickDate,
+                    ),
+                    AnimatedSize(
+                      duration: MediaQuery.disableAnimationsOf(context)
+                          ? Duration.zero
+                          : const Duration(milliseconds: 180),
+                      curve: Curves.easeOut,
+                      alignment: Alignment.topCenter,
+                      child: _period == PlannerPeriod.day
+                          ? _buildUntilSection()
+                          : const SizedBox(width: double.infinity),
                     ),
                   ],
                 ),
@@ -400,6 +492,9 @@ class _BudgetPlannerPageState extends State<BudgetPlannerPage> {
                         controller: _controllers[category]!,
                         focusNode: _focusNodes[category]!,
                         currencySymbol: currency.symbol,
+                        availableLabel: currency.formatAmount(
+                          budget.remainingFor(category),
+                        ),
                         onChanged: (value) => _toggle(category, value),
                       ),
                     ],
@@ -429,12 +524,22 @@ class _BudgetPlannerPageState extends State<BudgetPlannerPage> {
                       ),
                     ),
                     const SizedBox(width: 14),
-                    Text(
-                      currency.formatAmount(total),
-                      style: const TextStyle(
-                        fontSize: 21,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF121212),
+                    // Scale the amount down instead of overflowing at large
+                    // text sizes on narrow screens.
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 140),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          currency.formatAmount(total),
+                          maxLines: 1,
+                          style: const TextStyle(
+                            fontSize: 21,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF121212),
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -523,6 +628,167 @@ class _BudgetPlannerPageState extends State<BudgetPlannerPage> {
   String _editableAmount(double value) {
     return value % 1 == 0 ? value.toStringAsFixed(0) : value.toStringAsFixed(2);
   }
+
+  /// Quick day counts shown under the Until field.
+  static const _quickDayOptions = [1, 2, 3, 5];
+
+  Widget _buildUntilSection() {
+    final until = _until ?? _startDay;
+    final length = _dayLength;
+    return Column(
+      key: const ValueKey('planner-until-section'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 10),
+        _DatePill(
+          key: const ValueKey('planner-until-date'),
+          text: 'Until ${plannerFriendlyDate(until)}',
+          semanticsLabel:
+              'Until date, ${plannerFriendlyDate(until)}. '
+              'Double tap to change.',
+          onTap: _pickUntil,
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            for (var i = 0; i < _quickDayOptions.length; i++) ...[
+              if (i > 0) const SizedBox(width: 8),
+              Expanded(
+                child: _ChipButton(
+                  key: ValueKey('planner-days-${_quickDayOptions[i]}'),
+                  label: _quickDayOptions[i] == 1
+                      ? '1 day'
+                      : '${_quickDayOptions[i]} days',
+                  semanticsLabel:
+                      'Cover ${_quickDayOptions[i]} '
+                      '${_quickDayOptions[i] == 1 ? 'day' : 'days'}',
+                  selected: length == _quickDayOptions[i],
+                  onTap: () => _setDayLength(_quickDayOptions[i]),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+const _periodHelp = <PlannerPeriod, String>{
+  PlannerPeriod.day:
+      'One budget for the days you choose. Pick an end date to cover up to 6 days.',
+  PlannerPeriod.week: 'One budget for 7 days from your start date.',
+  PlannerPeriod.month:
+      'One budget from your start date to the day before the same date next month.',
+};
+
+const _periodExample = <PlannerPeriod, String>{
+  PlannerPeriod.day:
+      'Example: Oct 28 to Oct 30 is one budget that covers 3 days.',
+  PlannerPeriod.week: 'Example: starting Oct 28 covers Oct 28 to Nov 3.',
+  PlannerPeriod.month: 'Example: starting Oct 28 covers Oct 28 to Nov 27.',
+};
+
+Future<void> _showPeriodInfo(BuildContext context) {
+  return showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    builder: (sheetContext) => withBarrierBlur(
+      SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 10, 20, 18),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Budget periods',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF121212),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (final period in PlannerPeriod.values) ...[
+                          if (period.index > 0) const SizedBox(height: 16),
+                          Text(
+                            period.label,
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF121212),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _periodHelp[period]!,
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 13,
+                              height: 1.4,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xFF737983),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _periodExample[period]!,
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 13,
+                              height: 1.4,
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xFF121212),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: FilledButton(
+                    onPressed: () => Navigator.of(sheetContext).pop(),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF121212),
+                      foregroundColor: Colors.white,
+                      shape: const StadiumBorder(),
+                    ),
+                    child: const Text(
+                      'Got it',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 class _HeroCard extends StatelessWidget {
@@ -534,6 +800,7 @@ class _HeroCard extends StatelessWidget {
     required this.totalLabel,
     required this.isPreview,
     required this.isEmpty,
+    this.perDayLabel,
   });
 
   final BudgetPlan plan;
@@ -544,13 +811,18 @@ class _HeroCard extends StatelessWidget {
   final bool isPreview;
   final bool isEmpty;
 
+  /// "About X per day", shown under the total for multi-day plans.
+  final String? perDayLabel;
+
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
     final status = isEmpty
         ? 'Turn on a category to set a budget'
         : plannerStatusLabel(plan, spent, now: now);
-    final heading = plannerFriendlyDate(plan.start).startsWith('Tomorrow')
+    final heading = plan.isMultiDay
+        ? 'BUDGET PLAN'
+        : plannerFriendlyDate(plan.start).startsWith('Tomorrow')
         ? 'BUDGET FOR TOMORROW'
         : plannerFriendlyDate(plan.start) == 'Today'
         ? 'BUDGET FOR TODAY'
@@ -563,6 +835,19 @@ class _HeroCard extends StatelessWidget {
           FinancialHeroLabel(heading),
           const SizedBox(height: 8),
           FinancialHeroAmount(totalLabel),
+          if (perDayLabel != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              perDayLabel!,
+              key: const ValueKey('planner-per-day'),
+              style: const TextStyle(
+                color: Color(0xFFD7DCE5),
+                fontFamily: 'Inter',
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
           const SizedBox(height: 8),
           if (isPreview) ...[
             const Text(
@@ -577,6 +862,21 @@ class _HeroCard extends StatelessWidget {
             const SizedBox(height: 8),
           ],
           FinancialHeroSubtitle(status),
+          // Before a multi-day plan starts the status reads "Starts Oct 28",
+          // so show the range on its own line as well.
+          if (plan.isMultiDay && status != plannerPeriodSummary(plan)) ...[
+            const SizedBox(height: 4),
+            Text(
+              plannerPeriodSummary(plan),
+              key: const ValueKey('planner-range-summary'),
+              style: const TextStyle(
+                color: Color(0xFFD7DCE5),
+                fontFamily: 'Inter',
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
           const SizedBox(height: 24),
           Row(
             children: [
@@ -646,38 +946,110 @@ class _SectionTitle extends StatelessWidget {
   }
 }
 
-class _PeriodButton extends StatelessWidget {
-  const _PeriodButton({
-    required this.period,
+/// Selectable chip used for the period (Day, Week, Month) and the quick day
+/// counts. The label scales down instead of overflowing at large text sizes.
+class _ChipButton extends StatelessWidget {
+  const _ChipButton({
+    super.key,
+    required this.label,
     required this.selected,
+    required this.onTap,
+    this.semanticsLabel,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final String? semanticsLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: semanticsLabel ?? label,
+      excludeSemantics: true,
+      onTap: onTap,
+      child: SizedBox(
+        height: 46,
+        child: OutlinedButton(
+          onPressed: onTap,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: selected
+                ? const Color(0xFF121212)
+                : const Color(0xFF7A8290),
+            backgroundColor: selected ? Colors.white : const Color(0xFFF1F3F6),
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            minimumSize: Size.zero,
+            side: BorderSide(
+              color: selected ? const Color(0xFF121212) : Colors.transparent,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+          ),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              label,
+              maxLines: 1,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Pill-shaped date field with a calendar icon, used for Start and Until.
+class _DatePill extends StatelessWidget {
+  const _DatePill({
+    super.key,
+    required this.text,
+    required this.semanticsLabel,
     required this.onTap,
   });
 
-  final PlannerPeriod period;
-  final bool selected;
+  final String text;
+  final String semanticsLabel;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 46,
-      child: OutlinedButton(
-        onPressed: onTap,
-        style: OutlinedButton.styleFrom(
-          foregroundColor: selected
-              ? const Color(0xFF121212)
-              : const Color(0xFF7A8290),
-          backgroundColor: selected ? Colors.white : const Color(0xFFF1F3F6),
-          side: BorderSide(
-            color: selected ? const Color(0xFF121212) : Colors.transparent,
+    return Semantics(
+      button: true,
+      label: semanticsLabel,
+      excludeSemantics: true,
+      onTap: onTap,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(30),
+        child: Container(
+          height: 56,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            border: Border.all(color: const Color(0xFFE1E4E8)),
+            borderRadius: BorderRadius.circular(30),
           ),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+          child: Row(
+            children: [
+              const Icon(Icons.calendar_today_outlined, size: 22),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  text,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF121212),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ),
-        child: Text(
-          period.label,
-          style: const TextStyle(fontWeight: FontWeight.w600),
         ),
       ),
     );
@@ -691,6 +1063,7 @@ class _CategoryRow extends StatelessWidget {
     required this.controller,
     required this.focusNode,
     required this.currencySymbol,
+    required this.availableLabel,
     required this.onChanged,
   });
 
@@ -699,6 +1072,9 @@ class _CategoryRow extends StatelessWidget {
   final TextEditingController controller;
   final FocusNode focusNode;
   final String currencySymbol;
+
+  /// Formatted money currently left in this category, shown under the label.
+  final String availableLabel;
   final ValueChanged<bool> onChanged;
 
   @override
@@ -718,9 +1094,40 @@ class _CategoryRow extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(
-              label,
-              style: const TextStyle(fontSize: 16, color: Color(0xFF121212)),
+            child: Semantics(
+              label: '$label, $availableLabel available',
+              excludeSemantics: true,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      color: Color(0xFF121212),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      availableLabel,
+                      key: ValueKey('planner_available_${category.name}'),
+                      maxLines: 1,
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF737983),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           Switch(

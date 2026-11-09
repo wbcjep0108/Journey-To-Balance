@@ -1398,7 +1398,13 @@ class _BankCardPopupState extends State<_BankCardPopup> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('Cancel'),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF6B7280),
+              ),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
             ),
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, true),
