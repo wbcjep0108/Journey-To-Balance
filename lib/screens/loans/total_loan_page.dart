@@ -14,6 +14,7 @@ import '../../providers/loan_provider.dart';
 import '../../services/finance_api_service.dart';
 import '../../widgets/app_date_picker.dart';
 import '../../widgets/barrier_blur.dart';
+import '../../widgets/outlined_confirm_button.dart';
 import '../../widgets/sensitive_action_auth.dart';
 import 'paid_loan_transactions_page.dart';
 
@@ -584,17 +585,8 @@ class _AddLoanDialogState extends State<_AddLoanDialog> {
                 ),
               ),
               const SizedBox(height: 32),
-              TextButton(
-                onPressed: _confirm,
-                style: TextButton.styleFrom(
-                  foregroundColor: Colors.black,
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                ),
-                child: const Text(
-                  'Confirm',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-                ),
-              ),
+              OutlinedConfirmButton(label: 'Confirm', onPressed: _confirm),
+              const SizedBox(height: 4),
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),
                 style: TextButton.styleFrom(

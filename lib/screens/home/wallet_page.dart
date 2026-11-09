@@ -850,6 +850,11 @@ class _WalletTransferDialogState extends State<_WalletTransferDialog> {
               TextField(
                 controller: _amountController,
                 enabled: !_saving,
+                style: const TextStyle(
+                  color: Color(0xFF121212),
+                  fontWeight: FontWeight.w600,
+                ),
+                cursorColor: const Color(0xFF121212),
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
@@ -858,7 +863,16 @@ class _WalletTransferDialogState extends State<_WalletTransferDialog> {
                 ],
                 decoration: InputDecoration(
                   labelText: 'Amount',
+                  labelStyle: const TextStyle(color: Color(0xFF121212)),
+                  floatingLabelStyle: const TextStyle(
+                    color: Color(0xFF121212),
+                    fontWeight: FontWeight.w700,
+                  ),
                   prefixText: '${currency.symbol} ',
+                  prefixStyle: const TextStyle(
+                    color: Color(0xFF121212),
+                    fontWeight: FontWeight.w600,
+                  ),
                   errorText: _error,
                   filled: true,
                   fillColor: const Color(0xFFF3F4F6),

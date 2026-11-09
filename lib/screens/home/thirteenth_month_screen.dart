@@ -304,6 +304,10 @@ class _ThirteenthMonthScreenState extends State<ThirteenthMonthScreen> {
                                   label: _months[index],
                                   onChanged: (value) =>
                                       calculator.setMonthlySalary(index, _amountOf(value)),
+                                  onClear: () {
+                                    _monthControllers[index].clear();
+                                    calculator.setMonthlySalary(index, 0);
+                                  },
                                 ),
                               ),
                               const SizedBox(height: 16),
@@ -506,6 +510,7 @@ class _MoneyField extends StatelessWidget {
     required this.label,
     this.helperText,
     this.onChanged,
+    this.onClear,
   });
 
   final TextEditingController controller;
@@ -513,8 +518,20 @@ class _MoneyField extends StatelessWidget {
   final String? helperText;
   final ValueChanged<String>? onChanged;
 
+  /// When set, a delete icon appears while the field has a value.
+  final VoidCallback? onClear;
+
   @override
   Widget build(BuildContext context) {
+    if (onClear == null) return _buildField(showClear: false);
+    return ValueListenableBuilder<TextEditingValue>(
+      valueListenable: controller,
+      builder: (context, value, _) =>
+          _buildField(showClear: value.text.isNotEmpty),
+    );
+  }
+
+  Widget _buildField({required bool showClear}) {
     return TextField(
       controller: controller,
       style: const TextStyle(
@@ -542,6 +559,23 @@ class _MoneyField extends StatelessWidget {
           color: Color(0xFF121212),
           fontWeight: FontWeight.w600,
         ),
+        suffixIcon: showClear
+            ? IconButton(
+                tooltip: 'Clear $label',
+                onPressed: onClear,
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(
+                  minWidth: 36,
+                  minHeight: 36,
+                ),
+                icon: const Icon(
+                  Icons.delete_outline_rounded,
+                  size: 20,
+                  color: Color(0xFF6B7280),
+                ),
+              )
+            : null,
         filled: true,
         fillColor: const Color(0xFFF7F7F8),
         border: OutlineInputBorder(

@@ -12,6 +12,7 @@ import '../../providers/wallet_cash_provider.dart';
 import '../../widgets/app_date_picker.dart';
 import '../../widgets/barrier_blur.dart';
 import '../../widgets/category_icon_badge.dart';
+import '../../widgets/outlined_confirm_button.dart';
 import '../../widgets/rate_limit_dialog.dart';
 import '../../widgets/savings_goal_complete_dialog.dart';
 import '../../widgets/sensitive_action_auth.dart';
@@ -2376,84 +2377,8 @@ class _TextField extends StatelessWidget {
   }
 }
 
-class _ConfirmButton extends StatefulWidget {
-  const _ConfirmButton({
-    super.key,
-    required this.label,
-    required this.onPressed,
-    this.isLoading = false,
-  });
-
-  final String label;
-  final VoidCallback? onPressed;
-  final bool isLoading;
-
-  @override
-  State<_ConfirmButton> createState() => _ConfirmButtonState();
-}
-
-class _ConfirmButtonState extends State<_ConfirmButton> {
-  bool _pressed = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final enabled = widget.onPressed != null && !widget.isLoading;
-
-    return GestureDetector(
-      onTapDown: enabled ? (_) => setState(() => _pressed = true) : null,
-      onTapUp: enabled
-          ? (_) {
-              setState(() => _pressed = false);
-              widget.onPressed?.call();
-            }
-          : null,
-      onTapCancel: () => setState(() => _pressed = false),
-      child: AnimatedScale(
-        scale: _pressed ? 0.97 : 1,
-        duration: const Duration(milliseconds: 120),
-        child: AnimatedOpacity(
-          opacity: enabled ? 1 : 0.5,
-          duration: const Duration(milliseconds: 150),
-          child: Container(
-            width: double.infinity,
-            height: 48,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.black, width: 1.3),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: _pressed ? 0.04 : 0.08),
-                  blurRadius: _pressed ? 8 : 14,
-                  offset: Offset(0, _pressed ? 2 : 5),
-                ),
-              ],
-            ),
-            child: widget.isLoading
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Color(0xFF121212),
-                    ),
-                  )
-                : Text(
-                    widget.label,
-                    style: const TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.black,
-                    ),
-                  ),
-          ),
-        ),
-      ),
-    );
-  }
-}
+/// Shared outlined confirm button (also used by the Add Loan dialog).
+typedef _ConfirmButton = OutlinedConfirmButton;
 
 class _CancelButton extends StatelessWidget {
   const _CancelButton({required this.onPressed});
