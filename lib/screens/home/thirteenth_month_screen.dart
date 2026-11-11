@@ -77,7 +77,24 @@ class _ThirteenthMonthScreenState extends State<ThirteenthMonthScreen> {
     decimalDigits: 2,
   ).format(amount);
 
+  /// Retries a failed load, then shows the loaded inputs in the fields.
+  Future<void> _retryLoad() async {
+    final calculator = context.read<ThirteenthMonthProvider>();
+    final loaded = await calculator.retryLoad();
+    if (!mounted || !loaded) return;
+    _syncFieldsFromProvider(calculator);
+  }
+
+  void _syncFieldsFromProvider(ThirteenthMonthProvider calculator) {
+    for (var i = 0; i < _monthControllers.length; i++) {
+      _monthControllers[i].text = _editableAmount(calculator.monthlySalaries[i]);
+    }
+    _otherBenefitsController.text = _editableAmount(calculator.otherBenefits);
+  }
+
   void _fillAll() {
+    final calculator = context.read<ThirteenthMonthProvider>();
+    if (!calculator.hasLoaded) return;
     final amount = _amountOf(_fillAllController.text);
     context.read<ThirteenthMonthProvider>().fillAllMonths(amount);
     for (final controller in _monthControllers) {
@@ -172,6 +189,9 @@ class _ThirteenthMonthScreenState extends State<ThirteenthMonthScreen> {
     final calculator = context.watch<ThirteenthMonthProvider>();
     final budget = context.watch<BudgetProvider>();
     final result = calculator.result;
+    // Inputs stay read-only until saved data loads, so nothing typed here can
+    // be saved over it.
+    final editable = calculator.hasLoaded;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F5),
@@ -225,13 +245,14 @@ class _ThirteenthMonthScreenState extends State<ThirteenthMonthScreen> {
                                     child: _MoneyField(
                                       controller: _fillAllController,
                                       label: 'Monthly basic salary',
+                                      enabled: editable,
                                     ),
                                   ),
                                   const SizedBox(width: 10),
                                   SizedBox(
                                     height: 52,
                                     child: ElevatedButton(
-                                      onPressed: _fillAll,
+                                      onPressed: editable ? _fillAll : null,
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: const Color(0xFF121212),
                                         foregroundColor: Colors.white,
@@ -302,6 +323,7 @@ class _ThirteenthMonthScreenState extends State<ThirteenthMonthScreen> {
                                 itemBuilder: (context, index) => _MoneyField(
                                   controller: _monthControllers[index],
                                   label: _months[index],
+                                  enabled: editable,
                                   onChanged: (value) =>
                                       calculator.setMonthlySalary(index, _amountOf(value)),
                                   onClear: () {
@@ -314,6 +336,7 @@ class _ThirteenthMonthScreenState extends State<ThirteenthMonthScreen> {
                               _MoneyField(
                                 controller: _otherBenefitsController,
                                 label: 'Other benefits (optional)',
+                                enabled: editable,
                                 helperText:
                                     'Counts toward the combined ₱90,000 exemption',
                                 onChanged: (value) =>
@@ -323,9 +346,41 @@ class _ThirteenthMonthScreenState extends State<ThirteenthMonthScreen> {
                                 const SizedBox(height: 10),
                                 Text(
                                   calculator.errorMessage!,
+                                  key: const ValueKey('thirteenth-month-error'),
                                   style: const TextStyle(
                                     color: Color(0xFFB42318),
                                     fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                              if (calculator.loadFailed ||
+                                  (calculator.isLoading &&
+                                      !calculator.hasLoaded)) ...[
+                                const SizedBox(height: 4),
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: TextButton.icon(
+                                    key: const ValueKey('thirteenth-month-retry'),
+                                    onPressed: calculator.isLoading
+                                        ? null
+                                        : _retryLoad,
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: const Color(0xFF121212),
+                                    ),
+                                    icon: calculator.isLoading
+                                        ? const SizedBox(
+                                            width: 14,
+                                            height: 14,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: Color(0xFF121212),
+                                            ),
+                                          )
+                                        : const Icon(Icons.refresh_rounded),
+                                    label: const Text(
+                                      'Retry',
+                                      style: TextStyle(fontWeight: FontWeight.w700),
+                                    ),
                                   ),
                                 ),
                               ],
@@ -511,7 +566,12 @@ class _MoneyField extends StatelessWidget {
     this.helperText,
     this.onChanged,
     this.onClear,
+    this.enabled = true,
   });
+
+  /// False while saved inputs are not loaded, so nothing can be edited or
+  /// saved over them.
+  final bool enabled;
 
   final TextEditingController controller;
   final String label;
@@ -523,7 +583,7 @@ class _MoneyField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (onClear == null) return _buildField(showClear: false);
+    if (onClear == null || !enabled) return _buildField(showClear: false);
     return ValueListenableBuilder<TextEditingValue>(
       valueListenable: controller,
       builder: (context, value, _) =>
@@ -534,6 +594,7 @@ class _MoneyField extends StatelessWidget {
   Widget _buildField({required bool showClear}) {
     return TextField(
       controller: controller,
+      enabled: enabled,
       style: const TextStyle(
         color: Color(0xFF121212),
         fontWeight: FontWeight.w600,

@@ -33,6 +33,7 @@ import 'services/notification_router.dart';
 import 'services/notification_service.dart';
 import 'services/onboarding_service.dart';
 import 'services/planner_firestore_service.dart';
+import 'services/thirteenth_month_firestore_service.dart';
 import 'services/logout_transition_controller.dart';
 import 'services/user_session_cleanup.dart';
 import 'widgets/app_privacy_blur.dart';
@@ -52,6 +53,7 @@ void main() async {
       providers: [
         Provider(create: (_) => FirestoreFinanceService()),
         Provider(create: (_) => PlannerFirestoreService()),
+        Provider(create: (_) => ThirteenthMonthFirestoreService()),
         Provider(create: (_) => WalletFirestoreService()),
         ChangeNotifierProvider(
           create: (context) =>
@@ -94,7 +96,7 @@ void main() async {
         ChangeNotifierProvider<ThirteenthMonthProvider>(
           key: const ValueKey('thirteenth-month-provider'),
           create: (context) => ThirteenthMonthProvider(
-            context.read<PlannerFirestoreService>(),
+            context.read<ThirteenthMonthFirestoreService>(),
             context.read<BudgetProvider>(),
           ),
         ),
@@ -389,7 +391,13 @@ class _UserDataGateState extends State<_UserDataGate> {
       if (!mounted) return;
       await context.read<PlannerProvider>().loadForUser(widget.uid);
       if (!mounted) return;
-      await context.read<ThirteenthMonthProvider>().loadForUser(widget.uid);
+      // The 13th Month Pay calculator is independent of the rest of the app:
+      // a failed or offline load is shown on its own screen and must not
+      // block Budget Planner or any other feature.
+      await loadCalculatorWithoutBlocking(
+        context.read<ThirteenthMonthProvider>(),
+        widget.uid,
+      );
       if (!mounted) return;
       final error = context.read<BudgetProvider>().errorMessage;
       final loans = context.read<LoanProvider>().loans;

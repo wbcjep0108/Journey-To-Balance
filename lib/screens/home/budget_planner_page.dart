@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:firebase_core/firebase_core.dart' show FirebaseException;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -16,6 +17,22 @@ import '../../widgets/barrier_blur.dart';
 import '../../widgets/category_icon_badge.dart';
 import '../../widgets/financial_hero_card.dart';
 import '../../widgets/planner_progress_bar.dart';
+
+/// User-facing message for a failed plan save. A rules rejection is told
+/// apart from a connection problem, so the cause can be identified.
+@visibleForTesting
+String plannerSaveErrorMessage(Object error) {
+  if (error is FirebaseException) {
+    if (error.code == 'permission-denied') {
+      return 'Could not save the budget plan. The server rejected this plan.';
+    }
+    if (error.code == 'unavailable') {
+      return 'Could not save the budget plan. Check your connection and try '
+          'again.';
+    }
+  }
+  return 'Could not save the budget plan.';
+}
 
 class BudgetPlannerPage extends StatefulWidget {
   const BudgetPlannerPage({super.key});
@@ -275,12 +292,14 @@ class _BudgetPlannerPageState extends State<BudgetPlannerPage> {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(content: Text(message)));
-    } catch (_) {
+    } catch (error) {
+      // Keep the real cause in the device log so a failed save can be traced.
+      debugPrint('Budget plan save failed: $error');
       if (!mounted) return;
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
-          const SnackBar(content: Text('Could not save the budget plan.')),
+          SnackBar(content: Text(plannerSaveErrorMessage(error))),
         );
     }
   }

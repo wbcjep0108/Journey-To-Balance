@@ -109,6 +109,19 @@ function optionalFundingSource(
   return requireFundingSource(value, label);
 }
 
+/**
+ * A stored timestamp as a Date. The Firestore client decodes timestamps to
+ * Date; text dates written by older Worker versions are parsed too.
+ */
+function storedDate(value: unknown): Date {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+  if (typeof value === "string") {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+  return new Date();
+}
+
 function loadBudget(userDoc: Record<string, unknown> | null): BudgetState {
   const budget = parseBudget(userDoc?.budget);
   migrateBudgetSchemaIfNeeded(budget);
@@ -427,10 +440,7 @@ export async function handleFinance(
       }
       budget.availableBalance = Math.max(0, budget.availableBalance - delta);
       adjustRemaining(budget, category, -delta);
-      const previousCreatedAt =
-        typeof previous.createdAt === "string" ?
-          new Date(previous.createdAt) :
-          new Date();
+      const previousCreatedAt = storedDate(previous.createdAt);
       const previousIcon =
         typeof previous.iconAsset === "string" ?
           normalizeIconAsset(previous.iconAsset) :
@@ -526,7 +536,7 @@ export async function handleFinance(
         budgetPayload.updatedAt = new Date().toISOString();
         await client.commitSavingsTransfer({
           uid,
-          userData: {...userVersion.data, budget: budgetPayload},
+          budget: budgetPayload,
           userVersion,
           walletData: reversed.wallet,
           walletVersion,
@@ -554,10 +564,7 @@ export async function handleFinance(
             budget.savingsGoalCurrent - amount,
           );
         }
-        const createdAt =
-          typeof entry.createdAt === "string" ?
-            new Date(entry.createdAt) :
-            new Date();
+        const createdAt = storedDate(entry.createdAt);
         const refundIcon = normalizeIconAsset(entry.iconAsset);
         const fundingSourceId = typeof entry.fundingSourceId === "string" ?
           entry.fundingSourceId.trim() : "";
@@ -656,7 +663,7 @@ export async function handleFinance(
           budgetPayload.updatedAt = new Date().toISOString();
           await client.commitSavingsTransfer({
             uid,
-            userData: {...userVersion.data, budget: budgetPayload},
+            budget: budgetPayload,
             userVersion,
             walletData: nextWallet,
             walletVersion,

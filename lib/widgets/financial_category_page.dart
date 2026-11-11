@@ -8,6 +8,7 @@ import '../providers/budget_provider.dart';
 import '../providers/currency_provider.dart';
 import '../providers/wallet_cards_provider.dart';
 import '../providers/wallet_cash_provider.dart';
+import '../services/funding_source_adjuster.dart';
 import 'app_refresh_indicator.dart';
 import 'budget_modal.dart';
 import 'entry_title_with_icon.dart';
@@ -36,6 +37,9 @@ class FinancialCategoryPage extends StatefulWidget {
 class _FinancialCategoryPageState extends State<FinancialCategoryPage> {
   BudgetProvider? _budget;
   bool _showOlderEntries = false;
+
+  /// Guards against a double tap crediting the same refund twice.
+  final _refunds = EntryRefundService();
 
   @override
   void didChangeDependencies() {
@@ -351,7 +355,11 @@ class _FinancialCategoryPageState extends State<FinancialCategoryPage> {
               sourceLabel = 'Wallet';
             } else if (source.cardId != null) {
               sourceId = source.cardId;
-              sourceLabel = walletCards.cardById(source.cardId!)?.bankLabel;
+              // Save the nickname-aware label so two cards from the same bank
+              // stay distinguishable in history.
+              if (walletCards.cardById(source.cardId!) != null) {
+                sourceLabel = walletCards.displayLabelFor(source.cardId!);
+              }
             }
           }
           await provider.addEntry(
@@ -377,6 +385,33 @@ class _FinancialCategoryPageState extends State<FinancialCategoryPage> {
             }
           }
         } else {
+          final messenger = ScaffoldMessenger.of(context);
+          final previousAmount = entry.amount;
+          final increaseCents =
+              moneyToCents(amount) - moneyToCents(previousAmount);
+          // Block an increase the original source cannot cover before the
+          // Worker records it, so the budget and the source stay in step.
+          if (increaseCents > 0 && !isSavingsGoalEntry(entry)) {
+            final sourceBalance = _sourceBalance(
+              entry.fundingSourceId,
+              walletCash,
+              walletCards,
+            );
+            if (sourceBalance != null &&
+                moneyToCents(sourceBalance) < increaseCents) {
+              messenger
+                ..hideCurrentSnackBar()
+                ..showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'The original wallet or card does not have enough '
+                      'money for this change.',
+                    ),
+                  ),
+                );
+              return;
+            }
+          }
           await provider.updateEntry(
             widget.category,
             entry.copyWith(
@@ -386,9 +421,71 @@ class _FinancialCategoryPageState extends State<FinancialCategoryPage> {
               clearIconAsset: iconAsset == null || iconAsset.isEmpty,
             ),
           );
+          // The Worker update succeeded: charge or credit the difference.
+          final adjustment = await applyEditToFundingSource(
+            wallet: walletCash,
+            cards: walletCards,
+            entry: entry,
+            previousAmount: previousAmount,
+            newAmount: amount,
+          );
+          final editMessage = switch (adjustment.outcome) {
+            FundingAdjustmentOutcome.applied ||
+            FundingAdjustmentOutcome.appliedToWalletFallback ||
+            FundingAdjustmentOutcome.noSource => null,
+            FundingAdjustmentOutcome.cardMissing =>
+              'Change saved. The original card was removed, so no card '
+                  'balance was changed.',
+            FundingAdjustmentOutcome.insufficient ||
+            FundingAdjustmentOutcome.failed =>
+              'Change saved, but your wallet or card could not be updated. '
+                  'Please adjust it manually.',
+          };
+          if (editMessage != null) {
+            messenger
+              ..hideCurrentSnackBar()
+              ..showSnackBar(SnackBar(content: Text(editMessage)));
+          }
         }
       },
     );
+  }
+
+  Future<bool> _refund(BuildContext context, FinancialEntry entry) async {
+    final amountLabel = NumberFormat('#,##0.##').format(entry.amount);
+    final symbol = context.read<CurrencyProvider>().symbol;
+    final cards = context.read<WalletCardsProvider>();
+    final result = await _refunds.refund(
+      budget: context.read<BudgetProvider>(),
+      wallet: context.read<WalletCashProvider>(),
+      cards: cards,
+      category: widget.category,
+      entryId: entry.id,
+      authorize: () => showSensitiveActionAuth(
+        context: context,
+        title: 'Confirm refund',
+        description:
+            'Enter your PIN or use fingerprint to refund $symbol$amountLabel '
+            'back to ${widget.title}.',
+      ),
+    );
+    if (!context.mounted) return false;
+    if (result.outcome == EntryRefundOutcome.failed) {
+      _showError(context);
+      return false;
+    }
+    final card = result.targetCard;
+    final message = entryRefundMessage(
+      result,
+      categoryLabel: widget.title,
+      amountLabel: '$symbol$amountLabel',
+      cardLabel: card == null ? null : cards.displayLabelFor(card.id),
+    );
+    if (message == null) return false;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+    return true;
   }
 
   Future<bool> _refundOrDelete(
@@ -396,6 +493,7 @@ class _FinancialCategoryPageState extends State<FinancialCategoryPage> {
     FinancialEntry entry, {
     required bool refund,
   }) async {
+    if (refund) return _refund(context, entry);
     final amountLabel = NumberFormat('#,##0.##').format(entry.amount);
     final symbol = context.read<CurrencyProvider>().symbol;
     final authorized = await showSensitiveActionAuth(
@@ -434,6 +532,18 @@ class _FinancialCategoryPageState extends State<FinancialCategoryPage> {
       if (context.mounted) _showError(context);
       return false;
     }
+  }
+
+  /// Current balance of an entry's payment source, or null when the entry has
+  /// no source or its card no longer exists.
+  static double? _sourceBalance(
+    String? sourceId,
+    WalletCashProvider wallet,
+    WalletCardsProvider cards,
+  ) {
+    if (sourceId == null || sourceId.isEmpty) return null;
+    if (sourceId == 'wallet') return wallet.amount;
+    return cards.cardById(sourceId)?.amount;
   }
 
   void _showError(BuildContext context) {

@@ -39,6 +39,25 @@ extension PlannerPeriodX on PlannerPeriod {
   }
 }
 
+/// Reads a stored planner date. Accepts a Firestore [Timestamp], a [DateTime],
+/// or ISO 8601 text (older Worker versions rewrote timestamps as text).
+/// Returns null when the field is missing. Text that cannot be parsed throws a
+/// [FormatException] instead of being replaced with the current time, so the
+/// caller treats the plan as unreadable rather than showing wrong dates.
+DateTime? plannerStoredDate(Object? value) {
+  if (value == null) return null;
+  if (value is Timestamp) return value.toDate();
+  if (value is DateTime) return value;
+  if (value is String) {
+    final parsed = DateTime.tryParse(value.trim());
+    if (parsed == null) {
+      throw FormatException('Unreadable planner date', value);
+    }
+    return parsed;
+  }
+  throw FormatException('Unsupported planner date type', value);
+}
+
 /// Longest Day plan in calendar days. Use the Week period for 7 days.
 const int kPlannerMaxDayRange = 6;
 
@@ -170,27 +189,27 @@ class BudgetPlan {
         .where((value) => value.name == periodName)
         .firstOrNull;
     final period = recognized ?? PlannerPeriod.day;
-    final startAt = data['startAt'];
-    final endAt = data['endAt'];
-    final createdAt = data['createdAt'];
+    final startAt = plannerStoredDate(data['startAt']);
+    final endAt = plannerStoredDate(data['endAt']);
+    final createdAt = plannerStoredDate(data['createdAt']);
 
     // Only a recognized Day plan can carry an end date. A stale value left by
     // an older app build is dropped when it disagrees with the stored endAt,
     // is not after the start, or spans more than the allowed range.
     DateTime? endDate;
-    final rawEndDate = data['endDate'];
+    final rawEndDate = plannerStoredDate(data['endDate']);
     if (recognized == PlannerPeriod.day &&
-        startAt is Timestamp &&
-        rawEndDate is Timestamp) {
-      final first = DateUtils.dateOnly(startAt.toDate().toLocal());
-      final candidate = DateUtils.dateOnly(rawEndDate.toDate().toLocal());
+        startAt != null &&
+        rawEndDate != null) {
+      final first = DateUtils.dateOnly(startAt.toLocal());
+      final candidate = DateUtils.dateOnly(rawEndDate.toLocal());
       final expectedExclusive = DateTime(
         candidate.year,
         candidate.month,
         candidate.day + 1,
       );
-      final storedExclusive = endAt is Timestamp
-          ? DateUtils.dateOnly(endAt.toDate().toLocal())
+      final storedExclusive = endAt != null
+          ? DateUtils.dateOnly(endAt.toLocal())
           : expectedExclusive;
       if (candidate.isAfter(first) &&
           isPlannerDayRangeValid(first, candidate) &&
@@ -214,16 +233,12 @@ class BudgetPlan {
     return BudgetPlan(
       id: data['id'] as String? ?? '',
       period: period,
-      start: (startAt is Timestamp ? startAt.toDate() : DateTime.now())
-          .toLocal(),
-      endExclusive:
-          (endAt is Timestamp
-                  ? endAt.toDate()
-                  : period.endExclusive(DateTime.now()))
-              .toLocal(),
+      // A missing field keeps the previous fallback. Text dates are parsed by
+      // plannerStoredDate and never replaced with the current time.
+      start: (startAt ?? DateTime.now()).toLocal(),
+      endExclusive: (endAt ?? period.endExclusive(DateTime.now())).toLocal(),
       amounts: amounts,
-      createdAt: (createdAt is Timestamp ? createdAt.toDate() : DateTime.now())
-          .toLocal(),
+      createdAt: (createdAt ?? DateTime.now()).toLocal(),
       alertEligible: data['alertEligible'] == true,
       endDate: endDate,
     );

@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import '../models/budget_plan.dart';
 
@@ -9,16 +10,42 @@ class PlannerSnapshot {
   final bool hasPendingWrites;
 }
 
-class ThirteenthMonthInputs {
-  const ThirteenthMonthInputs({
-    required this.monthlySalaries,
-    required this.otherBenefits,
-  });
+/// Every Budget Planner field stored in users/{uid}.planner.
+const plannerPlanFields = [
+  'id',
+  'period',
+  'startAt',
+  'endAt',
+  'endDate',
+  'billsEnabled',
+  'billsAmount',
+  'savingsEnabled',
+  'savingsAmount',
+  'personalEnabled',
+  'personalAmount',
+  'total',
+  'createdAt',
+  'alertEligible',
+];
 
-  final List<double> monthlySalaries;
-  final double otherBenefits;
+/// The update that deletes the saved plan. When the planner map also holds a
+/// legacy 13th Month Pay copy (planner.thirteenthMonth, from older app
+/// versions), only the plan fields are removed so that calculator data is
+/// kept exactly as stored. Otherwise the whole planner field is removed.
+@visibleForTesting
+Map<String, Object?> plannerDeleteUpdate(Object? planner) {
+  if (planner is Map && planner.containsKey('thirteenthMonth')) {
+    return {
+      for (final field in plannerPlanFields)
+        'planner.$field': FieldValue.delete(),
+    };
+  }
+  return {'planner': FieldValue.delete()};
 }
 
+/// Budget Planner storage: the users/{uid}.planner map. It reads and writes
+/// only plan fields. 13th Month Pay inputs are stored separately by
+/// ThirteenthMonthFirestoreService.
 class PlannerFirestoreService {
   PlannerFirestoreService({FirebaseFirestore? firestore})
     : _firestore = firestore ?? FirebaseFirestore.instance;
@@ -44,22 +71,6 @@ class PlannerFirestoreService {
     return _parse(snapshot.data());
   }
 
-  Future<ThirteenthMonthInputs?> loadThirteenthMonthInputs(String uid) async {
-    final snapshot = await _user(uid).get();
-    final planner = snapshot.data()?['planner'];
-    if (planner is! Map) return null;
-    final saved = planner['thirteenthMonth'];
-    if (saved is! Map) return null;
-    final rawSalaries = saved['monthlyBasicSalaries'];
-    if (rawSalaries is! List || rawSalaries.length != 12) return null;
-    return ThirteenthMonthInputs(
-      monthlySalaries: rawSalaries
-          .map((value) => (value as num?)?.toDouble() ?? 0)
-          .toList(growable: false),
-      otherBenefits: (saved['otherBenefits'] as num?)?.toDouble() ?? 0,
-    );
-  }
-
   Stream<PlannerSnapshot> watch(String uid) {
     return _user(uid).snapshots().map(
       (snapshot) => PlannerSnapshot(
@@ -71,47 +82,22 @@ class PlannerFirestoreService {
 
   String createPlanId(String uid) => _user(uid).collection('_ids').doc().id;
 
+  /// Merges the plan fields into users/{uid}.planner. Every plan field is
+  /// written, and nothing else in the document is touched.
   Future<void> save(String uid, BudgetPlan plan) {
     return _user(
       uid,
     ).set({'planner': plan.toFirestore()}, SetOptions(merge: true));
   }
 
-  Future<void> saveThirteenthMonthInputs(
-    String uid, {
-    required List<double> monthlySalaries,
-    required double otherBenefits,
-  }) {
-    if (monthlySalaries.length != 12) {
-      throw ArgumentError('Exactly 12 monthly salaries are required.');
-    }
-    return _user(uid).set({
-      'planner': {
-        'thirteenthMonth': {
-          'year': DateTime.now().year,
-          'monthlyBasicSalaries': monthlySalaries,
-          'otherBenefits': otherBenefits,
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-      },
-    }, SetOptions(merge: true));
-  }
-
   Future<void> delete(String uid) {
     final reference = _user(uid);
     return _firestore.runTransaction((transaction) async {
       final snapshot = await transaction.get(reference);
-      final planner = snapshot.data()?['planner'];
-      final thirteenthMonth = planner is Map
-          ? planner['thirteenthMonth']
-          : null;
-      if (thirteenthMonth is Map) {
-        transaction.update(reference, {
-          'planner': {'thirteenthMonth': thirteenthMonth},
-        });
-      } else {
-        transaction.update(reference, {'planner': FieldValue.delete()});
-      }
+      transaction.update(
+        reference,
+        plannerDeleteUpdate(snapshot.data()?['planner']),
+      );
     });
   }
 }

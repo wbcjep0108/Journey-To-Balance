@@ -4,20 +4,45 @@ import 'dart:collection';
 import 'package:flutter/foundation.dart';
 
 import '../models/thirteenth_month_result.dart';
-import '../services/planner_firestore_service.dart';
 import '../services/thirteenth_month_calculator.dart';
+import '../services/thirteenth_month_firestore_service.dart';
 import 'budget_provider.dart';
 
-class ThirteenthMonthProvider extends ChangeNotifier {
-  ThirteenthMonthProvider(this._plannerService, this._budget);
+/// Loads the calculator during session start without letting a failure stop
+/// the session. The error stays on [calculator] (see
+/// [ThirteenthMonthProvider.loadFailed]) for the 13th Month Pay screen, and
+/// edits and saves remain blocked until a later load succeeds.
+Future<void> loadCalculatorWithoutBlocking(
+  ThirteenthMonthProvider calculator,
+  String uid,
+) async {
+  try {
+    await calculator.loadForUser(uid);
+  } catch (error) {
+    debugPrint('13th Month Pay load failed: $error');
+  }
+}
 
-  final PlannerFirestoreService _plannerService;
+class ThirteenthMonthProvider extends ChangeNotifier {
+  ThirteenthMonthProvider(this._service, this._budget);
+
+  /// Calculator storage only. The Budget Planner is never read or written.
+  final ThirteenthMonthFirestoreService _service;
   final BudgetProvider _budget;
+
+  static const loadErrorMessage = 'Saved salary inputs could not be loaded.';
+  static const saveErrorMessage = 'Salary inputs could not be saved.';
 
   String? _uid;
   List<double> _monthlySalaries = List<double>.filled(12, 0);
   List<double> _savedSalaryHistory = List<double>.filled(12, 0);
   double _otherBenefits = 0;
+
+  /// True once saved inputs were read for the current user. Edits and saves
+  /// stay blocked until then, so a failed or offline load can never replace
+  /// the stored calculator data with placeholder zeros.
+  bool _hasLoaded = false;
+  bool _loadFailed = false;
   bool _isLoading = false;
   bool _isSaving = false;
   bool _isReceiving = false;
@@ -29,6 +54,8 @@ class ThirteenthMonthProvider extends ChangeNotifier {
   UnmodifiableListView<double> get savedSalaryHistory =>
       UnmodifiableListView(_savedSalaryHistory);
   double get otherBenefits => _otherBenefits;
+  bool get hasLoaded => _hasLoaded;
+  bool get loadFailed => _loadFailed;
   bool get isLoading => _isLoading;
   bool get isSaving => _isSaving;
   bool get isReceiving => _isReceiving;
@@ -38,22 +65,38 @@ class ThirteenthMonthProvider extends ChangeNotifier {
     otherBenefits: _otherBenefits,
   );
 
+  /// Loads saved inputs for [uid]. A user whose data already loaded is not
+  /// reloaded; after a failed load, calling this again retries. Errors are
+  /// rethrown for the caller and also kept in [errorMessage] for the screen.
   Future<void> loadForUser(String uid) async {
-    if (_uid == uid && !_isLoading) return;
+    if (_uid == uid && (_hasLoaded || _isLoading)) return;
     _saveTimer?.cancel();
+    if (_uid != uid) {
+      // A different user: never show the previous user's numbers.
+      _monthlySalaries = List<double>.filled(12, 0);
+      _savedSalaryHistory = List<double>.filled(12, 0);
+      _otherBenefits = 0;
+    }
     _uid = uid;
+    _hasLoaded = false;
+    _loadFailed = false;
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
     try {
-      final saved = await _plannerService.loadThirteenthMonthInputs(uid);
+      final saved = await _service.load(uid);
       if (_uid != uid) return;
-      _monthlySalaries = saved?.monthlySalaries ?? List<double>.filled(12, 0);
+      // Keep an own, editable copy: the loaded list may be read-only.
+      _monthlySalaries = List<double>.from(
+        saved?.monthlySalaries ?? List<double>.filled(12, 0),
+      );
       _savedSalaryHistory = List<double>.from(_monthlySalaries);
       _otherBenefits = saved?.otherBenefits ?? 0;
+      _hasLoaded = true;
     } catch (_) {
       if (_uid == uid) {
-        _errorMessage = 'Saved salary inputs could not be loaded.';
+        _loadFailed = true;
+        _errorMessage = loadErrorMessage;
       }
       rethrow;
     } finally {
@@ -64,7 +107,21 @@ class ThirteenthMonthProvider extends ChangeNotifier {
     }
   }
 
+  /// Retries a failed load for the current user. Returns true when the saved
+  /// inputs are now available.
+  Future<bool> retryLoad() async {
+    final uid = _uid;
+    if (uid == null) return false;
+    try {
+      await loadForUser(uid);
+    } catch (_) {
+      return false;
+    }
+    return _hasLoaded;
+  }
+
   void setMonthlySalary(int monthIndex, double amount) {
+    if (!_hasLoaded) return;
     if (monthIndex < 0 || monthIndex >= 12 || amount < 0 || !amount.isFinite) {
       return;
     }
@@ -76,6 +133,7 @@ class ThirteenthMonthProvider extends ChangeNotifier {
   }
 
   void fillAllMonths(double amount) {
+    if (!_hasLoaded) return;
     if (amount < 0 || !amount.isFinite) return;
     _monthlySalaries = List<double>.filled(12, amount);
     _errorMessage = null;
@@ -84,6 +142,7 @@ class ThirteenthMonthProvider extends ChangeNotifier {
   }
 
   void setOtherBenefits(double amount) {
+    if (!_hasLoaded) return;
     if (amount < 0 || !amount.isFinite || amount == _otherBenefits) return;
     _otherBenefits = amount;
     _errorMessage = null;
@@ -93,7 +152,8 @@ class ThirteenthMonthProvider extends ChangeNotifier {
 
   Future<void> saveNow() async {
     final uid = _uid;
-    if (uid == null) return;
+    // Never write before the saved inputs loaded: that would overwrite them.
+    if (uid == null || !_hasLoaded) return;
     if (_isSaving) {
       _queueSave();
       return;
@@ -105,7 +165,7 @@ class ThirteenthMonthProvider extends ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
     try {
-      await _plannerService.saveThirteenthMonthInputs(
+      await _service.save(
         uid,
         monthlySalaries: salaries,
         otherBenefits: otherBenefits,
@@ -119,7 +179,7 @@ class ThirteenthMonthProvider extends ChangeNotifier {
       }
     } catch (_) {
       if (_uid == uid) {
-        _errorMessage = 'Salary inputs could not be saved.';
+        _errorMessage = saveErrorMessage;
       }
       rethrow;
     } finally {
@@ -156,6 +216,8 @@ class ThirteenthMonthProvider extends ChangeNotifier {
     _monthlySalaries = List<double>.filled(12, 0);
     _savedSalaryHistory = List<double>.filled(12, 0);
     _otherBenefits = 0;
+    _hasLoaded = false;
+    _loadFailed = false;
     _isLoading = false;
     _isSaving = false;
     _isReceiving = false;
@@ -164,7 +226,7 @@ class ThirteenthMonthProvider extends ChangeNotifier {
   }
 
   void _queueSave() {
-    if (_uid == null) return;
+    if (_uid == null || !_hasLoaded) return;
     _saveTimer?.cancel();
     _saveTimer = Timer(const Duration(milliseconds: 600), () {
       saveNow().catchError((_) {});

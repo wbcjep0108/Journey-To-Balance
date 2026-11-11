@@ -149,6 +149,26 @@ service cloud.firestore {
       ]);
     }
 
+    // 13th Month Pay inputs used to live in planner.thirteenthMonth. They now
+    // live in users/{uid}/calculators/thirteenthMonth. The legacy copy may be
+    // absent, kept exactly as stored (its contents, even if incomplete, are
+    // not revalidated, so they never block a Budget Planner save), or written
+    // by an older app build only when it passes full calculator validation.
+    function legacyThirteenthMonthUnchanged(planner) {
+      return resource != null &&
+        resource.data.keys().hasAny(['planner']) &&
+        resource.data.planner is map &&
+        resource.data.planner.keys().hasAny(['thirteenthMonth']) &&
+        planner.thirteenthMonth == resource.data.planner.thirteenthMonth;
+    }
+
+    function legacyThirteenthMonthAllowed(planner) {
+      return !planner.keys().hasAny(['thirteenthMonth']) ||
+        legacyThirteenthMonthUnchanged(planner) ||
+        isValidThirteenthMonth(planner.thirteenthMonth);
+    }
+
+    // Validates only Budget Planner fields.
     function isValidPlanner(planner) {
       return planner is map &&
         planner.keys().hasOnly([
@@ -161,8 +181,7 @@ service cloud.firestore {
         (hasBudgetPlan(planner) ||
           planner.keys().hasAny(['thirteenthMonth'])) &&
         ((!hasBudgetPlan(planner)) || isValidBudgetPlan(planner)) &&
-        ((!planner.keys().hasAny(['thirteenthMonth'])) ||
-          isValidThirteenthMonth(planner.thirteenthMonth));
+        legacyThirteenthMonthAllowed(planner);
     }
 
     function isValidLegalAcceptance(docId, acceptance) {
@@ -224,6 +243,18 @@ service cloud.firestore {
       // Realtime listeners: users/{uid}/wallet/data.snapshots()
       match /wallet/{docId} {
         allow read, write: if isOwner(userId);
+      }
+
+      // 13th Month Pay calculator inputs, independent of the Budget Planner.
+      // Path: users/{uid}/calculators/thirteenthMonth. Validates only
+      // calculator fields; no delete from the client (account deletion runs
+      // in the Worker with the service account).
+      match /calculators/{docId} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId) &&
+          docId == 'thirteenthMonth' &&
+          isValidThirteenthMonth(request.resource.data);
+        allow delete: if false;
       }
 
       // Owner-only, immutable consent receipts. Exact keys and request.time

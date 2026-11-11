@@ -9,6 +9,7 @@ import '../../providers/budget_provider.dart';
 import '../../providers/currency_provider.dart';
 import '../../providers/wallet_cards_provider.dart';
 import '../../providers/wallet_cash_provider.dart';
+import '../../services/funding_source_adjuster.dart';
 import '../../widgets/app_date_picker.dart';
 import '../../widgets/barrier_blur.dart';
 import '../../widgets/category_icon_badge.dart';
@@ -1452,29 +1453,16 @@ class _RecentActivityList extends StatelessWidget {
         entry.savingsDestinations.isNotEmpty) {
       return null;
     }
-    final sourceId = entry.fundingSourceId;
-    if (sourceId == null || sourceId.isEmpty) return null;
-
-    if (sourceId == 'wallet') {
-      final wallet = context.read<WalletCashProvider>();
-      await wallet.setAmount(wallet.amount + entry.amount);
-      return 'Wallet';
-    }
-
-    final cards = context.read<WalletCardsProvider>();
-    final card = cards.cardById(sourceId);
-    if (card != null) {
-      await cards.setCardAmount(
-        cardId: card.id,
-        amount: card.amount + entry.amount,
-      );
-      return card.bankLabel;
-    }
-
-    // If a previously used card was removed, return the money to Wallet.
-    final wallet = context.read<WalletCashProvider>();
-    await wallet.setAmount(wallet.amount + entry.amount);
-    return 'Wallet';
+    // Shared with ordinary refunds. A removed card returns the money to
+    // Wallet, as before.
+    final result = await adjustFundingSource(
+      wallet: context.read<WalletCashProvider>(),
+      cards: context.read<WalletCardsProvider>(),
+      sourceId: entry.fundingSourceId,
+      delta: entry.amount,
+    );
+    if (result.outcome == FundingAdjustmentOutcome.noSource) return null;
+    return result.targetCard?.bankLabel ?? 'Wallet';
   }
 
   Future<bool> _confirmDelete(BuildContext context, DayTransaction item) async {

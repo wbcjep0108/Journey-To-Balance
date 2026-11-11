@@ -1167,10 +1167,15 @@ class BudgetProvider extends ChangeNotifier {
   /// stays in history as a green refund credit.
   /// When [refund] is false, only the transaction is removed — balances stay
   /// as they are.
+  ///
+  /// For an ordinary refund, [awaitRemote] waits for the Worker and rethrows a
+  /// failure after rolling back, so callers can act only after the refund is
+  /// confirmed. By default the refund is persisted in the background.
   Future<Map<String, dynamic>?> deleteEntry(
     FinancialCategory category,
     FinancialEntry entry, {
     bool refund = true,
+    bool awaitRemote = false,
   }) async {
     _requireUid();
     final list = _entries[category]!;
@@ -1243,7 +1248,7 @@ class BudgetProvider extends ChangeNotifier {
       errorMessage = null;
       notifyListeners();
 
-      unawaited(() async {
+      Future<void> persistRefund() async {
         try {
           await _api.deleteTransaction(
             category: category.collection,
@@ -1266,8 +1271,15 @@ class BudgetProvider extends ChangeNotifier {
                 ? 'Savings Goal'
                 : _categoryRateLimitLabel(category),
           );
+          if (awaitRemote) rethrow;
         }
-      }());
+      }
+
+      if (awaitRemote) {
+        await persistRefund();
+      } else {
+        unawaited(persistRefund());
+      }
       return null;
     }
 

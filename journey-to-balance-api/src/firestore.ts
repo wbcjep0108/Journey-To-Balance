@@ -128,7 +128,7 @@ export async function deleteFirebaseAuthUser(
   }
 }
 
-type FirestoreValue =
+export type FirestoreValue =
   | {nullValue: null}
   | {booleanValue: boolean}
   | {integerValue: string}
@@ -144,7 +144,7 @@ export type VersionedDocument = {
   exists: boolean;
 };
 
-function encodeFields(value: Record<string, unknown>): Record<string, FirestoreValue> {
+export function encodeFields(value: Record<string, unknown>): Record<string, FirestoreValue> {
   const fields: Record<string, FirestoreValue> = {};
   for (const [k, v] of Object.entries(value)) {
     if (v !== undefined) fields[k] = encodeValue(v);
@@ -174,14 +174,35 @@ function encodeValue(value: unknown): FirestoreValue {
   return {stringValue: String(value)};
 }
 
-function decodeValue(value: FirestoreValue | undefined): unknown {
+/** Wallet fields a savings transfer changes; all other wallet fields stay. */
+export const WALLET_BALANCE_FIELDS = ["cashAmount", "cards", "updatedAt"];
+
+/**
+ * A Commit API write that sets only the budget field of users/{uid}. Without
+ * the mask, Firestore would replace the whole document with these fields.
+ */
+export function budgetOnlyWrite(
+  name: string,
+  budget: Record<string, unknown>,
+): {update: {name: string; fields: Record<string, FirestoreValue>};
+  updateMask: {fieldPaths: string[]}} {
+  return {
+    update: {name, fields: encodeFields({budget})},
+    updateMask: {fieldPaths: ["budget"]},
+  };
+}
+
+export function decodeValue(value: FirestoreValue | undefined): unknown {
   if (!value) return undefined;
   if ("nullValue" in value) return null;
   if ("booleanValue" in value) return value.booleanValue;
   if ("integerValue" in value) return Number(value.integerValue);
   if ("doubleValue" in value) return value.doubleValue;
   if ("stringValue" in value) return value.stringValue;
-  if ("timestampValue" in value) return value.timestampValue;
+  // Decode to Date (not the raw RFC 3339 string) so encodeValue writes it back
+  // as a timestamp. Returning a string here turned stored timestamps into text
+  // whenever a decoded document was written back.
+  if ("timestampValue" in value) return new Date(value.timestampValue);
   if ("arrayValue" in value) {
     return (value.arrayValue.values ?? []).map(decodeValue);
   }
@@ -406,6 +427,7 @@ export class FirestoreClient {
       "legal",
       "security",
       "pinReset",
+      "calculators",
     ]);
   }
 
@@ -432,16 +454,9 @@ export class FirestoreClient {
   }): Promise<void> {
     const writes: unknown[] = [];
 
-    const userName = this.docPath(options.uid);
-    const existing = await this.getUserDoc(options.uid);
-    const merged = {...(existing ?? {}), budget: options.budget};
-
-    writes.push({
-      update: {
-        name: userName,
-        fields: encodeFields(merged),
-      },
-    });
+    // Write only the budget field. The rest of users/{uid} (the client-owned
+    // planner map) is never read back and rewritten here.
+    writes.push(budgetOnlyWrite(this.docPath(options.uid), options.budget));
 
     const entryWrites = [
       ...(options.entry ? [options.entry] : []),
@@ -489,7 +504,7 @@ export class FirestoreClient {
    */
   async commitSavingsTransfer(options: {
     uid: string;
-    userData: Record<string, unknown>;
+    budget: Record<string, unknown>;
     userVersion: VersionedDocument;
     walletData: Record<string, unknown>;
     walletVersion: VersionedDocument;
@@ -512,13 +527,22 @@ export class FirestoreClient {
       options.entry.category,
       options.entry.entryId,
     );
+    // Both documents are masked: users/{uid} writes only budget, and the
+    // wallet writes only the balance fields this transfer changes. The
+    // version preconditions still reject the commit if either document
+    // changed after it was read.
+    const walletFields: Record<string, unknown> = {};
+    for (const key of WALLET_BALANCE_FIELDS) {
+      if (key in options.walletData) walletFields[key] = options.walletData[key];
+    }
     const writes: unknown[] = [
       {
-        update: {name: userName, fields: encodeFields(options.userData)},
+        ...budgetOnlyWrite(userName, options.budget),
         currentDocument: precondition(options.userVersion),
       },
       {
-        update: {name: walletName, fields: encodeFields(options.walletData)},
+        update: {name: walletName, fields: encodeFields(walletFields)},
+        updateMask: {fieldPaths: Object.keys(walletFields)},
         currentDocument: precondition(options.walletVersion),
       },
     ];

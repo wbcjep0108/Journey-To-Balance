@@ -32,6 +32,16 @@ class DailySpendingPage extends StatefulWidget {
   }
 }
 
+/// Daily Spending's Delete. Like the category page's Delete, it removes only
+/// the history row: the category budget and the wallet or card are unchanged.
+@visibleForTesting
+Future<void> deleteDayEntryWithoutRefund(
+  BudgetProvider budget,
+  DayTransaction item,
+) {
+  return budget.deleteEntry(item.category, item.entry, refund: false);
+}
+
 class _DailySpendingPageState extends State<DailySpendingPage> {
   List<DayTransaction> _transactions = const [];
   bool _started = false;
@@ -247,15 +257,13 @@ class _DailySpendingPageState extends State<DailySpendingPage> {
       context: context,
       title: 'Confirm delete',
       description:
-          'Enter your PIN or use fingerprint to delete "${item.entry.title}".',
+          'Enter your PIN or use fingerprint to delete "${item.entry.title}". '
+          'This will not return the money.',
     );
     if (!authorized || !context.mounted) return false;
 
     try {
-      await context.read<BudgetProvider>().deleteEntry(
-        item.category,
-        item.entry,
-      );
+      await deleteDayEntryWithoutRefund(context.read<BudgetProvider>(), item);
       if (mounted) {
         setState(() {
           _transactions = _transactions

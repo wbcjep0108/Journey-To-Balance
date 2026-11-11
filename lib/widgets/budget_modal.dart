@@ -702,7 +702,8 @@ class _PaymentSourceSection extends StatelessWidget {
               for (final card in cards)
                 _PaymentSourceChip(
                   iconAsset: card.iconAsset,
-                  label: card.bankLabel,
+                  label: walletCardDisplayLabels(cards)[card.id] ??
+                      card.displayName,
                   subtitle: money(card.amount),
                   selected: !walletSelected && selectedCardId == card.id,
                   onTap: () => onSelectCard(card.id),

@@ -1,3 +1,4 @@
+import 'package:firebase_core/firebase_core.dart' show FirebaseException;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/intl.dart';
@@ -399,6 +400,25 @@ void main() {
     // Changing only the range marks the draft as unsaved.
     await _tapChip(tester, 'planner-days-2');
     expect(find.text('Preview - not saved yet'), findsOneWidget);
+  });
+
+  test('save errors tell a rules rejection apart from other failures', () {
+    expect(
+      plannerSaveErrorMessage(
+        FirebaseException(plugin: 'cloud_firestore', code: 'permission-denied'),
+      ),
+      'Could not save the budget plan. The server rejected this plan.',
+    );
+    expect(
+      plannerSaveErrorMessage(
+        FirebaseException(plugin: 'cloud_firestore', code: 'unavailable'),
+      ),
+      'Could not save the budget plan. Check your connection and try again.',
+    );
+    expect(
+      plannerSaveErrorMessage(StateError('boom')),
+      'Could not save the budget plan.',
+    );
   });
 
   testWidgets('each category shows how much money it has left', (
