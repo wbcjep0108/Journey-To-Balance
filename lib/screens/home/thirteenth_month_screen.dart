@@ -401,34 +401,102 @@ class _ThirteenthMonthScreenState extends State<ThirteenthMonthScreen> {
                                 ),
                               ),
                               const SizedBox(height: 16),
+                              const Text(
+                                'Estimated final take-home benefits',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF121212),
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              SizedBox(
+                                width: double.infinity,
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    _money(result.takeHome),
+                                    key: const ValueKey(
+                                      'thirteenth-month-take-home',
+                                    ),
+                                    maxLines: 1,
+                                    style: const TextStyle(
+                                      fontSize: 36,
+                                      fontWeight: FontWeight.w800,
+                                      color: Color(0xFF121212),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              const Text(
+                                'Total combined benefits minus the estimated '
+                                'additional income tax.',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: Color(0xFF6B7280),
+                                ),
+                              ),
+                              const Divider(height: 28),
+                              const Text(
+                                'Detailed breakdown',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF121212),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
                               _ResultRow(
                                 label: 'Gross 13th month pay',
                                 value: _money(result.gross),
-                                prominent: true,
                               ),
-                              if (result.otherBenefits > 0) ...[
-                                const SizedBox(height: 12),
-                                _ResultRow(
-                                  label: 'Other benefits',
-                                  value: _money(result.otherBenefits),
-                                ),
-                                const SizedBox(height: 12),
-                                _ResultRow(
-                                  label: 'Total combined benefits',
-                                  value: _money(result.totalBenefits),
-                                ),
-                              ],
+                              const SizedBox(height: 12),
+                              _ResultRow(
+                                label: 'Other benefits',
+                                value: _money(result.otherBenefits),
+                              ),
+                              const SizedBox(height: 12),
+                              _ResultRow(
+                                label: 'Total combined benefits',
+                                value: _money(result.totalBenefits),
+                              ),
                               const Divider(height: 24),
                               _ResultRow(
-                                label: 'Tax-exempt portion (max ₱90,000)',
+                                label:
+                                    'Tax-exempt portion of 13th month pay (max ₱90,000)',
                                 value: _money(result.taxExempt),
+                              ),
+                              const SizedBox(height: 12),
+                              _ResultRow(
+                                label: 'Total tax-exempt benefits',
+                                value: _money(result.totalTaxExempt),
                               ),
                               const SizedBox(height: 12),
                               _ResultRow(
                                 label: 'Taxable excess',
                                 value: _money(result.taxableExcess),
                               ),
+                              const SizedBox(height: 12),
+                              _ResultRow(
+                                label: 'Estimated additional income tax',
+                                value: _money(result.additionalIncomeTax),
+                              ),
                               const SizedBox(height: 16),
+                              const Text(
+                                'Tax is estimated with the graduated annual '
+                                'income tax rates, using the monthly basic '
+                                'salaries you entered. Other income and '
+                                'deductions are not included.',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: Color(0xFF6B7280),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
                               const Text(
                                 'Estimate only. Not legal or tax advice.',
                                 style: TextStyle(
@@ -656,12 +724,10 @@ class _ResultRow extends StatelessWidget {
   const _ResultRow({
     required this.label,
     required this.value,
-    this.prominent = false,
   });
 
   final String label;
   final String value;
-  final bool prominent;
 
   @override
   Widget build(BuildContext context) {
@@ -670,19 +736,20 @@ class _ResultRow extends StatelessWidget {
         Expanded(
           child: Text(
             label,
-            style: TextStyle(
-              fontSize: prominent ? 15 : 14,
-              fontWeight: prominent ? FontWeight.w700 : FontWeight.w500,
-              color: const Color(0xFF121212),
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF121212),
             ),
           ),
         ),
+        const SizedBox(width: 12),
         Text(
           value,
-          style: TextStyle(
-            fontSize: prominent ? 22 : 16,
+          style: const TextStyle(
+            fontSize: 16,
             fontWeight: FontWeight.w800,
-            color: const Color(0xFF121212),
+            color: Color(0xFF121212),
           ),
         ),
       ],

@@ -10,6 +10,7 @@ import 'models/loan_entry.dart';
 import 'models/onboarding_state.dart';
 import 'providers/app_lock_provider.dart';
 import 'providers/budget_provider.dart';
+import 'providers/connectivity_provider.dart';
 import 'providers/currency_provider.dart';
 import 'providers/loan_provider.dart';
 import 'providers/notification_prefs_provider.dart';
@@ -21,6 +22,7 @@ import 'screens/auth/login_screen.dart';
 import 'screens/auth/pin_setup_screen.dart';
 import 'screens/auth/pin_unlock_screen.dart';
 import 'screens/legal/legal_acceptance_gate.dart';
+import 'screens/offline/offline_screen.dart';
 import 'screens/onboarding/onboarding_gate.dart';
 import 'screens/splash/splash_screen.dart';
 import 'screens/splash/welcome_transition.dart';
@@ -37,6 +39,7 @@ import 'services/thirteenth_month_firestore_service.dart';
 import 'services/logout_transition_controller.dart';
 import 'services/user_session_cleanup.dart';
 import 'widgets/app_privacy_blur.dart';
+import 'widgets/connectivity_gate.dart';
 import 'widgets/logout_skeleton.dart';
 
 void main() async {
@@ -51,6 +54,7 @@ void main() async {
   runApp(
     MultiProvider(
       providers: [
+        ChangeNotifierProvider(create: (_) => ConnectivityProvider()),
         Provider(create: (_) => FirestoreFinanceService()),
         Provider(create: (_) => PlannerFirestoreService()),
         Provider(create: (_) => ThirteenthMonthFirestoreService()),
@@ -135,7 +139,9 @@ class MyApp extends StatelessWidget {
         ),
       ),
       builder: (context, child) {
-        return AppPrivacyBlur(child: child ?? const SizedBox.shrink());
+        return AppPrivacyBlur(
+          child: ConnectivityGate(child: child ?? const SizedBox.shrink()),
+        );
       },
       home: const AuthGate(),
     );
@@ -300,13 +306,37 @@ class _UserDataGateState extends State<_UserDataGate> {
   String? _error;
   OnboardingRecord? _onboardingRecord;
   bool _showOnboarding = false;
+  ConnectivityProvider? _connectivity;
+  bool _wasOnline = true;
 
   @override
   void initState() {
     super.initState();
+    final connectivity = context.read<ConnectivityProvider>();
+    _connectivity = connectivity;
+    _wasOnline = connectivity.online;
+    connectivity.addListener(_onConnectivityChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _load();
+    });
+  }
+
+  @override
+  void dispose() {
+    _connectivity?.removeListener(_onConnectivityChanged);
+    super.dispose();
+  }
+
+  /// Retries a failed first load as soon as the connection returns.
+  void _onConnectivityChanged() {
+    final online = _connectivity?.online ?? true;
+    final reconnected = online && !_wasOnline;
+    _wasOnline = online;
+    if (!reconnected) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _loading || _ready || _error == null) return;
+      _retry();
     });
   }
 
@@ -479,6 +509,13 @@ class _UserDataGateState extends State<_UserDataGate> {
     }
 
     if (_error != null) {
+      final connectivity = context.watch<ConnectivityProvider>();
+      if (!connectivity.online) {
+        return OfflineScreen(
+          checking: connectivity.checking,
+          onRetry: () => unawaited(connectivity.retry()),
+        );
+      }
       return Scaffold(
         body: Center(
           child: Padding(
