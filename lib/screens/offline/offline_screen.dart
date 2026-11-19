@@ -28,8 +28,6 @@ class OfflineScreen extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const BrandMark(size: 72),
-                  const SizedBox(height: 28),
                   Container(
                     width: 56,
                     height: 56,
